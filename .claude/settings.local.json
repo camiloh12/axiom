@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.gartner.com)",
+      "WebFetch(domain:www.g2.com)",
+      "WebFetch(domain:taxdome.com)",
+      "WebFetch(domain:www.cpapracticeadvisor.com)",
+      "WebFetch(domain:ciferi.com)",
+      "WebFetch(domain:www.auditcue.com)",
+      "WebFetch(domain:www.fieldguide.io)",
+      "WebFetch(domain:www.datasnipper.com)",
+      "WebFetch(domain:www.acobloom.com)",
+      "WebFetch(domain:pcaobus.org)",
+      "WebFetch(domain:www.cpajournal.com)",
+      "WebFetch(domain:aurorafinancials.com)",
+      "WebFetch(domain:www.cloudmagazin.com)",
+      "WebFetch(domain:www.wwt.com)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ]
+  }
+}
