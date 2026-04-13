@@ -20,8 +20,8 @@
 8. [Integration Roadmap](#8-integration-roadmap)
 9. [Legal and Data Governance](#9-legal-and-data-governance)
 10. [Security Architecture](#10-security-architecture)
-11. [Onboarding Flows](#11-onboarding-flows)
-12. [Engagement Module Specifications](#12-engagement-module-specifications)
+11. [User Journeys](#11-user-journeys)
+12. [Flows Without Competitor Equivalent](#12-flows-without-competitor-equivalent)
 13. [Out of Scope at Launch](#13-out-of-scope-at-launch)
 
 ---
@@ -901,280 +901,55 @@ Axiom also makes a HIPAA BAA available to audit firm customers who require one f
 
 ---
 
-## 11. Onboarding Flows
+## 11. User Journeys
 
-This section defines the step-by-step journeys for the three distinct user populations that enter the platform: audit firm administrators (self-serve firm setup), individual firm staff members (invitation-based access), and client-side contacts (per-engagement invitation). Because Axiom's self-serve model is a structural competitive advantage over Fieldguide, every onboarding flow is designed for zero-consultant completion.
+Full journey maps with stage-by-stage detail (user actions, touchpoints, emotional states, competitor context, pain points, and opportunities) are in [`docs/user-journeys/all-journeys.md`](../user-journeys/all-journeys.md). The table below summarizes each journey and the personas, goals, and key system gates involved.
 
----
+| # | Persona | Goal | Key System Gates / Entities | AI Touchpoints |
+|---|---------|------|-----------------------------|----------------|
+| 1 | FirmAdmin | Set up firm and launch first engagement | `Firm`, `MethodologyTemplate`, `Engagement` scaffold, 5-step onboarding checklist, 14-day trial clock | — |
+| 2 | Staff Auditor | Join platform and reach first task | Magic link auth, role assignment, 5-step guided tour, `EngagementTeamMember` assignment | — |
+| 3 | Partner | Create and scope a new engagement | `ClientAcceptance` gate (Planning → Fieldwork blocked until signed), EQR independence validation, framework version lock after Fieldwork | Control mapping (Feature 2, Tier 2), risk category suggestions (Tier 2) |
+| 4 | Staff Auditor | Import and analyze a trial balance | `TrialBalanceAccount` import, account mapping confirmation, lead schedule generation, sampling calculator (ISA 530 / AU-C 530) | Account mapping (Feature 3, Tier 2), anomaly detection (Tier 1) |
+| 5 | Staff Auditor | Test controls and prepare workpapers | `TestProcedure` status progression (NotStarted → InProgress → Complete), `is_ai_draft` edit gate, sign-off hierarchy (preparer → reviewer → partner) | Evidence link suggestions (Tier 2), workpaper narrative draft (Feature 4, Tier 2) |
+| 6 | Manager | Review workpapers and advance the engagement | Review notes (immutable, block advancement until resolved), `ReviewComplete` sign-off, phase transition guards (Fieldwork → Review → Reporting) | — |
+| 7 | Staff Auditor | Manage document requests and collect evidence | `DocumentRequest` lifecycle, AI review queue (sorted by confidence), automated reminder state machine, `EvidenceLink` on acceptance | Document completeness review (Feature 1, Tier 2), evidence link suggestion (Tier 2) |
+| 8 | Client Contact | Fulfill audit document requests | Tokenized Client Hub link (no login, engagement-scoped, 90-day expiry), `ClientAdmin` delegation (single-request scoped), post-archive read-only access | — |
+| 9 | Partner | Generate report, finalize, and archive | Report issuance triggers assembly deadline + retention computation, Finalized state locks all content, S3 Object Lock WORM archival, addendum workflow (AU-C 230 §.16) | Report section draft (Tier 2) |
+| 10 | EQR Reviewer | Conduct engagement quality review | Read-only access (not `EngagementTeamMember`), `EngagementQualityReview` sign-off gate (Review → Reporting blocked until signed), immutable EQR record | — |
 
-### A. New Firm Onboarding (Self-Serve)
+### Regulatory constraints by journey
 
-**Goal:** Get a new firm from trial signup to a first active engagement in under one week, without human intervention on Axiom's side.
-
-**Steps:**
-
-1. **Trial signup** — The prospective firm admin visits the Axiom marketing site and enters a business email address. A verification email is sent. On verification, the admin completes a brief intake form:
-   - Firm name
-   - Staff count (dropdown: 1–10, 11–20, 21–40, 41–60, 60+)
-   - Primary audit types (multi-select: Financial Audit, SOC 2, ISO 27001, HIPAA)
-   - Country (US / Canada)
-   The system creates a `Firm` record with `subscription_tier = Trial` and `onboarding_status = ProfileSetup`. The 14-day trial clock starts.
-
-2. **Firm profile setup** — The admin is taken directly into the app. A required setup step collects: firm display name, logo (optional), timezone, and billing contact email. `onboarding_status` advances to `MethodologySetup`.
-
-3. **Methodology selection** — The admin activates one or more pre-built methodology templates:
-   - AICPA/GAAS Financial Audit (always available)
-   - SOC 2 Type I/II (TSC 2017)
-   - ISO 27001:2022
-   - HIPAA
-   Growth tier: templates are read-only pre-built. Scale tier: custom template editor is also unlocked (configurable after initial activation). The admin does not need to configure anything to activate — selecting a template makes it immediately available for engagement creation. `onboarding_status` advances to `FirstEngagement`.
-
-4. **First engagement wizard** — The system presents a guided engagement creation wizard. The admin (or any Partner/Manager role invited in the next step) selects:
-   - Engagement type and framework
-   - Client name (can use "Demo Client" for a test run)
-   - Audit period
-   - Methodology template (pre-selected based on signup intake)
-   The system creates the full engagement scaffold: `Engagement` in `Planning` state, all template `Control` and `TestProcedure` records, draft `Workpaper` shells, and an empty `ClientAcceptance` record. This is the completion event for the "time-to-first-engagement" product metric. `onboarding_status` advances to `StaffInvite`.
-
-5. **Staff invitation** — The admin invites firm staff by email. Bulk invite (paste multiple emails) is supported. For each invitee the admin assigns a role: `Partner | Manager | Staff | EQReviewer`. Invitees receive a magic link email valid for 7 days. At least one staff invite is encouraged (in-app prompt) but not required to proceed. `onboarding_status` advances to `Complete` once at least one invite is sent.
-
-6. **Optional SSO setup** — Growth and Scale tiers: OAuth with Microsoft or Google (configured in Firm Settings → Authentication at any time). Enterprise tier: SAML with the firm's own IdP. SSO setup is not a prerequisite for using the platform and is not part of the onboarding checklist.
-
-**In-app onboarding checklist:** A collapsible progress panel persists in the FirmAdmin sidebar until all five required steps are complete: profile setup, methodology activated, first engagement created, first staff invite sent. Each completed step is checked off. The checklist disappears permanently once all five are complete.
-
-**Scale-tier onboarding call:** Scale customers are offered (not required) a 30-minute onboarding call with an Axiom support specialist. The offer appears as an in-app prompt on Day 3 of the trial and again on Day 10 if the trial has not yet converted. This is not a multi-week implementation program — it is a single orientation call. The scheduling link is in-app (Calendly or equivalent).
-
-**Data entities touched:** `Firm`, `User` (FirmAdmin), `MethodologyTemplate`, `Engagement`, `EngagementTeamMember`, `Control`, `TestProcedure`, `Workpaper`, `ClientAcceptance`.
+| Constraint | Standard | Journeys |
+|-----------|----------|----------|
+| Client acceptance before fieldwork | SQMS 1 | 3 |
+| EQR reviewer independence | SQMS 2 / PCAOB AS 1220 | 3, 10 |
+| Framework version locked after fieldwork begins | Section 4 requirement | 3 |
+| Sign-off hierarchy enforced at data layer | SQMS 1, AU-C 220 | 5, 6 |
+| AI draft must be edited before sign-off | PCAOB AS 1105 | 5 |
+| Review notes cannot be deleted | AU-C 230 | 6 |
+| Period coverage check for SOC 2 Type II evidence | AT-C 320 | 7 |
+| All AI decisions logged as `AIDecision` records | PCAOB AS 1105 | 3, 4, 5, 7 |
+| Sampling documentation requirements | AU-C 530 / PCAOB AS 2315 | 4 |
+| Assembly deadline enforcement | AU-C 230, PCAOB AS 1215 | 9 |
+| WORM archival | PCAOB AS 1215, SOX §802 | 9 |
+| Retention periods per engagement type | AU-C 230, PCAOB, HIPAA | 9 |
+| Addenda require documented reason and partner sign-off | AU-C 230 §.16 | 9 |
+| Client upload tokens expire and require re-generation | Security policy | 7, 8 |
 
 ---
 
-### B. Individual Firm Staff User Onboarding
-
-**Goal:** Each staff member invited by the FirmAdmin reaches their first assigned task in a single session, with no friction from credential setup or platform confusion.
-
-**Steps:**
-
-| Step | User Action | System Response |
-|---|---|---|
-| **1. Invitation email** | Staff receives email: "You've been invited to [Firm Name]'s Axiom workspace as [Role]." | Email includes a magic link (valid 7 days) and a secondary link to set up a password directly. |
-| **2. First access** | Staff clicks magic link → authenticated for this browser session. | If firm has OAuth SSO configured, staff is prompted to link their Google or Microsoft account. Otherwise, prompted to set a password. Staff accepts terms of service. |
-| **3. Role and profile** | Staff views their assigned role (Partner / Manager / Staff / EQReviewer). Updates display name and notification preferences (email digest: real-time, daily, or weekly). | Role is displayed but cannot be self-changed — FirmAdmin only. Notification preferences are stored on the `User` record. |
-| **4. Guided tour** | 5-step in-app tour, skippable at any point. | Highlights in sequence: (1) engagement list, (2) workpaper editor, (3) evidence pool, (4) document request queue, (5) AI review panel. Each step includes a one-sentence description and a "show me" pointer. Tour progress is stored per-user and never repeats after completion or skip. |
-| **5. Engagement assignment** | Staff receives an in-app notification when a Partner or Manager adds them to an engagement via `EngagementTeamMember`. | The engagement appears in the staff member's engagement list. The notification links directly to the first assigned control or workpaper. This is the first meaningful platform action. |
-
-**Note on EQReviewer role:** Users with the `EQReviewer` role follow the same onboarding path but land in a read-only view of any engagement they are assigned to review. They cannot be added to the same engagement as a team member — the system enforces this at assignment time (see Section 12, Module 1).
-
----
-
-### C. Client Onboarding (Per Engagement)
-
-**Goal:** A client contact receives a document request, accesses their secure upload portal without friction, fulfills their requests, and (if needed) delegates specific requests to internal SMEs — all without mandatory account creation.
-
-Clients are onboarded per engagement, not at the firm level. The same client contact may be invited to multiple engagements over time; each invitation is independent. Optional account creation provides organized access across engagements.
-
-**Steps:**
-
-1. **Client contact invitation** — The auditor enters the client's primary contact email when creating the engagement (or later from the Client Hub settings). The system generates a tokenized Client Hub link scoped to this specific engagement and sends an invitation email: "Your audit team has started your [Engagement Name] and needs documents from you."
-
-2. **Magic link first access** — The client contact clicks the tokenized link. No account or password is required for basic upload. They land on the Client Hub showing: engagement name and period, list of outstanding document requests with titles, instructions, and due dates, and a drag-and-drop upload interface per request. The tokenized link is engagement-scoped — it cannot be used to access any other engagement or any firm-level content.
-
-3. **Optional account creation** — For clients with many requests or who expect multi-year engagements, the Client Hub prompts (but does not require): "Create a password-protected account to access all your requests in one place and receive organized notifications." Account creation creates a `ClientUser` record linked to the `Client`. Clients who decline continue to access via tokenized links for each request.
-
-4. **Intake form (configurable per engagement)** — For new clients, the auditor can enable an intake form in the engagement setup. If enabled, the client is prompted to complete the intake form on first access before their request list is shown. The form collects: entity legal name, primary business description, key systems in scope, and primary client contacts. Responses are stored as a `Workpaper` of type `ClientIntake` in the engagement file. The intake form is not required by default — auditors enable it only when needed (common for first-year SOC 2 and ISO 27001 engagements).
-
-5. **Request delegation** — A `ClientAdmin` user (elevated client role, assigned by the auditor) can delegate individual document requests to other contacts within their company. Delegation is by email: the `ClientAdmin` enters a colleague's email address on a specific request, and that colleague receives a tokenized link scoped to that single request only. The delegate sees only the request description, instructions, and upload interface — not the full Client Hub, the engagement name, or any other requests. Delegation creates an `AuditLog` entry recording who delegated, to whom, and when.
-
-6. **Ongoing and post-archive access** — While the engagement is active, the client can view submitted documents and request statuses. After the engagement is archived, the Client Hub link becomes read-only: submitted documents are visible, new uploads are blocked, and an in-portal notice explains that the engagement has been completed. If the auditor has shared the issued report with the client, it is visible in read-only mode in the Client Hub indefinitely (within the engagement's retention period).
-
-**Tokenized link security:**
-- All client-side upload tokens expire after 90 days and require re-generation by the auditor
-- Tokens are single-use per session (not per upload); a new token is issued on re-generation
-- Token re-generation is available from the Document Request settings panel by any `Manager` or `Partner` on the engagement
-- Token expiry and re-generation events are recorded in `AuditLog`
-
-**Data entities touched:** `Client`, `ClientUser`, `DocumentRequest`, `EvidenceItem`, `Workpaper` (ClientIntake type), `AuditLog`, `User` (ClientAdmin / ClientUser roles).
-
----
-
-## 12. Engagement Module Specifications
-
-### Module 1: Engagement Management and Scoping (including SQMS 1 Client Acceptance)
-
-**Purpose:** Initialize an engagement with correct methodology, framework version, team assignment, and quality documentation; enforce the SQMS 1 client acceptance workflow before fieldwork begins.
-
-**Key user flows:**
-
-1. **New engagement creation (from template):** Partner or Manager selects engagement type (FinancialAudit_Private, SOC2, ISO27001, HIPAA, etc.), selects the applicable `MethodologyTemplate`, selects the framework version, enters period dates, and assigns the engagement team. The system creates:
-   - `Engagement` record with `status = Planning`
-   - `EngagementTeamMember` records for assigned users
-   - `EngagementFramework` record(s) — one per framework in scope
-   - `Control` records cloned from `TemplateControl` entries (with `prior_control_id` if rollforward)
-   - `TestProcedure` records cloned from `TemplateTestProcedure` entries
-   - Draft `Workpaper` shells for each workpaper type in the template
-   - An empty `ClientAcceptance` record flagged as incomplete
-
-2. **SQMS 1 client acceptance:** Partner completes the `ClientAcceptance` form: quality risks identified (free text + structured categories), firm responses to those risks, independence confirmation, and acceptance sign-off. The Planning → Fieldwork transition is blocked at the state machine level until `ClientAcceptance.accepted_at` is populated by a Partner-role user. The acceptance record is immutable once signed — addenda require creating a new version.
-
-3. **EQR assignment (SQMS 2):** For engagements requiring EQR (all PCAOB engagements; higher-risk nonissuer engagements per firm policy), the `EngagementQualityReview` record is created during engagement setup. The system validates that the assigned `reviewer_id` holds the `EQReviewer` role and is not an `EngagementTeamMember` on the same engagement — if both conditions are not met, the EQR assignment is rejected with a clear error.
-
-4. **Rollforward from prior year:** When creating an engagement from a prior year (`prior_engagement_id` set), the system surfaces: all prior year controls (with rollforward status), prior year workpapers (read-only sidebar), prior trial balance (reference only), and prior ClientAcceptance (read-only — a new acceptance is required). Prior year evidence items are surfaced with "used in prior year" flags when the auditor links evidence to a test procedure.
-
-5. **Scope changes:** If the Partner returns the engagement from Fieldwork to Planning (e.g., a significant scope change requiring re-evaluation of quality risks), the system creates a new `ClientAcceptance` record rather than modifying the prior one. The prior acceptance remains in the audit file with a note that it was superseded.
-
-**Data entities involved:** `Engagement`, `EngagementTeamMember`, `EngagementFramework`, `Control`, `TestProcedure`, `ClientAcceptance`, `EngagementQualityReview`, `MethodologyTemplate`, `TemplateControl`, `TemplateTestProcedure`, `AuditLog`.
-
-**AI touchpoints:**
-- Control mapping (Feature 2): immediately after engagement creation, AI proposes `FirmControlObjectiveMapping` records across all frameworks. Partner/Manager reviews in bulk.
-- Risk pre-population: AI suggests quality risk categories based on client industry and prior engagement findings. SQMS 1 Tier 2 — auditor reviews and certifies; not auto-populated.
-
-**Regulatory constraints:**
-- `ClientAcceptance` must be completed before Fieldwork begins — SQMS 1
-- EQR reviewer independence check is system-enforced — SQMS 2 / PCAOB AS 1220
-- Framework version must be set at engagement creation and cannot be changed after Fieldwork begins without Partner override and documented reason — from framework version management requirement in Section 4
-
----
-
-### Module 2: Trial Balance and Financial Analysis (Sheets Experience)
-
-**Purpose:** Provide a spreadsheet-like environment for importing, reviewing, and analyzing the client's trial balance; support account mapping, adjustment tracking, lead schedule generation, and analytical procedures — all without leaving the platform or opening Excel.
-
-**Key user flows:**
-
-1. **Trial balance import:** Staff auditor uploads a CSV or Excel file exported from the client's accounting system (QBO, NetSuite, Sage, Xero). The importer recognizes common column formats (account number, account name, debit balance, credit balance) with configurable column mapping. The result is a set of `TrialBalanceAccount` records linked to the engagement.
-
-2. **AI account mapping (Feature 3):** Immediately after import, Claude Haiku classifies each account into a financial statement line item. Mappings are displayed in the Sheets UI with `mapping_status = AISuggested`. Low-confidence mappings are highlighted. The auditor reviews and confirms each mapping; bulk-confirm is available for accounts where the suggested mapping is unambiguous. Prior year confirmed mappings are pre-loaded on rollforward engagements and treated as the starting suggestion (with `mapping_status = AISuggested` to require re-confirmation for the current year).
-
-3. **Lead schedule generation:** Once accounts are mapped to FS line items, the system automatically generates lead schedule workpapers grouped by financial statement section. The lead schedule aggregates balances from `TrialBalanceAccount` records and supports drill-through to individual accounts. Materiality calculations (ISA 320 / AU-C 320 methods) are available as formula functions.
-
-4. **Adjustment tracking:** Staff auditors propose adjustments (`TrialBalanceAdjustment`). Each adjustment specifies account, amount, description, and type (Proposed | Passed | Waived). Manager or Partner approves or waives. The system tracks both the unadjusted and adjusted trial balance and reflects both in the lead schedule.
-
-5. **Analytical procedures:** The Sheets UI exposes computed analytics: period-over-period variance by account, ratio calculations (current ratio, quick ratio, debt-to-equity), and anomaly flags generated by the AI pipeline (accounts with unusual activity relative to prior period or industry norms). Anomaly flags are Tier 1 AI actions — informational only, not decisions.
-
-6. **Population export for sampling:** Auditors can export the GL transaction detail (if imported) as a population listing for sampling. The platform's sampling calculator (ISA 530 / AU-C 530 methods: systematic, random, monetary unit) accepts the population and produces a `TestProcedure` sample selection record.
-
-**Data entities involved:** `TrialBalance`, `TrialBalanceAccount`, `TrialBalanceAdjustment`, `Workpaper` (lead schedules), `WorkpaperVersion`, `AIDecision`, `AuditLog`.
-
-**AI touchpoints:**
-- Account mapping (Feature 3): Haiku classification on import
-- Anomaly detection (Tier 1): nightly background job flags unusual account movements for auditor attention; no human approval required to flag, required to act
-
-**Regulatory constraints:**
-- Lead schedules are workpapers subject to AU-C 230 assembly deadline and lock requirements — they are locked at the Finalized state
-- Every proposed adjustment requires approval documentation per AU-C (all adjustments proposed, whether or not passed, must be retained)
-- For PCAOB engagements, all technology-assisted analytical procedures (variance analysis, ratio calculations) must be documented as `AIDecision` records (AS 1105)
-- Sampling documentation must record population size, sample size, selection method, and results per AU-C 530 / PCAOB AS 2315
-
----
-
-### Module 3: Controls and Workpaper Management (including EQR workflow per SQMS 2)
-
-**Purpose:** Execute and document all control testing and workpaper preparation; enforce the sign-off hierarchy from preparer to reviewer to engagement partner; support the EQR workflow for applicable engagements.
-
-**Key user flows:**
-
-1. **Control testing:** Staff auditors are assigned controls via `Control.auditor_assigned_to_id`. For each control, the auditor works through associated `TestProcedure` records: selecting the procedure type, documenting the population and sample (if applicable), linking evidence items, recording results, noting exceptions, and documenting conclusions. Test procedure status progresses: NotStarted → InProgress → Complete (or Exception if exceptions found).
-
-2. **Evidence linking:** When the auditor has evidence to link to a test procedure, they access the engagement's evidence pool (all `EvidenceItem` records for this client, across all engagements) and link the relevant item. The AI may have already suggested a link (`EvidenceLink.ai_suggested = true`); the auditor accepts, modifies, or rejects. On acceptance, the `AIDecision` record is updated with the review action.
-
-3. **Cross-framework evidence display:** When an auditor links evidence to a test procedure, the UI shows which other framework requirements that evidence simultaneously satisfies (via the `FirmControlObjective → FirmControlObjectiveMapping → FrameworkRequirement` chain). For an integrated SOC 2 + ISO 27001 engagement, the auditor sees "this evidence satisfies SOC 2 CC6.1, ISO 27001 A.8.3, and HIPAA §164.312(a)(1)." No additional action required — all mappings are populated automatically.
-
-4. **Workpaper sign-off workflow:** After a test procedure is complete, the auditor marks the workpaper as `PreparedPendingReview`. The manager is notified. The manager reviews the workpaper (in-platform, with inline commenting and review notes), marks review notes as open or resolves them, and advances the workpaper to `ReviewComplete`. The engagement partner reviews the manager's cleared notes and signs off the workpaper. Sign-off is a timestamped, named action that creates an `AuditLog` entry — it cannot be backdated or bulk-applied without individual confirmation.
-
-5. **AI workpaper draft (Feature 4):** Once a test procedure is marked Complete, the auditor can request an AI narrative draft. The draft appears in the workpaper editor labeled "AI Draft — requires review." The `WorkpaperVersion` record is created with `is_ai_draft = true`. The auditor must edit the text and save (changing `is_ai_draft` to false) before the workpaper can be advanced to `PreparedPendingReview`. The platform will not allow a workpaper with `is_ai_draft = true` to be signed off.
-
-6. **EQR workflow (SQMS 2 / PCAOB AS 1220):** For engagements with EQR assigned, the EQR reviewer accesses the engagement in read-only mode (they are not an `EngagementTeamMember` and cannot modify any engagement content). The reviewer documents their review scope, findings, and conclusion in the `EngagementQualityReview` record. The Review → Reporting transition is blocked until `EngagementQualityReview.signed_off_at` is populated by the assigned reviewer. The EQR record and its sign-off timestamp become part of the immutable engagement archive.
-
-7. **Review notes management:** Review notes (comments and findings from manager or EQR review) are tracked as structured records linked to the relevant workpaper or control. Open review notes block workpaper advancement. Resolved notes remain in the record — they cannot be deleted. The AuditLog captures the open and resolution events.
-
-**Data entities involved:** `Control`, `TestProcedure`, `EvidenceItem`, `EvidenceLink`, `Workpaper`, `WorkpaperVersion`, `EngagementQualityReview`, `AIDecision`, `AuditLog`, `FirmControlObjective`, `FirmControlObjectiveMapping`, `FrameworkRequirement`.
-
-**AI touchpoints:**
-- Evidence link suggestions (Tier 2): AI suggests relevant evidence items for each test procedure based on the procedure description and evidence extracted text
-- Workpaper narrative draft (Feature 4, Tier 2): on-demand, explicit request by auditor
-- Control mapping (Feature 2): surfaces cross-framework satisfaction at evidence-link time
-
-**Regulatory constraints:**
-- Sign-off hierarchy must be enforced at data layer: workpaper cannot advance states out of order — SQMS 1, AU-C 220
-- EQR reviewer must be independent of engagement team — SQMS 2, PCAOB AS 1220
-- All AI suggestions that affect audit content must create `AIDecision` records — PCAOB AS 1105
-- `is_ai_draft = true` workpapers cannot be signed off — PCAOB AS 1105 (AI-generated vs. auditor-authored content distinction)
-- Review notes cannot be deleted — AU-C 230
-
----
-
-### Module 4: Document Request and Client Hub (PBC Portal)
-
-**Purpose:** Manage the complete cycle of PBC (Provided By Client) document requests from creation through fulfillment; provide clients with a clean, no-login-required upload experience; apply AI completeness review to uploaded documents before they enter the auditor's review queue.
-
-**Key user flows:**
-
-1. **Request creation:** Staff auditors or managers create `DocumentRequest` records linked to specific controls or test procedures. Requests include a title, detailed instructions (what to provide, the format required, the period to cover), a due date, and assignment to a client-side contact. Bulk request creation from a methodology template is available — the standard SOC 2 Type II template creates 80+ pre-drafted requests covering all trust services criteria.
-
-2. **Client notification and upload portal:** On request creation (or on explicit send action), the system sends the client contact an email with a tokenized link to their secure upload portal. No client account or password is required for basic uploads — the tokenized link is sufficient. For multi-upload engagements, clients can optionally create a password-protected `ClientUser` account for organized access to their request list.
-
-3. **Client upload experience:** The client portal presents the client's outstanding requests with descriptions, instructions, and due dates. For each request, the client uploads a file (drag-and-drop or file picker; single or bulk). The upload is stored as an `EvidenceItem` record immediately. The request status changes to `Submitted`.
-
-4. **AI completeness review (Feature 1):** On upload, an asynchronous job queues the AI completeness review. Within minutes, Claude Sonnet analyzes the uploaded document against the request requirements and produces an `AIDecision` record with a recommendation: Accept | Request Clarification | Reject. The auditor receives an in-app notification: "AI has reviewed [document name] for [request title]."
-
-5. **Auditor review queue:** The auditor sees all recently reviewed documents in a queue, sorted by AI confidence (low-confidence reviews surfaced first). For each review, the auditor sees the AI recommendation, the specific gaps identified (if any), and one-click actions: Accept (creates `EvidenceLink` to relevant `TestProcedure`), Send Back to Client (with auto-drafted client explanation from the AI's gap analysis), or Reject (remove from engagement). All three actions update the `AIDecision.review_action` field and create `AuditLog` entries.
-
-6. **Automated reminders:** Overdue document requests trigger the `DocumentRequestReminderStateMachine` in Step Functions. The workflow sends reminder emails on a configurable schedule (default: 7 days before due, on due date, 7 days after). After three reminders, the workflow escalates to the auditor with a notification. Reminder frequency and content are configurable per engagement.
-
-7. **Overdue management:** Requests that are overdue change status to `Overdue` automatically. The engagement dashboard surfaces overdue requests with a count badge. Partners can see overdue request rates across all active engagements in the analytics dashboard (Scale tier).
-
-**Data entities involved:** `DocumentRequest`, `EvidenceItem`, `EvidenceLink`, `TestProcedure`, `Control`, `AIDecision`, `AuditLog`, `User` (ClientUser).
-
-**AI touchpoints:**
-- Document completeness review (Feature 1, Tier 2): triggered on every client upload; auditor must review and action the recommendation
-- Evidence link suggestion (Tier 2): on acceptance, AI also suggests which `TestProcedure` to link the evidence to
-
-**Regulatory constraints:**
-- Period coverage check is a mandatory part of the AI completeness review for SOC 2 Type II — AT-C 320 requires evidence covering the full examination period
-- Every document request acceptance creates an `AIDecision` record — PCAOB AS 1105 where applicable
-- Client-side upload tokens expire after 90 days and require re-generation; tokens are single-use for the specific engagement (cannot be used to upload to a different engagement)
-- Document request overdue reminders are audit-trailed in `AuditLog` (reminder sent, who was notified, when)
-
----
-
-### Module 5: Reporting and Archiving (Immutable Archive, Assembly Deadline Enforcement)
-
-**Purpose:** Generate the final engagement report; manage the transition from active engagement to finalized and then to immutable archived state; enforce assembly deadlines and retention schedules.
-
-**Key user flows:**
-
-1. **Report generation:** When the engagement reaches the Reporting state, the partner generates the report from a template. Report types: SOC 2 Type I, SOC 2 Type II, SOC 1 Type I, SOC 1 Type II, Financial Audit Opinion, Agreed-Upon Procedures, Management Letter. The report template is pre-populated with engagement data (client name, period, framework, controls summary, exception summary). The partner edits the narrative, adds the opinion, and iterates on the draft internally. Each save creates a `ReportVersion` record.
-
-2. **Client review (optional):** The partner can share a draft report with client admin users for review. Client users see a read-only view of the draft report and can submit comments. The partner reviews comments in-platform and issues a revised draft.
-
-3. **Report issuance:** The partner marks the report as Issued (`Report.status = Issued`) and the system records `report_issued_at` on the `Engagement`. This triggers: (a) computation of `assembly_deadline` (report date + 60 days for AICPA, + 45 days for PCAOB), (b) computation of `retention_deadline` (report date + 5 years for AICPA, + 7 years for PCAOB), (c) scheduling of the Finalized → Archived Step Functions wait state.
-
-4. **Finalized state:** The partner transitions the engagement to Finalized. This transition is blocked unless `Report.status = Issued`. At Finalized: all workpaper content is locked (`Workpaper.is_locked = true`); no further edits to any workpaper, evidence link, control conclusion, or test procedure are permitted. Any modification attempt returns a hard error: "This engagement has been finalized. Modifications require an addendum."
-
-5. **Addendum process (post-finalization):** If an error or omission is identified after finalization and before archival, the auditor creates a new `WorkpaperVersion` with `is_addendum = true`, documents the reason for the addendum, and obtains sign-off from the engagement partner. The original content is unchanged — the addendum is an additional record, not a modification. This implements AU-C 230 §.16 (subsequent discovery of information after the documentation completion date must be documented as an addendum).
-
-6. **Automatic archival:** The `EngagementLifecycleStateMachine` in Step Functions triggers the Finalized → Archived transition when `report_issued_at + assembly_window` has elapsed. At archival:
-   - All workpaper and evidence files are copied to the S3 Object Lock bucket with the engagement's `retention_deadline` set as the Object Lock retention period (COMPLIANCE mode)
-   - `Engagement.archived_at` is set
-   - The engagement becomes read-only in the application — no further state changes are possible (except the FirmAdmin → Abandoned path)
-   - An archival confirmation email is sent to the engagement partner
-   - The `AuditLog` records the system-triggered archival event
-
-7. **Retention expiry and deletion:** When `retention_deadline` elapses (5 or 7 years from report date), the Object Lock period expires automatically. The system sends the firm admin a notification 90 days before expiry: "Engagement [name] reaches its retention limit in 90 days. Data will be deleted on [date] unless you export it." If no extension is requested, S3 lifecycle policies delete the objects after expiry. This implements the obligation to delete at schedule end per GDPR/CCPA retention obligations.
-
-8. **Engagement export:** At any time (including before archival), firm admins can generate a complete engagement export: all workpapers as PDF, all evidence files in native format, trial balance as Excel, AuditLog as CSV, and engagement metadata as JSON. The export is a structured ZIP file suitable for standalone archival independent of the platform. This export is the primary mechanism for satisfying offboarding obligations and for firms that want their own long-term archival copies.
-
-**Data entities involved:** `Engagement`, `Report`, `ReportVersion`, `Workpaper`, `WorkpaperVersion`, `EvidenceItem`, `EvidenceLink`, `AuditLog`, `EngagementQualityReview`, `AIDecision`.
-
-**AI touchpoints:**
-- Report narrative drafting: AI can be invoked on the report template to pre-draft the "Description of Tests of Controls" section from the control testing data; same Tier 2 rule applies (draft labeled, human must edit and sign off)
-- No other AI touchpoints in reporting — the partner is performing final professional judgment at this stage
-
-**Regulatory constraints:**
-- Assembly deadline is computed at report issuance and enforced as a hard lock — AU-C 230, PCAOB AS 1215
-- S3 Object Lock COMPLIANCE mode is used for archived engagements — PCAOB AS 1215 and SOX §802 immutability requirements
-- Retention periods are per engagement type (5 years for private/SOC/ISO; 7 years for public/PCAOB; 6 years for HIPAA) and computed from `report_issued_at`
-- Addenda post-finalization require documented reason and partner sign-off — AU-C 230 §.16
-- The Finalized → Archived transition is system-triggered and cannot be overridden by any user role (including FirmAdmin) except to mark an engagement as Abandoned — which also triggers archival
+## 12. Flows Without Competitor Equivalent
+
+These flows represent genuine Axiom innovation — no competitor (Fieldguide, CaseWare, DataSnipper, Yak) currently offers them. Full design detail is in the journey maps linked above.
+
+1. **Cross-framework evidence satisfaction display** (Journeys 3, 5) — one piece of evidence simultaneously satisfying SOC 2, ISO 27001, and HIPAA requirements, shown in real-time during testing
+2. **AI document completeness review with client-facing gap explanations** (Journeys 7, 8) — AI analyzes uploaded documents against request requirements and auto-drafts specific gap explanations for the client
+3. **System-enforced AI draft edit gate** (Journeys 5, 6) — workpapers with unedited AI content cannot be signed off, implementing PCAOB AS 1105 at the data layer
+4. **EQR independence enforcement** (Journey 10) — system-level validation that the quality reviewer is not on the engagement team
+5. **Post-finalization addendum workflow** (Journey 9) — proper AU-C 230 §.16 implementation with immutable original content and versioned addenda
+6. **Full-population analytics as alternative to sampling** (Journey 4) — testing entire transaction datasets rather than statistical samples
+7. **Automatic assembly deadline computation and WORM archival** (Journey 9) — computed at report issuance, enforced via S3 Object Lock COMPLIANCE mode
 
 ---
 
