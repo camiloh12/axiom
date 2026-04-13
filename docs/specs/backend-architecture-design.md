@@ -29,6 +29,8 @@ The following decisions were made in sequence:
 
 5. **Population analysis runs in PostgreSQL.** Trial balance population analysis (gap testing, duplicate detection, threshold filtering, Benford's law) runs as SQL queries against the trial balance database. The application layer handles orchestration and result formatting only. This removes performance as a differentiator between language options and makes Python's GIL a non-issue for this workload.
 
+**AWS infrastructure** — account structure, VPC design, ECS/Fargate configuration, RDS instance sizing, S3 bucket policies, CI/CD pipeline, Terraform workspace segmentation, observability, and security controls are specified in [`infrastructure-design.md`](./infrastructure-design.md).
+
 ---
 
 ## 2. Service Decomposition
@@ -230,7 +232,7 @@ RDS PostgreSQL (Multi-AZ)
 
 Each service has its own Postgres user with access only to its own database. No cross-database queries. Cross-service data is resolved via REST API calls at runtime.
 
-PgBouncer (transaction-mode connection pooling) is deployed as a sidecar or DaemonSet to pool connections per database. Each service connects to PgBouncer, not directly to RDS.
+PgBouncer (transaction-mode connection pooling) is deployed as an ECS sidecar container in each service's task definition. Each service connects to PgBouncer at `localhost:6432`, not directly to RDS.
 
 ### core_db: Multi-Tenancy via RLS
 
@@ -323,11 +325,16 @@ packages/
                         OpenTelemetry setup, common error types
   openapi/           — OpenAPI specs for all services (source of truth)
   ai/                — Go: Bedrock client wrappers, AIDecision recording
+
+infra/
+  modules/           — Reusable Terraform modules (vpc, ecs-service, rds, etc.)
+  workspaces/        — Layer-based Terraform workspaces (network, data, compute, etc.)
+  envs/              — Per-environment tfvars (dev, staging, prod)
 ```
 
 Each Go service has its own `go.mod`. `go-shared` is a local module referenced by each service. The Python service has its own `pyproject.toml`.
 
-Turborepo manages the monorepo with per-service build caching. Go services build to single binaries; the Python service builds a Docker image.
+Turborepo manages the monorepo with per-service build caching. Go services build to single binaries; the Python service builds a Docker image. Infrastructure is provisioned via Terraform with layer-based workspace segmentation — see [`infrastructure-design.md`](./infrastructure-design.md) for full details.
 
 ---
 
@@ -347,6 +354,10 @@ Turborepo manages the monorepo with per-service build caching. Go services build
 | Transactional email | SES or SendGrid (undecided) | SES |
 | Frontend type sharing | tRPC inferred types | openapi-typescript (generated from OpenAPI spec) |
 | Container orchestration | EKS (Kubernetes) | ECS Fargate — no node management, no control plane upgrades; ECS Service Connect for internal DNS; Amazon VPC Lattice for deferred mTLS |
+| Infrastructure-as-code | Undefined | Terraform with layer-based workspace segmentation (network, data, compute, dns-cdn, observability, cicd) — see [`infrastructure-design.md`](./infrastructure-design.md) |
+| CI/CD | Undefined | GitHub Actions with OIDC federation to AWS (no long-lived credentials) |
+| AWS account structure | Undefined | Multi-account via AWS Organizations (management, tooling, dev, staging, prod) |
+| Observability | Undefined | CloudWatch Logs + Metrics + Dashboards + Alarms, X-Ray via OpenTelemetry |
 
 The frontend (`apps/web`) remains TypeScript + React. `openapi-typescript` generates typed API clients from the OpenAPI specs in `packages/openapi/`. The code-generation step runs as part of the Turborepo build pipeline — a spec change automatically regenerates the client on the next build.
 

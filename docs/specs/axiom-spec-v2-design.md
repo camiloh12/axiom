@@ -712,8 +712,13 @@ AG Grid Community handles 200–10,000 rows with virtualization, has a large Rea
 - **S3** — Evidence file storage; Object Lock enabled for finalized engagements (see Section 10)
 - **CloudFront** — CDN for the React SPA
 - **SES** — Transactional email (document request notifications, client invitations, review alerts)
-- **Secrets Manager** — API keys, database credentials, OAuth tokens
+- **Secrets Manager** — API keys, database credentials, OAuth tokens (automatic 30-day rotation for RDS credentials)
 - **CloudWatch + X-Ray** — Logging, monitoring, distributed tracing (via OpenTelemetry Go SDK)
+- **AWS WAF** — Web Application Firewall on ALB and CloudFront (OWASP core rules, rate limiting, geo-restriction)
+- **GuardDuty** — Threat detection across ECS, S3, and RDS
+- **AWS Config** — Continuous infrastructure compliance monitoring
+
+**Full AWS account structure, VPC design, Terraform workspace segmentation, CI/CD pipeline, security controls, observability configuration, and cost estimates are specified in [`infrastructure-design.md`](./infrastructure-design.md).**
 
 ---
 
@@ -862,11 +867,12 @@ Axiom's standard MSA states coverage levels and commits to maintaining them thro
 
 ### Encryption
 
-**In transit:** TLS 1.3 minimum for all connections (browser → CloudFront → API, API → database, API → S3, API → Bedrock via VPC endpoint). No exceptions; HTTP upgrade headers redirect all HTTP traffic.
+**In transit:** TLS 1.2 minimum for all connections (browser → CloudFront → API, API → database, API → S3, API → Bedrock via VPC endpoint). TLS 1.3 is preferred and negotiated when both sides support it. The ALB uses the `ELBSecurityPolicy-TLS13-1-2-2021-06` policy, which supports TLS 1.2 and 1.3 (TLS 1.3-only would break some enterprise clients). No exceptions; HTTP requests are redirected to HTTPS.
 
 **At rest:** AES-256 server-side encryption for all data:
-- RDS PostgreSQL: AES-256 via AWS-managed keys (KMS)
-- S3 evidence files: AES-256 SSE-S3 (upgraded to SSE-KMS for HIPAA engagements)
+- RDS PostgreSQL: AES-256 via customer-managed KMS key (`axiom-{env}-rds`) with annual automatic rotation
+- S3 evidence files: AES-256 SSE-S3 default; HIPAA-flagged evidence uses SSE-KMS with a dedicated customer-managed key (`axiom-{env}-hipaa`) for CloudTrail decrypt auditing and IAM-level key access control (see [`infrastructure-design.md`](./infrastructure-design.md) Section 4 for rationale)
+- S3 archive bucket (finalized engagements): SSE-KMS with the HIPAA key
 - Backups: encrypted with the same KMS key as the source
 
 ### Multi-Tenancy Isolation

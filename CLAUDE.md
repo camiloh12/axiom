@@ -14,6 +14,7 @@ This repository currently contains no implemented code. All guidance below refle
 
 - **Product spec:** `docs/specs/axiom-spec-v2-design.md` — full product design, data model, and feature requirements
 - **Backend architecture:** `docs/specs/backend-architecture-design.md` — supersedes the tech stack section of the product spec
+- **Infrastructure:** `docs/specs/infrastructure-design.md` — AWS account structure, networking, Terraform workspaces, CI/CD, observability, security controls, cost estimates
 
 ## Tech Stack
 
@@ -27,7 +28,9 @@ This repository currently contains no implemented code. All guidance below refle
 | Background jobs | River (Postgres-backed, Go-native) |
 | Workflow engine | AWS Step Functions |
 | AI inference | AWS Bedrock (Claude via VPC endpoint) |
-| Infrastructure | AWS ECS Fargate + ALB + RDS (Multi-AZ) |
+| Infrastructure | AWS ECS Fargate + ALB + RDS (Multi-AZ), Terraform IaC |
+| CI/CD | GitHub Actions with OIDC federation to AWS |
+| Observability | CloudWatch + X-Ray (via OpenTelemetry) |
 | Email | AWS SES |
 
 ## Architecture Overview
