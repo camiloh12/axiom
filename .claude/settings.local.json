@@ -27,7 +27,15 @@
       "Bash(sed -i '931s/| Section 11B //' /tmp/new_spec.md)",
       "Bash(sed -i '932s/| Module 1 //' /tmp/new_spec.md)",
       "Bash(sed -i '929s/|---|---------|------/|---|---------|------|/' /tmp/new_spec.md)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(ls -la /tmp/audit-core-part*.yaml)",
+      "Bash(grep -c '^\\\\s\\\\+\\\\w\\\\+:$' C:/Users/camil/projects/axiom/packages/openapi/audit-core-part2.yaml)",
+      "Bash(grep -oP '\\\\$ref:\\\\s*['\\\\''\"]#/components/schemas/\\(\\\\w+\\)['\\\\''\"]' C:/Users/camil/projects/axiom/packages/openapi/audit-core.yaml)",
+      "Bash(where python:*)",
+      "Bash(where python3:*)",
+      "Bash(grep -c 'operationId:' C:/Users/camil/projects/axiom/packages/openapi/*.yaml)",
+      "Bash(grep -ch 'operationId:' C:/Users/camil/projects/axiom/packages/openapi/*.yaml)",
+      "Bash(bc)"
     ]
   }
 }
