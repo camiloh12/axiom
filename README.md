@@ -52,7 +52,6 @@ SOC 2 Type 2, ISO 27001, ISO 42001 from day one. All AI decisions are logged for
 - [backend-architecture-design.md](docs/specs/backend-architecture-design.md) — service decomposition and monorepo structure
 - [infrastructure-design.md](docs/specs/infrastructure-design.md) — AWS account structure, Terraform workspaces, CI/CD, observability
 - [domain-and-data-model-design.md](docs/specs/domain-and-data-model-design.md) — domain model and data schema design
-- [user-journey-mapping-skill-design.md](docs/specs/user-journey-mapping-skill-design.md) — user journey mapping skill design
 
 ## User Journeys
 
