@@ -35,7 +35,14 @@
       "Bash(where python3:*)",
       "Bash(grep -c 'operationId:' C:/Users/camil/projects/axiom/packages/openapi/*.yaml)",
       "Bash(grep -ch 'operationId:' C:/Users/camil/projects/axiom/packages/openapi/*.yaml)",
-      "Bash(bc)"
+      "Bash(bc)",
+      "Bash(pip show:*)",
+      "Bash(py --version)",
+      "Bash(python3.exe --version)",
+      "Bash(pip3.exe show:*)",
+      "Bash(python3.12 -c \"import diagrams.aws.compute as m; print\\([x for x in dir\\(m\\) if 'ECR' in x.upper\\(\\) or 'ecr' in x.lower\\(\\)]\\)\")",
+      "Bash(/c/Users/camil/AppData/Local/Programs/Python/Python312/python.exe -c \"import diagrams.aws.compute as m; print\\([x for x in dir\\(m\\) if 'ecr' in x.lower\\(\\) or 'ECR' in x]\\)\")",
+      "Bash(/c/Users/camil/AppData/Local/Programs/Python/Python312/python.exe axiom_infrastructure.py)"
     ]
   }
 }
