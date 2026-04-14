@@ -1277,9 +1277,9 @@ System-wide reference tables (`frameworks`, `framework_requirements`, `control_o
 
 ### Entity Count Summary
 
-- **Total domain entities:** 33
-- **identity_db tables:** 9
-- **core_db tables:** 18 (4 system + 14 tenant-scoped)
+- **Total domain entities:** 39
+- **identity_db tables:** 10
+- **core_db tables:** 21 (4 system + 17 tenant-scoped)
 - **trial_balance_db tables:** 4
 - **workpaper_db tables:** 3
 - **reporting_db tables:** 2
