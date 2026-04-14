@@ -2,6 +2,7 @@
 **Date:** 2026-04-12
 **Status:** Approved
 **Supersedes:** Section 7 (Technology Stack) of `axiom-spec-design.md`
+**Related:** [`domain-and-data-model-design.md`](./domain-and-data-model-design.md) (authoritative domain model and entity definitions)
 
 ---
 
@@ -93,14 +94,18 @@ Owns:
 - `Firm` — root tenant entity
 - `User` — firm staff and client-side users; roles
 - `Client` — entity being audited
-- `MethodologyTemplate`, `TemplateControl`, `TemplateTestProcedure` — firm-level reusable templates
+- `Invitation` — magic link staff onboarding tokens
+- `MethodologyTemplate`, `TemplateControl`, `TemplateTestProcedure`, `TemplateDocumentRequest` — firm-level reusable templates
+- `FirmControlObjective`, `FirmControlObjectiveMapping` — firm-customized control objectives and framework requirement mappings
 
 Responsibilities:
 - User registration, login (email/password + MFA), SSO via SAML (Microsoft/Google).
 - JWT issuance and refresh. JWTs are signed with an RSA private key held only by this service.
 - RBAC: role assignment, permission checks. Roles: `FirmAdmin | Partner | Manager | Staff | EQReviewer | ClientAdmin | ClientUser | ViewOnly`.
 - Firm settings and subscription tier management.
-- Methodology template CRUD.
+- Staff invitation management (magic link issuance, expiry, day-5 reminders).
+- Methodology template CRUD (including pre-drafted document request templates).
+- Firm control objective CRUD and framework requirement mappings.
 
 Client users (`ClientAdmin`, `ClientUser`) belong to a `Client` record in this service, not a `Firm`. Their JWT encodes the `client_id` and the specific engagement IDs they are invited to.
 
@@ -116,13 +121,13 @@ Client users (`ClientAdmin`, `ClientUser`) belong to a `Client` record in this s
 
 Owns:
 - `Engagement`, `EngagementTeamMember`, `EngagementFramework`
-- `ClientAcceptance`, `EngagementQualityReview`
-- `FirmControlObjective`, `FirmControlObjectiveMapping`
+- `ClientAcceptance`, `EngagementQualityReview`, `EQRFinding`
 - `Control`, `TestProcedure`
-- `EvidenceItem`, `EvidenceLink`
-- `DocumentRequest`
+- `EvidenceItem`, `EvidenceLink`, `evidence_embeddings` (pgvector)
+- `DocumentRequest`, `ClientHubToken`, `DelegationToken`
 - `AIDecision`
 - `AuditLog` (append-only, insert-only PostgreSQL rule)
+- `Notification` (in-app + email delivery)
 
 System tables (seeded, not tenant-scoped, updated via migrations):
 - `Framework`, `FrameworkRequirement`
@@ -133,10 +138,10 @@ River workers (background jobs within `core_db`):
 - `document.embed` — generates embeddings via Claude API; stores vectors in pgvector
 - `ai.completeness-check` — per document upload, checks completeness against request
 - `ai.nightly-sweep` — engagement-level completeness review
-- `ai.batch-control-mapping` — maps new FirmControlObjectives to FrameworkRequirements
-- `email.notification` — all transactional email via SES
+- `ai.batch-control-mapping` — maps new FirmControlObjectives to FrameworkRequirements; reads FirmControlObjectives via Identity Service REST API, writes mappings back via REST (triggered by SQS event from Identity Service)
+- `notification.deliver` — creates Notification records and delivers transactional email via SES based on recipient notification preferences
 
-This is the largest service by entity count and intentionally so. The evidence chain (`EvidenceItem → EvidenceLink → TestProcedure → Control → FirmControlObjective → FrameworkRequirement`) is the product's core differentiator and requires ACID transactions across these entities. Splitting it would require distributed transactions or eventual consistency on operations that must be atomic (e.g., accepting a document request must atomically create an `EvidenceLink` and update `DocumentRequest.status`).
+This is the largest service by entity count and intentionally so. The evidence chain within `core_db` (`EvidenceItem → EvidenceLink → TestProcedure → Control`) requires ACID transactions. `Control.firm_control_objective_id` is a cross-database reference to `identity_db` — framework mapping resolution (`FirmControlObjective → FirmControlObjectiveMapping → FrameworkRequirement`) traverses the Identity Service via REST, but this is a read-only lookup that can be cached per engagement. The critical atomic operations (e.g., accepting a document request must atomically create an `EvidenceLink` and update `DocumentRequest.status`) stay within `core_db`.
 
 ---
 
@@ -148,6 +153,7 @@ This is the largest service by entity count and intentionally so. The evidence c
 
 Owns:
 - `TrialBalance`, `TrialBalanceAccount`, `TrialBalanceAdjustment`
+- `ColumnMappingProfile` — saved column mapping configurations per accounting system for reuse across imports
 
 `engagement_id` is stored as a plain UUID column — no foreign key, no join to `core_db`. If a request requires validating that the engagement exists and the requesting user has access, the service makes one REST call to Audit Core at the start of the handler and caches the result for the duration of the request.
 
@@ -165,6 +171,7 @@ The spreadsheet UI (AG Grid + HyperFormula) has distinct scaling and collaborati
 
 Owns:
 - `Workpaper`, `WorkpaperVersion`
+- `ReviewNote` — structured reviewer feedback anchored to workpaper content (cannot be deleted — AU-C 230)
 - Yjs document awareness state (in-memory per document, persisted to `workpaper_db` on save)
 
 `engagement_id` and `control_id` are plain UUID references — no foreign keys to `core_db`.
@@ -259,6 +266,7 @@ pgvector extension is enabled on `core_db`. Embedding vectors for `EvidenceItem`
 
 Used for request/response queries where the caller needs an immediate result. Examples:
 - API Gateway → any service (all client-initiated requests)
+- Audit Core → Identity Service (resolve FirmControlObjective and framework mappings for evidence chain)
 - Trial Balance Service → Audit Core (validate engagement access)
 - Workpaper Service → Audit Core (validate engagement and control access)
 - Reporting Service → Audit Core, Trial Balance, Workpaper (assemble report data)
@@ -270,6 +278,7 @@ All internal service calls use ECS Service Connect DNS. No service mesh at launc
 Used for cross-service events where the producer does not need an immediate response. Examples:
 - Audit Core → SQS → Document Processing triggered when a new `EvidenceItem` is uploaded
 - Identity Service → SQS → Audit Core notified when a user is deactivated (revoke engagement access)
+- Identity Service → SQS → Audit Core notified when new FirmControlObjectives are created (trigger AI batch control mapping)
 
 SQS standard queues (at-least-once delivery). Consumers are idempotent — processing the same event twice has no side effects (idempotency key stored in the relevant table).
 

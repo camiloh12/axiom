@@ -1,7 +1,7 @@
 # Axiom Infrastructure Design
 **Date:** 2026-04-12
 **Status:** Approved
-**Builds on:** `axiom-spec-design.md` Section 7, `backend-architecture-design.md`
+**Builds on:** `axiom-spec-design.md` Section 7, `backend-architecture-design.md`, `domain-and-data-model-design.md`
 
 ---
 
@@ -218,6 +218,7 @@ The Terraform `rds` module parameterizes the engine (`engine = var.rds_engine`) 
 |---|---|---|---|
 | `axiom-{env}-document-uploaded` | Audit Core | Audit Core (River worker) | Trigger document extraction pipeline |
 | `axiom-{env}-user-deactivated` | Identity Service | Audit Core | Revoke engagement access on user deactivation |
+| `axiom-{env}-fco-created` | Identity Service | Audit Core | Trigger AI batch control mapping when new FirmControlObjectives are created |
 
 Standard queues (at-least-once delivery). Each queue has a corresponding dead-letter queue (`-dlq` suffix) with `maxReceiveCount = 3`. DLQ messages trigger a CloudWatch alarm. Message retention: 7 days on main queue, 14 days on DLQ. Consumers are idempotent — processing the same event twice has no side effects.
 
@@ -304,7 +305,7 @@ Single target group pointing to the API Gateway ECS service. The gateway handles
 | Service | Permissions |
 |---|---|
 | `gateway` | Secrets Manager read (`jwt/rsa-public-key` only) |
-| `identity` | Secrets Manager read (own DB creds, JWT private key, OAuth secrets), SES `SendEmail`, SQS publish to `user-deactivated` |
+| `identity` | Secrets Manager read (own DB creds, JWT private key, OAuth secrets), SES `SendEmail`, SQS publish to `user-deactivated` and `fco-created` |
 | `audit-core` | Secrets Manager read (own DB creds), S3 read/write to `evidence` and `archive` buckets, SQS publish/consume, SES `SendEmail`, Bedrock `InvokeModel`, Step Functions `StartExecution`, KMS `Decrypt`/`GenerateDataKey` (HIPAA key) |
 | `trial-balance` | Secrets Manager read (own DB creds), Bedrock `InvokeModel` |
 | `workpaper` | Secrets Manager read (own DB creds), Bedrock `InvokeModel` |
@@ -335,8 +336,8 @@ Not provisioned at demo stage — engagement lifecycle transitions managed manua
 ### Bedrock
 
 Model access enabled in `us-east-1`:
-- `anthropic.claude-3-5-haiku` — control mapping, trial balance classification
-- `anthropic.claude-3-5-sonnet` — document completeness review, workpaper narrative drafts
+- `anthropic.claude-haiku-4-5` — control mapping, trial balance classification
+- `anthropic.claude-sonnet-4-6` — document completeness review, workpaper narrative drafts
 
 Traffic routes through the Bedrock VPC endpoint. IAM policies on task roles restrict which services can invoke which models (e.g., `trial-balance` task role can only invoke Haiku).
 
@@ -706,6 +707,7 @@ Workspaces share outputs via **SSM Parameter Store** in each workload account. T
 | `data` | `/axiom/{env}/s3-reports-bucket-arn` | `compute` |
 | `data` | `/axiom/{env}/sqs-document-uploaded-arn` | `compute` |
 | `data` | `/axiom/{env}/sqs-user-deactivated-arn` | `compute` |
+| `data` | `/axiom/{env}/sqs-fco-created-arn` | `compute` |
 | `data` | `/axiom/{env}/kms-hipaa-key-arn` | `compute` |
 | `compute` | `/axiom/{env}/alb-dns-name` | `dns-cdn` |
 | `compute` | `/axiom/{env}/alb-hosted-zone-id` | `dns-cdn` |
