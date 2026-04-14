@@ -1,0 +1,250 @@
+openapi: 3.1.0
+info:
+  title: Axiom Document Processing Service
+  version: 1.0.0
+  description: |
+    Stateless internal microservice that extracts text and table data from PDF and image documents.
+
+    **Internal service — not exposed via the API Gateway.**
+    This service is called exclusively by Audit Core's `document.extract` River worker over HTTP
+    within the VPC. No authentication is required. It must never be reachable from outside the
+    VPC network boundary.
+
+    Extraction engines:
+    - **pdfplumber** — layout-aware text and table extraction for digital PDFs.
+    - **pytesseract (Tesseract OCR)** — OCR for scanned documents detected as image-based PDFs or
+      rasterised image formats.
+
+    No state is retained between calls; every request is fully independent.
+
+servers:
+  - url: http://doc-processing:8080
+    description: Internal VPC service endpoint (ECS service-discovery DNS name).
+
+tags:
+  - name: DocumentExtraction
+    description: Extract text and structured data from PDF and image documents.
+
+paths:
+  /extract:
+    post:
+      summary: Extract text from a document
+      description: |
+        Accepts a PDF or image file and returns the full extracted text, per-page text with any
+        detected tables, and document-level metadata.
+
+        Supported MIME types: `application/pdf`, `image/png`, `image/jpeg`, `image/tiff`.
+
+        - Digital PDFs are processed with **pdfplumber** for layout-aware text and table detection.
+        - Documents where `is_scanned` is detected (image-based PDFs or raster images) are
+          processed with **pytesseract**.
+      operationId: extractDocument
+      tags:
+        - DocumentExtraction
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - content_type
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: |
+                    The document file to extract text from.
+                    Accepted formats: PDF, PNG, JPG, TIFF.
+                content_type:
+                  type: string
+                  description: MIME type of the uploaded file.
+                  enum:
+                    - application/pdf
+                    - image/png
+                    - image/jpeg
+                    - image/tiff
+                  examples:
+                    - application/pdf
+            encoding:
+              file:
+                contentType: application/pdf, image/png, image/jpeg, image/tiff
+      responses:
+        "200":
+          description: Text extraction succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtractionResult"
+              example:
+                text: "Full extracted text from all pages..."
+                pages:
+                  - page_number: 1
+                    text: "Text from page 1..."
+                    tables:
+                      - rows:
+                          - ["Header1", "Header2"]
+                          - ["Val1", "Val2"]
+                metadata:
+                  page_count: 5
+                  has_tables: true
+                  is_scanned: false
+        "400":
+          description: |
+            Invalid input. Returned when the uploaded file is corrupt, the MIME type is
+            unsupported, or the `content_type` field does not match the actual file format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: UNSUPPORTED_FORMAT
+                  message: "The uploaded file format is not supported."
+        "422":
+          description: |
+            Extraction failure. The file is valid and the format is supported, but text could
+            not be extracted (e.g., fully redacted PDF, zero-byte image, OCR returned no output).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: EXTRACTION_FAILED
+                  message: "Text extraction produced no output for the supplied document."
+        "500":
+          description: Unexpected internal error during extraction.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error:
+                  code: INTERNAL_ERROR
+                  message: "An unexpected error occurred."
+
+components:
+  schemas:
+    ExtractionResult:
+      type: object
+      description: Full extraction result for a single document.
+      required:
+        - text
+        - pages
+        - metadata
+      properties:
+        text:
+          type: string
+          description: Full concatenated text extracted from the entire document across all pages.
+          examples:
+            - "Full extracted text from all pages..."
+        pages:
+          type: array
+          description: Per-page extraction results in document order.
+          items:
+            $ref: "#/components/schemas/ExtractionPage"
+        metadata:
+          $ref: "#/components/schemas/ExtractionMetadata"
+
+    ExtractionPage:
+      type: object
+      description: Extracted content for a single page.
+      required:
+        - page_number
+        - text
+        - tables
+      properties:
+        page_number:
+          type: integer
+          minimum: 1
+          description: 1-based page index within the document.
+          examples:
+            - 1
+        text:
+          type: string
+          description: Full text extracted from this page, including any text outside of tables.
+          examples:
+            - "Text from page 1..."
+        tables:
+          type: array
+          description: Tables detected on this page. Empty array if no tables were found.
+          items:
+            $ref: "#/components/schemas/ExtractionTable"
+
+    ExtractionTable:
+      type: object
+      description: |
+        A single table extracted from a page. Rows are ordered top-to-bottom; cells within
+        each row are ordered left-to-right. The first row typically contains column headers
+        but this is not guaranteed — callers must inspect the content.
+      required:
+        - rows
+      properties:
+        rows:
+          type: array
+          description: Ordered list of rows. Each row is an ordered list of cell strings.
+          items:
+            type: array
+            items:
+              type:
+                - string
+                - "null"
+              description: |
+                Cell text. Null when the cell was present in the layout but contained no
+                extractable content.
+          examples:
+            - - ["Header1", "Header2"]
+              - ["Val1", "Val2"]
+
+    ExtractionMetadata:
+      type: object
+      description: Document-level metadata produced during extraction.
+      required:
+        - page_count
+        - has_tables
+        - is_scanned
+      properties:
+        page_count:
+          type: integer
+          minimum: 1
+          description: Total number of pages in the document.
+          examples:
+            - 5
+        has_tables:
+          type: boolean
+          description: True if at least one table was detected anywhere in the document.
+          examples:
+            - true
+        is_scanned:
+          type: boolean
+          description: |
+            True if the document was determined to be image-based (scanned) and processed
+            via OCR (pytesseract). False if digital text was extracted directly via pdfplumber.
+          examples:
+            - false
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code.
+              examples:
+                - UNSUPPORTED_FORMAT
+                - EXTRACTION_FAILED
+                - INTERNAL_ERROR
+            message:
+              type: string
+              description: Human-readable description of the error.
+              examples:
+                - "The uploaded file format is not supported."

@@ -1,0 +1,171 @@
+openapi: 3.1.0
+info:
+  title: Axiom Common Schemas
+  version: 1.0.0
+  description: |
+    Shared schema components, parameters, and responses used across all Axiom service specs.
+    Referenced via `$ref: './common.yaml#/components/...'` from each service spec.
+
+paths: {}
+
+components:
+  parameters:
+    X-User-Id:
+      name: X-User-Id
+      in: header
+      required: true
+      description: UUID of the authenticated user, injected by the API Gateway from the verified JWT.
+      schema:
+        type: string
+        format: uuid
+
+    X-Firm-Id:
+      name: X-Firm-Id
+      in: header
+      required: true
+      description: UUID of the user's firm, injected by the API Gateway from the verified JWT.
+      schema:
+        type: string
+        format: uuid
+
+    X-User-Role:
+      name: X-User-Role
+      in: header
+      required: true
+      description: Role of the authenticated user, injected by the API Gateway from the verified JWT.
+      schema:
+        type: string
+        enum:
+          - FirmAdmin
+          - Partner
+          - Manager
+          - Staff
+          - EQReviewer
+          - ClientAdmin
+          - ClientUser
+          - ViewOnly
+
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor for pagination. Omit for the first page.
+      schema:
+        type: string
+
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of items to return per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+
+  schemas:
+    Pagination:
+      type: object
+      required:
+        - has_more
+      properties:
+        next_cursor:
+          type:
+            - string
+            - "null"
+          description: Opaque cursor to pass as the `cursor` query parameter for the next page. Null when there are no more results.
+        has_more:
+          type: boolean
+          description: Whether additional pages exist beyond the current result set.
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code (e.g., "ENGAGEMENT_NOT_FOUND", "VALIDATION_ERROR").
+              examples:
+                - VALIDATION_ERROR
+            message:
+              type: string
+              description: Human-readable error description.
+              examples:
+                - "The request body failed validation."
+            details:
+              type: array
+              description: Per-field validation errors or additional context.
+              items:
+                $ref: "#/components/schemas/ErrorDetail"
+
+    ErrorDetail:
+      type: object
+      properties:
+        field:
+          type: string
+          description: JSON path to the field that caused the error (e.g., "body.email").
+          examples:
+            - body.email
+        reason:
+          type: string
+          description: Explanation of why the field value is invalid.
+          examples:
+            - "Must be a valid email address."
+
+  responses:
+    BadRequest:
+      description: The request body or query parameters failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Unauthorized:
+      description: Missing or invalid authentication headers.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Forbidden:
+      description: The authenticated user does not have the required role or permission for this operation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: The requested resource does not exist or is not accessible to the current user.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Conflict:
+      description: The request conflicts with the current state of the resource (e.g., duplicate, invalid state transition).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    UnprocessableEntity:
+      description: The request is syntactically valid but violates a business rule or guard condition.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    InternalServerError:
+      description: An unexpected error occurred on the server.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

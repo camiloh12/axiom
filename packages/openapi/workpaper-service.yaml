@@ -1,0 +1,1599 @@
+openapi: 3.1.0
+
+info:
+  title: Axiom Workpaper Service API
+  version: 1.0.0
+  description: |
+    API for the Axiom Workpaper Service. Handles collaborative workpaper editing,
+    version history, and the review note workflow.
+
+    ## Architecture
+
+    The Workpaper Service is a Go microservice (Chi + oapi-codegen) backed by `workpaper_db`
+    (PostgreSQL). Real-time collaborative editing is provided via WebSocket (Yjs CRDT protocol).
+    `engagement_id` and `control_id` are plain UUIDs — no foreign key into `core_db`. Access
+    authorization is validated via a REST call to the Audit Core service.
+
+    The API Gateway injects `X-User-Id`, `X-Firm-Id`, and `X-User-Role` headers on every
+    inbound request after JWT verification. These headers must be present on all calls.
+
+    ## Status Lifecycle
+
+    Workpapers move through a linear review pipeline. Only the transitions listed below are
+    permitted; all others return 409 Conflict.
+
+    ```
+    Draft
+      → PreparedPendingReview   POST /submit           (Staff)
+                                  Guard: latest version must not be an AI draft (PCAOB AS 1105)
+      → InReview                POST /start-review     (Manager)
+      → ReviewNotesOpen         POST /return           (Manager)
+      → InReview                POST /resubmit         (Staff)
+      → ReviewComplete          POST /complete-review  (Manager)
+                                  Guard: all ReviewNotes must be Resolved
+      → SignedOff               POST /sign-off         (Partner)
+                                  Side-effect: AuditLog entry written via Audit Core REST call
+    ```
+
+    Once a workpaper reaches **SignedOff** and is locked (`is_locked = true`) via `POST /lock`,
+    the content field is immutable. Subsequent content contributions must go through
+    `POST /addendum`, which creates a new `WorkpaperVersion` with `is_addendum = true`.
+
+    ## Immutability Constraints
+
+    - **Review notes cannot be deleted** (AU-C 230 audit trail requirement). No DELETE endpoint
+      is exposed for review notes. Notes transition through Open → Responded → Resolved only.
+    - **Locked workpapers reject content updates.** `PATCH /workpapers/{workpaperId}` returns
+      422 when `is_locked = true`. Use `POST /addendum` instead.
+    - **AI-draft guard.** `POST /submit` returns 422 when the latest `WorkpaperVersion` has
+      `is_ai_draft = true`, preventing submission of unreviewed AI-generated content per
+      PCAOB AS 1105.
+
+servers:
+  - url: https://api.axiom.internal/workpaper
+    description: Internal service base (routed by API Gateway)
+
+tags:
+  - name: Workpapers
+    description: |
+      Core workpaper CRUD and lifecycle state-transition operations.
+      Roles: Staff (prepare/submit/resubmit), Manager (review/return/complete), Partner (sign-off/lock/addendum).
+  - name: WorkpaperVersions
+    description: |
+      Immutable version history for workpaper content. A new version is auto-created on every
+      successful PATCH and on every addendum.
+  - name: ReviewNotes
+    description: |
+      Manager- and Partner-created annotations attached to a workpaper during review.
+      Review notes are append-only (AU-C 230) — they can never be deleted.
+
+paths:
+
+  # ---------------------------------------------------------------------------
+  # Workpapers — list / create
+  # ---------------------------------------------------------------------------
+
+  /api/v1/engagements/{engagementId}/workpapers:
+
+    get:
+      operationId: listWorkpapers
+      summary: List workpapers for an engagement
+      description: |
+        Returns a cursor-paginated list of `WorkpaperSummary` objects for the given engagement.
+        Results are scoped to the caller's firm via `X-Firm-Id`.
+
+        **Allowed roles:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: engagementId
+          in: path
+          required: true
+          description: UUID of the engagement.
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          description: Filter by workpaper status.
+          schema:
+            $ref: '#/components/schemas/WorkpaperStatus'
+        - name: workpaper_type
+          in: query
+          required: false
+          description: Filter by workpaper type.
+          schema:
+            $ref: '#/components/schemas/WorkpaperType'
+        - name: control_id
+          in: query
+          required: false
+          description: Filter to workpapers linked to a specific control UUID.
+          schema:
+            type: string
+            format: uuid
+        - name: prepared_by_id
+          in: query
+          required: false
+          description: Filter to workpapers prepared by a specific user UUID.
+          schema:
+            type: string
+            format: uuid
+        - $ref: './common.yaml#/components/parameters/CursorParam'
+        - $ref: './common.yaml#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated list of workpaper summaries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkpaperSummaryPage'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    post:
+      operationId: createWorkpaper
+      summary: Create a workpaper
+      description: |
+        Creates a new workpaper in `Draft` status under the given engagement.
+
+        `control_id` is optional — workpapers of type `Memo` or `ManagementLetter` are typically
+        not linked to a specific control. `content` defaults to `{}` when omitted.
+
+        **Allowed roles:** Partner, Manager, Staff
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: engagementId
+          in: path
+          required: true
+          description: UUID of the engagement to create the workpaper under.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkpaperRequest'
+      responses:
+        '201':
+          description: Workpaper created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '422':
+          $ref: './common.yaml#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Workpapers — single resource
+  # ---------------------------------------------------------------------------
+
+  /api/v1/workpapers/{workpaperId}:
+
+    get:
+      operationId: getWorkpaper
+      summary: Get a workpaper with its current content
+      description: |
+        Returns the full `Workpaper` object including the current `content` (latest version's
+        JSONB payload), status, and all user assignment fields.
+
+        **Allowed roles:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          description: UUID of the workpaper.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workpaper detail with current content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    patch:
+      operationId: updateWorkpaper
+      summary: Update workpaper content or title
+      description: |
+        Applies a partial update to the workpaper's `content` and/or `title`. On every
+        successful PATCH a new `WorkpaperVersion` row is written automatically. If the
+        previous latest version had `is_ai_draft = true`, that flag is cleared on the
+        new version (the human edit supersedes the AI draft).
+
+        **Immutability guard:** Returns 422 when `is_locked = true`. Use `POST /addendum`
+        for post-finalization content additions.
+
+        **Access guard:** Once a workpaper is submitted (status ≥ `PreparedPendingReview`),
+        the preparer is locked out of content edits. Only the assigned reviewer may modify
+        content or return the workpaper to the preparer.
+
+        **Allowed roles:** Partner, Manager, Staff (subject to status guards above)
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          description: UUID of the workpaper to update.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkpaperRequest'
+      responses:
+        '200':
+          description: Workpaper updated; new version created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '422':
+          description: |
+            Business rule violation. Common codes:
+            - `WORKPAPER_LOCKED` — workpaper is locked; use /addendum.
+            - `PREPARER_LOCKED_OUT` — workpaper is submitted; only the reviewer may edit.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Workpaper lifecycle transitions
+  # ---------------------------------------------------------------------------
+
+  /api/v1/workpapers/{workpaperId}/submit:
+    post:
+      operationId: submitWorkpaper
+      summary: Submit workpaper for review
+      description: |
+        Transitions status: `Draft → PreparedPendingReview`.
+
+        **Guards:**
+        - Caller must be the `prepared_by_id` user or a Manager/Partner.
+        - The latest `WorkpaperVersion` must have `is_ai_draft = false`. If the latest version
+          is an AI draft, the submission is blocked with 422 (`AI_DRAFT_SUBMISSION_BLOCKED`) to
+          enforce PCAOB AS 1105 — staff must review and edit AI-generated content before it
+          enters the review pipeline.
+
+        **Allowed roles:** Staff, Manager, Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workpaper submitted; status is now PreparedPendingReview.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is not in `Draft` status; transition is not permitted.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '422':
+          description: |
+            Business rule violation. Common codes:
+            - `AI_DRAFT_SUBMISSION_BLOCKED` — latest version is an AI draft; staff must edit before submitting (PCAOB AS 1105).
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/start-review:
+    post:
+      operationId: startWorkpaperReview
+      summary: Open workpaper for review
+      description: |
+        Transitions status: `PreparedPendingReview → InReview`.
+
+        The calling Manager (or Partner) is recorded as `reviewed_by_id` if not already set.
+
+        **Allowed roles:** Manager, Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Review started; status is now InReview.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is not in `PreparedPendingReview` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/return:
+    post:
+      operationId: returnWorkpaper
+      summary: Return workpaper to preparer with review notes
+      description: |
+        Transitions status: `InReview → ReviewNotesOpen`.
+
+        Used when the reviewer has raised one or more `ReviewNote` items that require the
+        preparer's attention before review can continue. The workpaper is unlocked for the
+        preparer after this transition.
+
+        **Allowed roles:** Manager, Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workpaper returned; status is now ReviewNotesOpen.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is not in `InReview` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/resubmit:
+    post:
+      operationId: resubmitWorkpaper
+      summary: Resubmit workpaper after addressing review notes
+      description: |
+        Transitions status: `ReviewNotesOpen → InReview`.
+
+        Called by the preparer after addressing all or some of the open review notes. The
+        reviewer then evaluates the responses and either clears the review (`complete-review`)
+        or returns again.
+
+        **Allowed roles:** Staff, Manager, Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workpaper resubmitted; status is now InReview.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is not in `ReviewNotesOpen` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/complete-review:
+    post:
+      operationId: completeWorkpaperReview
+      summary: Complete review (Manager clears the workpaper)
+      description: |
+        Transitions status: `InReview → ReviewComplete`.
+
+        **Guard:** All `ReviewNote` rows associated with this workpaper must have
+        `status = Resolved`. If any note is `Open` or `Responded`, the transition is
+        blocked with 422 (`UNRESOLVED_REVIEW_NOTES`). The response body includes a count
+        of blocking notes.
+
+        **Allowed roles:** Manager, Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Review complete; status is now ReviewComplete.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is not in `InReview` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '422':
+          description: |
+            Business rule violation. Common codes:
+            - `UNRESOLVED_REVIEW_NOTES` — one or more ReviewNotes are not Resolved. All notes must be Resolved before review can be completed.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/sign-off:
+    post:
+      operationId: signOffWorkpaper
+      summary: Partner sign-off
+      description: |
+        Transitions status: `ReviewComplete → SignedOff`.
+
+        Records the signing Partner as `signed_off_by_id`. After the status transition
+        the service makes a synchronous REST call to Audit Core to write an `AuditLog`
+        entry recording the sign-off event, user, timestamp, and workpaper reference.
+
+        **Sign-off hierarchy:** Staff prepares → Manager reviews → Partner signs off.
+        This endpoint enforces the final step. A Manager may not sign off (403 returned).
+
+        **Allowed roles:** Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workpaper signed off; status is now SignedOff.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workpaper'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is not in `ReviewComplete` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/lock:
+    post:
+      operationId: lockWorkpaper
+      summary: Lock workpaper for finalization
+      description: |
+        Sets `is_locked = true` on the workpaper, preventing any further content edits via
+        `PATCH`. After locking, content additions must go through `POST /addendum`.
+
+        Locking is a one-way operation — there is no unlock endpoint. This ensures the
+        immutability of finalized audit documentation.
+
+        **Allowed roles:** Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Workpaper locked successfully. No response body.
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is already locked.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/addendum:
+    post:
+      operationId: createWorkpaperAddendum
+      summary: Post-finalization addendum
+      description: |
+        Creates a new `WorkpaperVersion` with `is_addendum = true` on a locked workpaper.
+        The `addendum_reason` field is required and must explain why the workpaper is being
+        amended after finalization.
+
+        The main `content` field on the `workpapers` row is NOT updated — the addendum
+        content is stored exclusively in the new version row so that the original finalized
+        content is preserved.
+
+        **Allowed roles:** Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAddendumRequest'
+      responses:
+        '201':
+          description: Addendum version created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkpaperVersion'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '422':
+          description: |
+            Business rule violation. Common codes:
+            - `WORKPAPER_NOT_LOCKED` — workpaper must be locked before an addendum can be added.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Workpaper Versions
+  # ---------------------------------------------------------------------------
+
+  /api/v1/workpapers/{workpaperId}/versions:
+    get:
+      operationId: listWorkpaperVersions
+      summary: List version history for a workpaper
+      description: |
+        Returns the complete version history for a workpaper as an array, ordered by
+        `version_number` ascending. Not paginated — version counts are bounded by the
+        workpaper's lifetime and are not expected to reach pagination thresholds.
+
+        Each entry indicates whether the version was an AI draft (`is_ai_draft`) and
+        whether it is a post-finalization addendum (`is_addendum`).
+
+        **Allowed roles:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly
+      tags:
+        - WorkpaperVersions
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Full version history array.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkpaperVersion'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/versions/{versionNumber}:
+    get:
+      operationId: getWorkpaperVersion
+      summary: Get a specific workpaper version
+      description: |
+        Returns a single `WorkpaperVersion` by its sequential `version_number`.
+        Version numbers start at 1 and increment monotonically.
+
+        **Allowed roles:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly
+      tags:
+        - WorkpaperVersions
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: versionNumber
+          in: path
+          required: true
+          description: Sequential version number (1-based).
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Workpaper version detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkpaperVersion'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Review Notes
+  # ---------------------------------------------------------------------------
+
+  /api/v1/workpapers/{workpaperId}/review-notes:
+
+    get:
+      operationId: listReviewNotes
+      summary: List review notes for a workpaper
+      description: |
+        Returns a cursor-paginated list of `ReviewNote` objects for the given workpaper.
+
+        **Immutability reminder:** Review notes are append-only per AU-C 230. No DELETE
+        endpoint is provided. Notes transition through Open → Responded → Resolved only.
+
+        **Allowed roles:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly
+      tags:
+        - ReviewNotes
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          description: Filter by review note status.
+          schema:
+            $ref: '#/components/schemas/ReviewNoteStatus'
+        - name: severity
+          in: query
+          required: false
+          description: Filter by review note severity.
+          schema:
+            $ref: '#/components/schemas/ReviewNoteSeverity'
+        - $ref: './common.yaml#/components/parameters/CursorParam'
+        - $ref: './common.yaml#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated list of review notes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewNotePage'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    post:
+      operationId: createReviewNote
+      summary: Create a review note
+      description: |
+        Creates a new `ReviewNote` in `Open` status attached to the workpaper. The caller
+        is recorded as `created_by_id`.
+
+        `content_anchor` is an opaque JSONB object that the frontend uses to anchor the
+        note to a specific location in the Yjs document (e.g., node ID, character offset).
+
+        Review notes can only be created while the workpaper is in `InReview` or
+        `ReviewNotesOpen` status.
+
+        **Immutability:** Once created, a review note cannot be deleted (AU-C 230).
+
+        **Allowed roles:** Manager, Partner
+      tags:
+        - ReviewNotes
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReviewNoteRequest'
+      responses:
+        '201':
+          description: Review note created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewNote'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is not in a status that allows review note creation (InReview or ReviewNotesOpen).
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/review-notes/{noteId}:
+
+    get:
+      operationId: getReviewNote
+      summary: Get a review note
+      description: |
+        Returns the full detail of a single `ReviewNote` including any response and
+        resolution metadata.
+
+        **Allowed roles:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly
+      tags:
+        - ReviewNotes
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: noteId
+          in: path
+          required: true
+          description: UUID of the review note.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Review note detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewNote'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/review-notes/{noteId}/respond:
+    post:
+      operationId: respondToReviewNote
+      summary: Respond to a review note
+      description: |
+        Records the preparer's response to a review note and transitions its status:
+        `Open → Responded`.
+
+        The caller is recorded as `responded_by_id` and `responded_at` is set to the
+        current server timestamp. The `response` field is required.
+
+        **Allowed roles:** Staff, Manager, Partner
+      tags:
+        - ReviewNotes
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RespondToNoteRequest'
+      responses:
+        '200':
+          description: Response recorded; note status is now Responded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewNote'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Review note is not in `Open` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/review-notes/{noteId}/resolve:
+    post:
+      operationId: resolveReviewNote
+      summary: Resolve a review note
+      description: |
+        Marks a review note as resolved, transitioning its status: `Responded → Resolved`.
+
+        The caller is recorded as `resolved_by_id` and `resolved_at` is set to the current
+        server timestamp. Only the reviewer (Manager or Partner) may resolve notes — the
+        preparer cannot self-resolve their own responses.
+
+        Once resolved, the note is permanently in the `Resolved` state. There is no
+        re-open operation (AU-C 230 audit trail integrity).
+
+        **Allowed roles:** Manager, Partner
+      tags:
+        - ReviewNotes
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Review note resolved; status is now Resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewNote'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Review note is not in `Responded` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # WebSocket — Yjs real-time collaboration
+  # ---------------------------------------------------------------------------
+
+  /ws/workpapers/{workpaperId}:
+    get:
+      operationId: connectWorkpaperWebSocket
+      summary: Yjs real-time collaboration WebSocket
+      description: |
+        Upgrades the HTTP connection to a WebSocket for real-time collaborative editing
+        of a single workpaper via the Yjs CRDT protocol (y-websocket provider).
+
+        **Authentication:** Because browsers cannot set custom headers on WebSocket
+        handshakes, authentication is passed as the `token` query parameter (a short-lived
+        JWT issued by the Identity Service). The service validates the token and rejects
+        the upgrade with 401 if invalid or expired.
+
+        **Authorization:** The service verifies that the caller has access to the
+        engagement containing this workpaper via a REST call to Audit Core before
+        completing the upgrade.
+
+        **Locked workpapers:** Clients connected to a locked workpaper receive the document
+        state in read-only mode. Incoming Yjs update messages from those clients are
+        silently discarded and an `access-denied` awareness message is broadcast back to
+        the offending client.
+
+        See the `x-websocket` extension below for protocol details.
+      tags:
+        - Workpapers
+      parameters:
+        - name: workpaperId
+          in: path
+          required: true
+          description: UUID of the workpaper to open for collaborative editing.
+          schema:
+            type: string
+            format: uuid
+        - name: token
+          in: query
+          required: true
+          description: Short-lived JWT for WebSocket authentication (cannot use Authorization header in browser WS).
+          schema:
+            type: string
+      responses:
+        '101':
+          description: Switching Protocols — WebSocket connection established.
+        '401':
+          description: Token is missing, invalid, or expired.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller does not have access to this workpaper's engagement.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+      x-websocket:
+        protocol: yjs
+        description: |
+          The server implements the y-websocket server protocol. Messages are binary-encoded
+          Yjs protocol messages (Uint8Array). The following message types are exchanged:
+
+          | Type constant | Value | Direction      | Description                                        |
+          |---------------|-------|----------------|----------------------------------------------------|
+          | messageSync   | 0     | bidirectional  | Yjs sync step 1 / sync step 2 / update             |
+          | messageAwareness | 1  | bidirectional  | Awareness state updates (cursors, presence)        |
+
+          **Connection lifecycle:**
+
+          1. Client opens WebSocket to `/ws/workpapers/{workpaperId}?token=<jwt>`.
+          2. Server validates `token`, then performs Audit Core access check.
+          3. Server sends `messageSync` step 1 containing the current document state vector.
+          4. Client replies with `messageSync` step 2 (missing updates), followed by its own
+             state vector so the server can send updates the client is missing.
+          5. Both sides are now in sync. Subsequent document changes are broadcast as
+             `messageSync` update messages to all connected peers.
+          6. Awareness messages (cursor position, user metadata) are forwarded to all
+             other connected clients without server-side persistence.
+
+          **Persistence:** The server persists the Yjs document state to `workpaper_db`
+          (column: `workpapers.content`) after a debounced write interval (default: 1 s).
+          A new `WorkpaperVersion` row is written every time the debounced flush triggers,
+          keeping an immutable version trail alongside the live document.
+
+          **Locked workpaper behaviour:** When `is_locked = true`, the server completes the
+          sync handshake (client receives current state) but drops all incoming update
+          messages from clients. An awareness message of type `access-denied` is sent
+          back to the offending client.
+
+          **Disconnection:** On clean close or abnormal termination the server removes the
+          client's awareness state and broadcasts the removal to remaining peers.
+
+          **Encoding:** All messages use the Yjs binary encoding (lib0 encoding library).
+          Do not send JSON over this socket.
+
+          **Awareness user fields (sent by client in awareness update):**
+
+          ```json
+          {
+            "user": {
+              "id": "<uuid>",
+              "name": "Jane Smith",
+              "color": "#e05ccf"
+            },
+            "cursor": {
+              "anchor": { ... },
+              "head": { ... }
+            }
+          }
+          ```
+
+components:
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+
+  schemas:
+
+    WorkpaperType:
+      type: string
+      enum:
+        - LeadSchedule
+        - TestPaper
+        - Memo
+        - ConfirmationLetter
+        - SamplingWorksheet
+        - ManagementLetter
+        - AnalyticalProcedures
+        - Other
+      description: Classification of the workpaper's purpose within the engagement.
+
+    WorkpaperStatus:
+      type: string
+      enum:
+        - Draft
+        - PreparedPendingReview
+        - InReview
+        - ReviewNotesOpen
+        - ReviewComplete
+        - SignedOff
+      description: |
+        Current lifecycle status of the workpaper.
+
+        Permitted transitions (all others return 409):
+        - Draft → PreparedPendingReview (submit)
+        - PreparedPendingReview → InReview (start-review)
+        - InReview → ReviewNotesOpen (return)
+        - ReviewNotesOpen → InReview (resubmit)
+        - InReview → ReviewComplete (complete-review; all notes must be Resolved)
+        - ReviewComplete → SignedOff (sign-off; Partner only)
+
+    ReviewNoteSeverity:
+      type: string
+      enum:
+        - Question
+        - Suggestion
+        - RequiredChange
+      description: |
+        Severity classification of the review note.
+        - `Question` — reviewer needs clarification; may or may not require a change.
+        - `Suggestion` — reviewer recommends an improvement; preparer may address or justify.
+        - `RequiredChange` — reviewer mandates a change before the workpaper can proceed.
+
+    ReviewNoteStatus:
+      type: string
+      enum:
+        - Open
+        - Responded
+        - Resolved
+      description: |
+        Lifecycle status of a review note. Transitions: Open → Responded → Resolved.
+        Notes cannot be deleted (AU-C 230) and cannot be re-opened once Resolved.
+
+    WorkpaperSummary:
+      type: object
+      description: Lightweight workpaper representation used in list responses.
+      required:
+        - id
+        - engagement_id
+        - firm_id
+        - workpaper_type
+        - title
+        - status
+        - is_locked
+        - prepared_by_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the workpaper.
+        engagement_id:
+          type: string
+          format: uuid
+          description: UUID of the parent engagement (plain UUID; no FK to core_db).
+        firm_id:
+          type: string
+          format: uuid
+          description: UUID of the owning firm.
+        control_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: UUID of the linked control, if any.
+        workpaper_type:
+          $ref: '#/components/schemas/WorkpaperType'
+        title:
+          type: string
+          description: Human-readable title of the workpaper.
+        status:
+          $ref: '#/components/schemas/WorkpaperStatus'
+        is_locked:
+          type: boolean
+          description: Whether the workpaper is locked for finalization. Locked workpapers reject PATCH updates.
+        prepared_by_id:
+          type: string
+          format: uuid
+          description: UUID of the user who prepared (created) the workpaper.
+        reviewed_by_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: UUID of the Manager or Partner assigned as reviewer.
+        signed_off_by_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: UUID of the Partner who signed off the workpaper.
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of workpaper creation.
+
+    Workpaper:
+      allOf:
+        - $ref: '#/components/schemas/WorkpaperSummary'
+        - type: object
+          description: Full workpaper representation including current content payload.
+          required:
+            - content
+          properties:
+            content:
+              type: object
+              description: |
+                Current content of the workpaper as a free-form JSONB object. The schema is
+                determined by the frontend editor (ProseMirror/Yjs document model). Defaults
+                to `{}` on creation.
+              additionalProperties: true
+            prior_workpaper_id:
+              type:
+                - string
+                - "null"
+              format: uuid
+              description: UUID of the prior-period workpaper this one rolls forward from.
+
+    WorkpaperSummaryPage:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkpaperSummary'
+        pagination:
+          $ref: './common.yaml#/components/schemas/Pagination'
+
+    WorkpaperVersion:
+      type: object
+      description: |
+        An immutable snapshot of workpaper content at a point in time. Created automatically
+        on every PATCH and explicitly on addendum. Version numbers are sequential and unique
+        per workpaper (UNIQUE constraint on workpaper_id, version_number).
+      required:
+        - id
+        - workpaper_id
+        - version_number
+        - content
+        - saved_by_id
+        - saved_at
+        - is_ai_draft
+        - is_addendum
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for this version.
+        workpaper_id:
+          type: string
+          format: uuid
+          description: UUID of the parent workpaper.
+        version_number:
+          type: integer
+          minimum: 1
+          description: Sequential, 1-based version number. Monotonically increasing per workpaper.
+        content:
+          type: object
+          description: JSONB content snapshot at the time this version was saved.
+          additionalProperties: true
+        saved_by_id:
+          type: string
+          format: uuid
+          description: UUID of the user whose action triggered this version save.
+        saved_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when this version was saved.
+        is_ai_draft:
+          type: boolean
+          description: |
+            True when this version was generated by the AI assistant without subsequent human
+            edits. Submission is blocked while the latest version has this flag set (PCAOB AS 1105).
+        is_addendum:
+          type: boolean
+          description: True when this version was created via the POST /addendum endpoint after finalization.
+        addendum_reason:
+          type:
+            - string
+            - "null"
+          description: Required when `is_addendum = true`. Explains why the workpaper is being amended after finalization.
+
+    ReviewNote:
+      type: object
+      description: |
+        An annotation created by a Manager or Partner during workpaper review.
+
+        **Immutability:** Review notes cannot be deleted (AU-C 230 audit trail requirement).
+        They transition through Open → Responded → Resolved only.
+      required:
+        - id
+        - firm_id
+        - workpaper_id
+        - created_by_id
+        - description
+        - severity
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the review note.
+        firm_id:
+          type: string
+          format: uuid
+          description: UUID of the owning firm.
+        workpaper_id:
+          type: string
+          format: uuid
+          description: UUID of the workpaper this note is attached to.
+        content_anchor:
+          type:
+            - object
+            - "null"
+          description: |
+            Opaque JSONB object used by the frontend to anchor the note to a specific location
+            in the Yjs document (e.g., ProseMirror node ID or character range). Null when the
+            note applies to the workpaper as a whole rather than a specific passage.
+          additionalProperties: true
+        created_by_id:
+          type: string
+          format: uuid
+          description: UUID of the Manager or Partner who created this note.
+        description:
+          type: string
+          description: Full text of the review note describing the issue or question.
+        severity:
+          $ref: '#/components/schemas/ReviewNoteSeverity'
+        status:
+          $ref: '#/components/schemas/ReviewNoteStatus'
+        response:
+          type:
+            - string
+            - "null"
+          description: Preparer's written response to the note. Set when status transitions to Responded.
+        responded_by_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: UUID of the user who responded to the note.
+        responded_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: ISO 8601 timestamp when the response was recorded.
+        resolved_by_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: UUID of the Manager or Partner who resolved the note.
+        resolved_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: ISO 8601 timestamp when the note was resolved.
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the note was created.
+
+    ReviewNotePage:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewNote'
+        pagination:
+          $ref: './common.yaml#/components/schemas/Pagination'
+
+    # -------------------------------------------------------------------------
+    # Request bodies
+    # -------------------------------------------------------------------------
+
+    CreateWorkpaperRequest:
+      type: object
+      required:
+        - title
+        - workpaper_type
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Human-readable title for the workpaper.
+        workpaper_type:
+          $ref: '#/components/schemas/WorkpaperType'
+        control_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Optional UUID of a linked control. Omit for engagement-level workpapers (e.g., Memo, ManagementLetter).
+        content:
+          type: object
+          description: Initial content payload. Defaults to `{}` when omitted.
+          additionalProperties: true
+        prior_workpaper_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Optional UUID of the prior-period workpaper this one rolls forward from.
+
+    UpdateWorkpaperRequest:
+      type: object
+      description: |
+        Partial update for a workpaper. At least one of `content` or `title` must be provided.
+        Returns 422 when `is_locked = true`.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: New title for the workpaper. Omit to leave unchanged.
+        content:
+          type: object
+          description: New full content payload to replace the current content. Omit to leave unchanged.
+          additionalProperties: true
+      minProperties: 1
+
+    CreateAddendumRequest:
+      type: object
+      required:
+        - content
+        - addendum_reason
+      properties:
+        content:
+          type: object
+          description: Content payload for the addendum version.
+          additionalProperties: true
+        addendum_reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Required explanation for why this post-finalization addendum is being added.
+
+    CreateReviewNoteRequest:
+      type: object
+      required:
+        - description
+        - severity
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          description: Full text of the review note.
+        severity:
+          $ref: '#/components/schemas/ReviewNoteSeverity'
+        content_anchor:
+          type:
+            - object
+            - "null"
+          description: |
+            Optional JSONB anchor linking the note to a specific location in the Yjs document.
+            Omit for notes that apply to the workpaper as a whole.
+          additionalProperties: true
+
+    RespondToNoteRequest:
+      type: object
+      required:
+        - response
+      properties:
+        response:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          description: The preparer's written response to the review note.

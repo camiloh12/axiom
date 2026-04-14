@@ -1,0 +1,979 @@
+openapi: 3.1.0
+
+info:
+  title: Axiom Reporting Service
+  version: 1.0.0
+  description: |
+    Handles async report generation, version history, client review, issuance, and engagement export
+    for the Axiom AI-native audit platform.
+
+    ## Report Status Lifecycle
+
+    ```
+    Draft → ClientReview → FirmReview → Issued → Archived
+    ```
+
+    - **Draft**: Initial state after async generation. Content may be edited. AI-drafted sections
+      are flagged with `is_ai_draft` on each version.
+    - **ClientReview**: Shared with the client portal for review and feedback.
+    - **FirmReview**: Client review acknowledged; auditors perform final internal sign-off.
+    - **Issued**: Partner has formally issued the report. The report becomes **read-only**. Records
+      `issued_at` and `issued_by_id`. Triggers computation of `assembly_deadline` and
+      `retention_deadline` on the Engagement via an Audit Core REST call.
+    - **Archived**: Issued report archived to S3 with Object Lock (COMPLIANCE mode) for regulatory
+      immutability (WORM). No further mutations are permitted.
+
+    ## Async Operations
+
+    Report creation (`POST /engagements/{engagementId}/reports`) and engagement export
+    (`POST /engagements/{engagementId}/export`) are asynchronous. Both return **202 Accepted**
+    immediately. Callers should poll the returned resource URL to track status.
+
+    ## Security
+
+    The API Gateway injects `X-User-Id`, `X-Firm-Id`, and `X-User-Role` on every request.
+    Only the **Partner** role may call the issue endpoint. Issued and Archived reports are
+    immutable; any mutation attempt returns 422.
+
+servers:
+  - url: /api/v1
+    description: Reporting Service base path (routed by API Gateway)
+
+tags:
+  - name: Reports
+    description: |
+      Report lifecycle management — creation, retrieval, editing, status transitions, issuance,
+      and presigned PDF download.
+  - name: ReportVersions
+    description: Immutable version history for report content, including AI-drafted sections.
+  - name: EngagementExport
+    description: Async full-engagement export as a downloadable archive.
+
+paths:
+
+  # ---------------------------------------------------------------------------
+  # Reports — engagement-scoped
+  # ---------------------------------------------------------------------------
+
+  /engagements/{engagementId}/reports:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: engagementId
+        in: path
+        required: true
+        description: UUID of the engagement. Not a foreign key into core_db — the Reporting Service
+          treats this as an opaque identifier.
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Reports]
+      summary: List reports for an engagement
+      operationId: listReports
+      description: |
+        Returns all reports belonging to the specified engagement that are visible to the
+        caller's firm. Supports cursor-based pagination.
+      parameters:
+        - $ref: './common.yaml#/components/parameters/CursorParam'
+        - $ref: './common.yaml#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          required: false
+          description: Filter by report status.
+          schema:
+            $ref: '#/components/schemas/ReportStatus'
+        - name: report_type
+          in: query
+          required: false
+          description: Filter by report type.
+          schema:
+            $ref: '#/components/schemas/ReportType'
+      responses:
+        '200':
+          description: Paginated list of reports.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Report'
+                  pagination:
+                    $ref: './common.yaml#/components/schemas/Pagination'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    post:
+      tags: [Reports]
+      summary: Create a report and trigger async generation
+      operationId: createReport
+      description: |
+        Creates a new report record in **Draft** status and enqueues a River background job to
+        assemble report data from Audit Core, Trial Balance, and Workpaper services.
+
+        Returns **202 Accepted** immediately. Poll `GET /api/v1/reports/{reportId}` to track
+        generation progress via the `status` field and `generated_at` timestamp.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+      responses:
+        '202':
+          description: |
+            Report created and async generation enqueued. Poll the returned report's `id`
+            via `GET /api/v1/reports/{reportId}`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '422':
+          $ref: './common.yaml#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Reports — resource-scoped
+  # ---------------------------------------------------------------------------
+
+  /reports/{reportId}:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: reportId
+        in: path
+        required: true
+        description: UUID of the report.
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Reports]
+      summary: Get a report
+      operationId: getReport
+      description: Returns the full report including its current content (JSONB) and status.
+      responses:
+        '200':
+          description: Report found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    patch:
+      tags: [Reports]
+      summary: Update report content
+      operationId: updateReport
+      description: |
+        Partially updates the report's `content` JSONB. Each successful PATCH creates a new
+        `ReportVersion` row capturing the saved content, the caller's identity, and whether
+        the update originates from an AI draft.
+
+        Returns **422 Unprocessable Entity** if the report is in `Issued` or `Archived` status,
+        as issued reports are immutable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReportRequest'
+      responses:
+        '200':
+          description: Report content updated. A new version has been saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '422':
+          description: |
+            The report cannot be edited. This occurs when the report status is `Issued` or
+            `Archived` — issued reports are immutable.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Report status transitions
+  # ---------------------------------------------------------------------------
+
+  /reports/{reportId}/share-with-client:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: reportId
+        in: path
+        required: true
+        description: UUID of the report.
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Reports]
+      summary: Share report with client for review
+      operationId: shareReportWithClient
+      description: |
+        Transitions the report from **Draft** → **ClientReview**.
+
+        Makes the report visible in the Client Hub so the client can review it and provide
+        feedback. Returns 409 if the report is not currently in `Draft` status.
+      responses:
+        '200':
+          description: Report transitioned to ClientReview status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Invalid state transition. Report must be in `Draft` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /reports/{reportId}/complete-client-review:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: reportId
+        in: path
+        required: true
+        description: UUID of the report.
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Reports]
+      summary: Complete client review and move to firm review
+      operationId: completeClientReview
+      description: |
+        Transitions the report from **ClientReview** → **FirmReview**.
+
+        Acknowledges that client feedback has been addressed. The report enters internal
+        firm sign-off. Returns 409 if the report is not currently in `ClientReview` status.
+      responses:
+        '200':
+          description: Report transitioned to FirmReview status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Invalid state transition. Report must be in `ClientReview` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /reports/{reportId}/issue:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: reportId
+        in: path
+        required: true
+        description: UUID of the report.
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Reports]
+      summary: Issue the report (Partner only)
+      operationId: issueReport
+      description: |
+        Formally issues the report. **Only users with the `Partner` role may call this endpoint.**
+        Returns 403 for all other roles.
+
+        Transitions the report from **FirmReview** → **Issued**. Records `issued_at` (UTC) and
+        `issued_by_id` on the report row.
+
+        **Triggers deadline computation:** after status is persisted, the service calls Audit Core
+        to compute and store `assembly_deadline` and `retention_deadline` on the Engagement.
+        The computed deadlines are included in the response.
+
+        Once issued, the report is **read-only**. Subsequent PATCH or status-transition requests
+        will return 422. The report will eventually be archived to S3 with Object Lock
+        (COMPLIANCE mode) for regulatory immutability.
+
+        Returns 409 if the report is not currently in `FirmReview` status.
+      responses:
+        '200':
+          description: Report issued successfully. Includes the report and computed deadlines.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueReportResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          description: |
+            The authenticated user does not have the `Partner` role, which is required to issue
+            a report. All other roles are forbidden.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Invalid state transition. Report must be in `FirmReview` status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Report PDF download
+  # ---------------------------------------------------------------------------
+
+  /reports/{reportId}/download:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: reportId
+        in: path
+        required: true
+        description: UUID of the report.
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [Reports]
+      summary: Get presigned S3 URL for PDF download
+      operationId: getReportDownloadUrl
+      description: |
+        Generates and returns a short-lived presigned S3 URL to download the rendered PDF
+        of the report. For Archived reports this resolves to the S3 Object Lock (WORM) copy.
+
+        The URL expires after `expires_in` seconds. Clients should redirect immediately and
+        not cache the URL.
+      responses:
+        '200':
+          description: Presigned download URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadUrlResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '422':
+          description: The report PDF is not yet available (e.g. still generating).
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Report Versions
+  # ---------------------------------------------------------------------------
+
+  /reports/{reportId}/versions:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: reportId
+        in: path
+        required: true
+        description: UUID of the report.
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [ReportVersions]
+      summary: List version history for a report
+      operationId: listReportVersions
+      description: |
+        Returns the full ordered version history for a report, newest-first.
+        Each version captures the content snapshot, the saving user, the save timestamp, and
+        whether the version was produced by an AI draft.
+      parameters:
+        - $ref: './common.yaml#/components/parameters/CursorParam'
+        - $ref: './common.yaml#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Paginated list of report versions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReportVersion'
+                  pagination:
+                    $ref: './common.yaml#/components/schemas/Pagination'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /reports/{reportId}/versions/{versionNumber}:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: reportId
+        in: path
+        required: true
+        description: UUID of the report.
+        schema:
+          type: string
+          format: uuid
+      - name: versionNumber
+        in: path
+        required: true
+        description: Sequential version number (1-based, monotonically increasing per report).
+        schema:
+          type: integer
+          minimum: 1
+
+    get:
+      tags: [ReportVersions]
+      summary: Get a specific report version
+      operationId: getReportVersion
+      description: |
+        Returns a single historical version of a report by its version number. The
+        `(report_id, version_number)` pair is unique.
+      responses:
+        '200':
+          description: Report version found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportVersion'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Engagement Export
+  # ---------------------------------------------------------------------------
+
+  /engagements/{engagementId}/export:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: engagementId
+        in: path
+        required: true
+        description: UUID of the engagement to export.
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [EngagementExport]
+      summary: Request a full engagement export (async)
+      operationId: createEngagementExport
+      description: |
+        Enqueues an async River job to produce a full export archive for the engagement,
+        including all reports, workpapers, evidence, and trial balance data.
+
+        Returns **202 Accepted** with an `export_id`. Poll
+        `GET /api/v1/exports/{exportId}` to check status and retrieve the download URL once
+        the export is complete.
+
+        Only one active export (Pending or Processing) per engagement is allowed at a time.
+        Returns 409 if a conflicting export is already in progress.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEngagementExportRequest'
+      responses:
+        '202':
+          description: |
+            Export enqueued. Poll `GET /api/v1/exports/{exportId}` for status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementExport'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: An export is already Pending or Processing for this engagement.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /exports/{exportId}:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: exportId
+        in: path
+        required: true
+        description: UUID of the engagement export job.
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      tags: [EngagementExport]
+      summary: Get export status and download URL
+      operationId: getEngagementExport
+      description: |
+        Returns the current status of an engagement export job and, when complete, a presigned
+        S3 download URL for the archive.
+
+        Poll this endpoint until `status` is `Complete` or `Failed`.
+
+        - **Pending**: job is queued, not yet started.
+        - **Processing**: River worker is actively building the archive.
+        - **Complete**: archive is ready; `download_url` and `expires_at` are populated.
+        - **Failed**: export encountered an unrecoverable error; `error_message` is populated.
+      responses:
+        '200':
+          description: Export job found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngagementExport'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+# ---------------------------------------------------------------------------
+# Component schemas
+# ---------------------------------------------------------------------------
+
+components:
+  schemas:
+
+    # ---- Enumerations -------------------------------------------------------
+
+    ReportType:
+      type: string
+      description: The type of audit report being produced.
+      enum:
+        - SOC2Type1
+        - SOC2Type2
+        - SOC1Type1
+        - SOC1Type2
+        - FinancialAuditOpinion
+        - AgreedUponProcedures
+        - ManagementLetter
+
+    ReportStatus:
+      type: string
+      description: |
+        Current lifecycle status of the report.
+
+        Allowed transitions:
+        - `Draft` → `ClientReview` (via share-with-client)
+        - `ClientReview` → `FirmReview` (via complete-client-review)
+        - `FirmReview` → `Issued` (via issue — Partner only)
+        - `Issued` → `Archived` (system-initiated, S3 Object Lock COMPLIANCE mode)
+
+        Reports in `Issued` or `Archived` status are immutable.
+      enum:
+        - Draft
+        - ClientReview
+        - FirmReview
+        - Issued
+        - Archived
+
+    ExportStatus:
+      type: string
+      description: Current status of an async engagement export job.
+      enum:
+        - Pending
+        - Processing
+        - Complete
+        - Failed
+
+    # ---- Core domain objects ------------------------------------------------
+
+    Report:
+      type: object
+      required:
+        - id
+        - engagement_id
+        - firm_id
+        - report_type
+        - status
+        - content
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the report.
+        engagement_id:
+          type: string
+          format: uuid
+          description: Identifier of the engagement this report belongs to.
+        firm_id:
+          type: string
+          format: uuid
+          description: Identifier of the firm that owns this report.
+        report_type:
+          $ref: '#/components/schemas/ReportType'
+        status:
+          $ref: '#/components/schemas/ReportStatus'
+        content:
+          type: object
+          description: |
+            Structured report content as JSONB. Shape is report-type-specific. Defaults to `{}`.
+            Populated by the async River generation job; may contain AI-drafted sections.
+          additionalProperties: true
+        template_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Optional reference to the template used during generation.
+        generated_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: |
+            Timestamp (UTC) when the async generation job completed. Null while still generating.
+        issued_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Timestamp (UTC) when the report was issued. Null until `Issued`.
+        issued_by_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: UUID of the Partner who issued the report. Null until `Issued`.
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp (UTC) when the report record was created.
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp (UTC) of the last update to the report record.
+
+    ReportVersion:
+      type: object
+      required:
+        - id
+        - report_id
+        - version_number
+        - content
+        - saved_by_id
+        - saved_at
+        - is_ai_draft
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for this version record.
+        report_id:
+          type: string
+          format: uuid
+          description: UUID of the parent report.
+        version_number:
+          type: integer
+          minimum: 1
+          description: |
+            Monotonically increasing version number scoped to the report.
+            The `(report_id, version_number)` pair is unique.
+        content:
+          type: object
+          description: Full content snapshot of the report at this version.
+          additionalProperties: true
+        saved_by_id:
+          type: string
+          format: uuid
+          description: UUID of the user who saved this version.
+        saved_at:
+          type: string
+          format: date-time
+          description: Timestamp (UTC) when this version was saved.
+        is_ai_draft:
+          type: boolean
+          description: |
+            Whether this version was produced by an AI draft operation. Used for
+            human-in-the-loop compliance auditing (logged in `AIDecision` table via Audit Core).
+          default: false
+
+    EngagementExport:
+      type: object
+      required:
+        - id
+        - engagement_id
+        - firm_id
+        - status
+        - requested_by_id
+        - requested_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the export job.
+        engagement_id:
+          type: string
+          format: uuid
+          description: UUID of the engagement being exported.
+        firm_id:
+          type: string
+          format: uuid
+          description: UUID of the firm that owns this export.
+        status:
+          $ref: '#/components/schemas/ExportStatus'
+        requested_by_id:
+          type: string
+          format: uuid
+          description: UUID of the user who requested the export.
+        requested_at:
+          type: string
+          format: date-time
+          description: Timestamp (UTC) when the export was requested.
+        completed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Timestamp (UTC) when the export completed (successfully or with failure).
+        download_url:
+          type:
+            - string
+            - "null"
+          format: uri
+          description: |
+            Presigned S3 URL to download the export archive. Only populated when
+            `status` is `Complete`. Clients should use this URL immediately — it is
+            short-lived and should not be cached.
+        expires_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Timestamp (UTC) at which `download_url` expires. Null when not yet complete.
+        error_message:
+          type:
+            - string
+            - "null"
+          description: Human-readable failure reason. Only populated when `status` is `Failed`.
+
+    # ---- Computed deadlines returned after issuance -------------------------
+
+    EngagementDeadlines:
+      type: object
+      description: |
+        Deadlines computed by Audit Core upon report issuance. Values reflect regulatory and
+        firm-policy retention requirements derived from the report type and issuance date.
+      required:
+        - assembly_deadline
+        - retention_deadline
+      properties:
+        assembly_deadline:
+          type: string
+          format: date
+          description: Date by which the engagement file must be assembled (ISO 8601 date).
+        retention_deadline:
+          type: string
+          format: date
+          description: Date until which the engagement file must be retained (ISO 8601 date).
+
+    # ---- Request bodies -----------------------------------------------------
+
+    CreateReportRequest:
+      type: object
+      required:
+        - report_type
+      properties:
+        report_type:
+          $ref: '#/components/schemas/ReportType'
+        template_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: |
+            Optional UUID of an existing report template to use during generation.
+            If omitted, the service selects a default template for the given report type.
+
+    UpdateReportRequest:
+      type: object
+      required:
+        - content
+      description: |
+        Partial update for a report's content. The provided `content` object is merged into
+        the existing content. Creates a new `ReportVersion` on success.
+
+        Returns 422 if the report is in `Issued` or `Archived` status.
+      properties:
+        content:
+          type: object
+          description: Updated report content (merged into existing JSONB content).
+          additionalProperties: true
+        is_ai_draft:
+          type: boolean
+          description: |
+            Set to `true` when this update originates from an AI generation operation.
+            Propagated to the created `ReportVersion.is_ai_draft` field and logged for
+            human-in-the-loop compliance.
+          default: false
+
+    CreateEngagementExportRequest:
+      type: object
+      description: Optional configuration for the engagement export. All fields are optional.
+      properties:
+        include_workpapers:
+          type: boolean
+          description: Whether to include workpaper documents in the export archive.
+          default: true
+        include_evidence:
+          type: boolean
+          description: Whether to include evidence files in the export archive.
+          default: true
+        include_trial_balance:
+          type: boolean
+          description: Whether to include trial balance data in the export archive.
+          default: true
+
+    # ---- Response bodies ----------------------------------------------------
+
+    IssueReportResponse:
+      type: object
+      required:
+        - report
+        - deadlines
+      description: |
+        Returned after successful report issuance. Contains the updated report (now `Issued`)
+        and the engagement deadlines computed by Audit Core.
+      properties:
+        report:
+          $ref: '#/components/schemas/Report'
+        deadlines:
+          $ref: '#/components/schemas/EngagementDeadlines'
+
+    DownloadUrlResponse:
+      type: object
+      required:
+        - url
+        - expires_in
+      properties:
+        url:
+          type: string
+          format: uri
+          description: |
+            Presigned S3 URL for PDF download. For Archived reports this resolves to the
+            S3 Object Lock (WORM) copy. Use immediately — do not cache.
+        expires_in:
+          type: integer
+          description: Number of seconds until the presigned URL expires.
+          example: 300
