@@ -252,188 +252,69 @@ The `Framework` table treats each version as a separate row. ISO 27001 2013 and 
 
 ## 5. Core Data Model
 
-### Entity Inventory
+> **Full specification:** [Domain and Data Model Design](domain-and-data-model-design.md) — complete domain model (bounded contexts, aggregates, invariants), data model (table definitions, column types, constraints, indexes), and journey-to-entity traceability. What follows is a summary.
 
-#### Tenant and Identity Layer
+### Bounded Contexts
 
-**Firm** — The root tenant entity. All firm-owned data carries `firm_id`. Key fields: `id`, `name`, `slug`, `subscription_tier`, `settings (jsonb)`. Every tenant-scoped table has an indexed `firm_id` column enforced by PostgreSQL RLS.
+The domain is organized into 7 bounded contexts and 3 cross-cutting concerns, derived from the [user journeys](../user-journeys/all-journeys.md):
 
-**User** — Staff at the audit firm or client-side users invited to specific engagements. Key fields: `id`, `firm_id` (nullable for client users), `email`, `name`, `role`. Roles: `FirmAdmin | Partner | Manager | Staff | EQReviewer | ClientAdmin | ClientUser | ViewOnly`. Client users belong to a `Client` record, not a `Firm`; they access only engagements they are explicitly invited to.
+| # | Context | Key Entities | Database |
+|---|---|---|---|
+| 1 | Firm Identity | Firm, User, Client, Invitation | `identity_db` |
+| 2 | Regulatory Framework | Framework, FrameworkRequirement, ControlObjectiveLibrary | `core_db` |
+| 3 | Firm Methodology | MethodologyTemplate, FirmControlObjective, template items | `identity_db` |
+| 4 | Audit Core | Engagement, Control, TestProcedure, EvidenceItem, EvidenceLink, DocumentRequest, ClientAcceptance, EngagementQualityReview | `core_db` |
+| 5 | Trial Balance | TrialBalance, TrialBalanceAccount, TrialBalanceAdjustment | `trial_balance_db` |
+| 6 | Workpaper Authoring | Workpaper, WorkpaperVersion, ReviewNote | `workpaper_db` |
+| 7 | Reporting | Report, ReportVersion | `reporting_db` |
+| — | Cross-cutting | AIDecision, AuditLog, Notification | `core_db` |
 
-**Client** — The entity being audited ("service organization" in SOC 2 context). Key fields: `id`, `firm_id`, `name`, `industry`, `primary_contact_email`. One firm has many clients.
+**Total entities: 33** across 5 PostgreSQL databases on a shared RDS instance.
 
-#### Framework Reference Layer (Shared Across All Tenants, Not Tenant-Scoped)
+### Cross-Framework Evidence Chain
 
-**Framework** — A specific version of a standards framework. Key fields: `id`, `name`, `version`, `effective_date`, `deprecated_at`, `governing_body`. ISO 27001:2013 and ISO 27001:2022 are separate rows.
-
-**FrameworkRequirement** — A single criterion or control within a framework (e.g., SOC 2 CC6.1, ISO 27001 A.8.3, HIPAA §164.312(a)(1)). Key fields: `id`, `framework_id`, `identifier`, `title`, `description`, `category`, `sort_order`.
-
-#### Control Objective Layer (Framework-Agnostic Bridge)
-
-**ControlObjectiveLibrary** — System-maintained semantic control objectives, independent of any framework. Example: "Access to production systems is restricted to authorized personnel." Key fields: `id`, `name`, `description`, `tags (jsonb)`.
-
-**ControlObjectiveLibraryMapping** — Maps a library objective to one or more `FrameworkRequirement` rows across all frameworks. This table encodes the ~80% overlap between SOC 2 and ISO 27001, enabling a single evidence item to satisfy all mapped requirements simultaneously.
-
-**FirmControlObjective** — A firm's customized version of a library objective, or a net-new objective. Key fields: `id`, `firm_id`, `source_library_id` (nullable), `name`, `description`, `custom_test_guidance (jsonb)`. Firms can override library objectives or define their own.
-
-**FirmControlObjectiveMapping** — Maps a `FirmControlObjective` to specific `FrameworkRequirement` rows. This is the firm-specific layer of the cross-framework evidence architecture.
-
-#### Engagement Layer
-
-**Engagement** — One engagement = one client, one primary framework, one audit period. Key fields: `id`, `firm_id`, `client_id`, `name`, `engagement_type` (FinancialAudit_Private | FinancialAudit_Public | SOC1 | SOC2 | ISO27001 | HIPAA | AgreedUponProcedures | Advisory), `primary_framework_id`, `framework_version_id`, `period_start`, `period_end`, `status`, `prior_engagement_id` (FK for rollforward), `methodology_template_id`, `assembly_deadline` (computed: report date + 60 or 45 days), `retention_deadline` (computed: report date + 5 or 7 years), `report_issued_at`, `finalized_at`, `archived_at`.
-
-**EngagementTeamMember** — Associates users to an engagement with their role on that specific engagement. Used for engagement-level access control checks in the application layer. Key fields: `id`, `engagement_id`, `user_id`, `role`, `assigned_at`, `removed_at`.
-
-**EngagementFramework** — Supports multi-framework engagements (e.g., integrated SOC 2 + ISO 27001). One framework is primary; others are secondary. Key fields: `id`, `engagement_id`, `framework_id`, `framework_version_id`, `is_primary`.
-
-#### Control Layer
-
-**Control** — An instantiation of a `FirmControlObjective` within a specific engagement. Key fields: `id`, `engagement_id`, `firm_control_objective_id`, `description`, `control_owner_id`, `auditor_assigned_to_id`, `status` (NotStarted | InProgress | Complete | Exception | NotApplicable), `is_key_control`, `prior_control_id`.
-
-**TestProcedure** — A specific test step within a control. Key fields: `id`, `control_id`, `procedure_type` (Inquiry | Observation | InspectionOfDocument | Reperformance | Analytics), `description`, `expected_result`, `population_size`, `sample_size`, `sampling_method`, `result`, `exceptions_noted`, `conclusion`, `performed_by_id`, `performed_at`, `reviewed_by_id`, `reviewed_at`, `status`.
-
-#### Evidence Layer
-
-Evidence is stored at the **firm + client** level, not at the engagement level. This is the architectural decision that enables year-over-year reuse and cross-framework reuse without re-uploading.
-
-**EvidenceItem** — A single uploaded document or artifact. Key fields: `id`, `firm_id`, `client_id`, `filename`, `storage_path` (S3 key), `content_type`, `file_size_bytes`, `uploaded_by_id`, `uploaded_at`, `source_type` (ClientUpload | CloudIntegration | APIImport | AuditorGenerated), `source_integration` (Dropbox | Box | GoogleDrive | O365 | DratAuditHub | Vanta | null), `extracted_text`, `extraction_status`, `is_sensitive` (PII/PHI flag).
-
-**EvidenceLink** — Connects an `EvidenceItem` to a specific `TestProcedure`. Key fields: `id`, `evidence_item_id`, `test_procedure_id`, `linked_by_id`, `linked_at`, `notes`, `ai_suggested` (bool), `ai_decision_id` (FK to AIDecision).
-
-#### Framework-Agnostic Evidence Chain
-
-The full relationship that makes cross-framework evidence reuse work:
+The core architectural differentiator — one evidence upload satisfies all mapped framework requirements simultaneously:
 
 ```
-EvidenceItem
-  → (EvidenceLink)
-  → TestProcedure
-  → Control
-  → FirmControlObjective
-  → (FirmControlObjectiveMapping)
-  → FrameworkRequirement (SOC 2 CC6.1)
-  → FrameworkRequirement (ISO 27001 A.8.3)
-  → FrameworkRequirement (HIPAA §164.312(a)(1))
+EvidenceItem → EvidenceLink → TestProcedure → Control
+  → FirmControlObjective → FirmControlObjectiveMapping
+    → FrameworkRequirement (SOC 2 CC6.1)
+    → FrameworkRequirement (ISO 27001 A.8.3)
+    → FrameworkRequirement (HIPAA §164.312(a)(1))
 ```
 
-One evidence upload, one link action, and the evidence simultaneously satisfies all framework requirements mapped to that control objective. This is the architectural realization of the Hyperproof/Drata cross-framework pattern on the auditor side — no competitor currently does this.
-
-#### Document Request Layer
-
-**DocumentRequest** — A PBC (Provided By Client) request sent to the client. Key fields: `id`, `engagement_id`, `control_id` (nullable), `assigned_to_id`, `title`, `description`, `instructions`, `due_date`, `status` (Pending | Submitted | InReview | Accepted | Rejected | Overdue), `reminder_count`, `last_reminder_sent_at`, `fulfilled_by_evidence_item_id`.
-
-#### Trial Balance Layer (Financial Audit Only)
-
-**TrialBalance** — Container for an imported trial balance. Key fields: `id`, `engagement_id`, `period_date`, `import_source`, `imported_at`, `imported_by_id`.
-
-**TrialBalanceAccount** — Individual account row. Key fields: `id`, `trial_balance_id`, `account_number`, `account_name`, `account_type`, `balance_debit`, `balance_credit`, `net_balance`, `mapped_fs_line_item`, `mapping_status` (Unmapped | AISuggested | Confirmed | Overridden), `ai_decision_id`, `confirmed_by_id`.
-
-**TrialBalanceAdjustment** — Proposed, passed, or waived adjustments. Key fields: `id`, `trial_balance_id`, `account_id`, `amount`, `description`, `adjustment_type` (Proposed | Passed | Waived), `proposed_by_id`, `approved_by_id`.
-
-#### Workpaper Layer
-
-**Workpaper** — A document in the engagement file. Key fields: `id`, `engagement_id`, `workpaper_type` (LeadSchedule | TestPaper | Memo | ConfirmationLetter | SamplingWorksheet | ManagementLetter | Other), `title`, `content (jsonb)`, `status` (Draft | PreparedPendingReview | InReview | ReviewNotesOpen | ReviewComplete | SignedOff), `prepared_by_id`, `reviewed_by_id`, `signed_off_by_id`, `is_locked` (true after assembly deadline), `prior_workpaper_id`.
-
-**WorkpaperVersion** — Immutable version history. Every save creates a new row. Key fields: `id`, `workpaper_id`, `version_number`, `content (jsonb)`, `saved_by_id`, `saved_at`, `is_ai_draft` (bool — true until a human edits any content, per PCAOB AS 1105 requirement to distinguish AI-generated from auditor-authored content).
-
-#### Quality Management Layer (SQMS 1/2)
-
-**ClientAcceptance** — Per-engagement quality risk documentation required by SQMS 1. Key fields: `id`, `engagement_id`, `quality_risks_identified (jsonb)`, `firm_responses (jsonb)`, `independence_confirmed`, `independence_confirmed_by_id`, `accepted_by_id`, `accepted_at`. Required before Planning → Fieldwork transition.
-
-**EngagementQualityReview** — Formal EQR record (SQMS 2 / PCAOB AS 1220). Key fields: `id`, `engagement_id`, `reviewer_id` (must have EQReviewer role; must not be on engagement team — system-enforced), `independence_documented_at`, `status` (Assigned | InProgress | Complete), `scope_notes`, `conclusion`, `signed_off_at`. Required before Review → Reporting transition where EQR is applicable.
-
-#### AI Decision Layer
-
-**AIDecision** — Every AI output that could affect audit content is recorded here. Required for PCAOB engagements; best practice for all others. Key fields: `id`, `firm_id`, `engagement_id` (nullable), `context_type` (EvidenceReview | ControlMapping | RiskAssessment | TrialBalanceMapping | DocumentCompleteness | WorkpaperDraft | SamplingRecommendation | AnomalyDetection), `context_id` (uuid), `context_table` (which table), `model_id` (e.g., "claude-sonnet-4-6"), `input_token_count`, `output_token_count`, `raw_output (jsonb)`, `suggested_value`, `confidence` (float 0–1), `review_action` (Pending | Accepted | Modified | Rejected), `accepted_value`, `reviewed_by_id`, `reviewed_at`.
-
-The `context_type + context_id + context_table` triple provides a queryable link to exactly what was being analyzed without a polymorphic foreign key that would complicate migrations.
-
-#### Audit Log (Immutable)
-
-**AuditLog** — Append-only. No updates, no deletes. Key fields: `id` (sequential bigint — not UUID, for ordering guarantees), `firm_id`, `actor_id`, `actor_type` (User | System | AIAgent), `action` (e.g., "engagement.status.changed", "workpaper.signed_off", "evidence.linked"), `resource_type`, `resource_id`, `old_value (jsonb)`, `new_value (jsonb)`, `ip_address`, `user_agent`, `occurred_at` (timestamptz).
-
-Implemented as a PostgreSQL insert-only table with a `RULE` preventing `UPDATE` and `DELETE`. This satisfies regulatory immutability requirements and the GDPR audit trail obligation simultaneously.
-
-#### Reporting Layer
-
-**Report** — Key fields: `id`, `engagement_id`, `report_type` (SOC2Type1 | SOC2Type2 | SOC1Type1 | SOC1Type2 | FinancialAuditOpinion | AgreedUponProcedures | ManagementLetter), `status` (Draft | ClientReview | FirmReview | Issued | Archived), `content (jsonb)`, `generated_at`, `issued_at`, `issued_by_id`.
-
-**ReportVersion** — Immutable version history per report. Same pattern as WorkpaperVersion.
-
-#### Methodology Template Layer
-
-**MethodologyTemplate** — Firm-level reusable templates that pre-populate a new engagement with controls, test procedures, and workpaper shells. Key fields: `id`, `firm_id`, `name`, `applicable_engagement_type`, `applicable_framework_id`, `version`, `is_active`.
-
-**TemplateControl** and **TemplateTestProcedure** — Control and test procedure definitions within a template.
+This chain requires ACID transactions, which is why Audit Core (Context 4) is a single bounded context with a shared database.
 
 ### Engagement Lifecycle State Machine
 
 ```
-Planning ──[Partner: acceptance complete]──► Fieldwork
-Fieldwork ──[Manager/Partner: all controls have results]──► Review
-Review ──[Partner: notes resolved + EQR signed off]──► Reporting
-Reporting ──[Partner: report issued]──► Finalized
-Finalized ──[System: assembly window elapsed]──► Archived (IMMUTABLE)
-
-Reverse paths (exceptional):
-Fieldwork ──[Partner: scope change]──► Planning
-Review ──[Manager/Partner: additional procedures needed]──► Fieldwork
-Reporting ──[Partner: significant issue found]──► Review
-Any state ──[FirmAdmin: abandoned engagement]──► Archived
+Planning ──[ClientAcceptance signed by Partner]──► Fieldwork
+Fieldwork ──[All Controls: Complete or Exception]──► Review
+Review ──[All ReviewNotes resolved + EQR signed off where applicable]──► Reporting
+Reporting ──[Report.status = Issued]──► Finalized
+Finalized ──[System: assembly_deadline elapsed]──► Archived (IMMUTABLE)
 ```
 
-**Valid transitions and guards:**
+Reverse paths exist for exceptional cases (scope change, additional procedures, significant post-reporting issues). Once Finalized, no content can be modified — addenda only (AU-C 230, PCAOB AS 1215).
 
-| From | To | Who Triggers | Guard Condition |
-|---|---|---|---|
-| Planning | Fieldwork | Partner | `ClientAcceptance.accepted_at` is populated |
-| Fieldwork | Review | Manager or Partner | All `Control` records have status `Complete` or `Exception` |
-| Review | Reporting | Partner | All review notes resolved; `EngagementQualityReview.status = Complete` where applicable |
-| Reporting | Finalized | Partner | `Report.status = Issued` |
-| Finalized | Archived | System (Step Functions `Wait` state) | `report_issued_at + assembly_window` has elapsed |
-| Fieldwork | Planning | Partner | (scope change requiring re-acceptance) |
-| Review | Fieldwork | Manager or Partner | (additional procedures required) |
-| Reporting | Review | Partner | (significant issue identified post-reporting) |
-| Any | Archived | FirmAdmin | (abandoned engagement) |
+### Entities Added by Journey Analysis
 
-**Finalized is a hard gate.** Once an engagement reaches Finalized, no workpaper content can be modified. Addenda are created as new `WorkpaperVersion` records with `is_addendum = true` and require re-sign-off. This implements AU-C 230 and PCAOB AS 1215 assembly deadline compliance at the data layer, not just in the UI.
+The following entities were identified through the user journey analysis and are not present in earlier versions of this spec:
 
-### Year-Over-Year Rollforward Behavior
+- **Invitation** — magic link onboarding for staff (Journey 1, 2)
+- **TemplateDocumentRequest** — pre-drafted PBC requests within methodology templates (Journey 7)
+- **ReviewNote** — structured, immutable review feedback on workpapers (Journey 6)
+- **EQRFinding** — individual findings within an engagement quality review (Journey 10)
+- **ClientHubToken** — tokenized no-login access for client document uploads (Journey 7, 8)
+- **DelegationToken** — single-request scoped delegation for client contacts (Journey 8)
+- **ColumnMappingProfile** — saved TB import configurations per accounting system (Journey 4)
+- **Notification** — in-app and email delivery with deep links (Journey 2, 5, 6, 7)
 
-When a new engagement is created with `prior_engagement_id` set:
+### Multi-Tenancy
 
-| Entity | Behavior |
-|---|---|
-| Engagement | New record; `prior_engagement_id` set; all status fields reset |
-| Controls | Cloned from prior engagement; `prior_control_id` set on each; status reset to NotStarted |
-| TestProcedures | Cloned per control; status reset; available as editable starting point |
-| DocumentRequests | Not auto-cloned; AI suggests new requests based on prior engagement controls |
-| EvidenceItems | Not touched; they exist at the firm+client level and are surfaced with "used in prior year" flag |
-| TrialBalance | New import required; prior year TB accessible as read-only reference for comparatives |
-| Workpapers | New drafts created; `prior_workpaper_id` set; prior year workpapers visible as read-only sidebar reference |
-| Report | New document; prior year report accessible for reference only |
-| AIDecisions | Not carried forward; AI re-analyzes fresh evidence for the new period |
-| ClientAcceptance | New record required; quality risk acceptance must be refreshed annually |
-| EngagementQualityReview | New record required if applicable |
+`core_db` uses PostgreSQL RLS with `firm_id` on all tenant-scoped tables. Other databases use application-layer isolation (`WHERE firm_id = $1`). Three authorization dimensions: firm isolation (RLS), engagement team membership (point lookup), and client user scoping (engagement-level invitation).
 
-### Multi-Tenancy Isolation
-
-**Model: Shared PostgreSQL database with row-level security (RLS).**
-
-All tenant-scoped tables carry `firm_id` with an index. The application sets `SET app.current_firm_id = '<uuid>'` at the start of every request. RLS policies enforce the firm isolation boundary:
-
-```sql
-CREATE POLICY firm_isolation ON engagements
-  USING (firm_id = current_setting('app.current_firm_id')::uuid);
-```
-
-RLS is the safety net — defense in depth. Application-layer authorization (REST middleware) is the primary mechanism. The three authorization dimensions are:
-
-1. **Firm isolation** — RLS + `withFirmIsolation` middleware. Every query scoped to `current_firm_id`.
-2. **Engagement team membership** — Application layer `withEngagementAccess` middleware. An indexed point lookup on `EngagementTeamMember (engagement_id, user_id)`.
-3. **Client user scoping** — Application layer `withClientScoping` middleware. Client users can only see `DocumentRequest` and `EvidenceItem` records linked to engagements they were invited to.
-
-System-wide reference tables (`Framework`, `FrameworkRequirement`, `ControlObjectiveLibrary`, `ControlObjectiveLibraryMapping`) have no `firm_id` and no RLS — they are read-only reference data shared across all tenants.
+See [Domain and Data Model Design](domain-and-data-model-design.md) for complete attribute definitions, data types, constraints, indexes, enum types, rollforward behavior, and the journey-to-entity traceability matrix.
 
 ---
 
