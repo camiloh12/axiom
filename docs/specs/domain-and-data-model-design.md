@@ -1,7 +1,7 @@
 # Axiom Domain and Data Model
 
 **Derived from:** [User Journeys](../user-journeys/all-journeys.md) (10 journeys, clean-slate domain modeling exercise)
-**Supersedes:** Section 5 of the [product spec](axiom-spec-v2-design.md) (which now contains an abbreviated summary pointing here)
+**Supersedes:** Section 5 of the [product spec](axiom-spec-design.md) (which now contains an abbreviated summary pointing here)
 **Related:** [Backend Architecture](backend-architecture-design.md) (service decomposition and database topology)
 
 ---

@@ -1,6 +1,6 @@
 # Axiom User Journeys
 
-Task-level user journey maps for every major platform workflow, organized by persona and goal. Referenced from Sections 11–12 of the [product spec](../specs/axiom-spec-v2-design.md).
+Task-level user journey maps for every major platform workflow, organized by persona and goal. Referenced from Sections 11–12 of the [product spec](../specs/axiom-spec-design.md).
 
 Competitor workflows (Fieldguide, CaseWare, DataSnipper, Yak) informed the pain points and opportunities throughout. Where Axiom introduces flows with no competitor equivalent, those are called out explicitly.
 

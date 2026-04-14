@@ -1,7 +1,7 @@
 # Axiom Infrastructure Design
 **Date:** 2026-04-12
 **Status:** Approved
-**Builds on:** `axiom-spec-v2-design.md` Section 7, `backend-architecture-design.md`
+**Builds on:** `axiom-spec-design.md` Section 7, `backend-architecture-design.md`
 
 ---
 

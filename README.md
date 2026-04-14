@@ -48,6 +48,6 @@ SOC 2 Type 2, ISO 27001, ISO 42001 from day one. All AI decisions are logged for
 
 ## Specification Documents
 
-- `docs/specs/axiom-spec-v2-design.md` — full product design and feature requirements
+- `docs/specs/axiom-spec-design.md` — full product design and feature requirements
 - `docs/specs/backend-architecture-design.md` — service decomposition and monorepo structure
 - `docs/specs/infrastructure-design.md` — AWS account structure, Terraform workspaces, CI/CD, observability

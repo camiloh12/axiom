@@ -1,7 +1,7 @@
 # Axiom Backend Architecture Design
 **Date:** 2026-04-12
 **Status:** Approved
-**Supersedes:** Section 7 (Technology Stack) of `axiom-spec-v2-design.md`
+**Supersedes:** Section 7 (Technology Stack) of `axiom-spec-design.md`
 
 ---
 
