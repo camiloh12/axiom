@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — AI Control Mapping</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250); --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250); --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250); --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff; --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250); --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250); --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250); --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250); --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145); --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85); --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25); --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --color-ai: oklch(55% 0.14 290); --color-ai-light: oklch(95% 0.03 290);
+      --color-ai-text: oklch(38% 0.12 290);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+    body { font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5; color: var(--color-neutral-800); background: var(--color-neutral-50); min-height: 100vh; display: flex; -webkit-font-smoothing: antialiased; }
+
+    .sidebar { width: 240px; min-height: 100vh; background: var(--color-neutral-100); border-right: 1px solid var(--color-neutral-200); display: flex; flex-direction: column; flex-shrink: 0; padding: var(--space-5) 0; }
+    .sidebar-logo { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-5); margin-bottom: var(--space-6); }
+    .sidebar-logo .logo-mark { width: 28px; height: 28px; background: var(--color-primary-500); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: var(--text-sm); }
+    .sidebar-logo .logo-text { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.03em; }
+    .nav-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-600); text-decoration: none; border-left: 2px solid transparent; cursor: pointer; transition: all 0.12s ease; }
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+    .nav-item.active { color: var(--color-primary-500); background: var(--color-primary-50); border-left-color: var(--color-primary-500); font-weight: 600; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-sub { padding-left: calc(var(--space-5) + 18px + var(--space-3)); }
+    .nav-sub .nav-item { padding-left: var(--space-3); font-size: var(--text-sm); border-left: none; }
+
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; }
+    .header { height: 56px; background: var(--color-neutral-0); border-bottom: 1px solid var(--color-neutral-200); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-6); flex-shrink: 0; }
+    .header-breadcrumb { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-neutral-400); }
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+    .header-icon-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); color: var(--color-neutral-500); cursor: pointer; border: none; background: none; }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary-100); color: var(--color-primary-600); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; cursor: pointer; }
+
+    .content { flex: 1; padding: var(--space-6) var(--space-8); overflow-y: auto; display: flex; flex-direction: column; }
+
+    .page-header { margin-bottom: var(--space-6); display: flex; align-items: flex-start; justify-content: space-between; }
+    .page-header-left { flex: 1; }
+    .page-header .step-label { font-size: var(--text-sm); font-weight: 600; color: var(--color-primary-500); margin-bottom: var(--space-2); }
+    .page-header h1 { font-size: var(--text-xl); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.02em; line-height: 1.2; }
+    .page-header p { font-size: var(--text-sm); color: var(--color-neutral-600); margin-top: var(--space-2); max-width: 600px; }
+
+    /* AI Summary Banner */
+    .ai-summary { display: flex; align-items: flex-start; gap: var(--space-4); padding: var(--space-5); background: var(--color-ai-light); border: 1px solid oklch(88% 0.06 290); border-left: 3px solid var(--color-ai); border-radius: var(--radius-sm); margin-bottom: var(--space-6); }
+    .ai-summary-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); background: oklch(90% 0.06 290); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ai-summary-icon svg { width: 20px; height: 20px; color: var(--color-ai); }
+    .ai-summary-content { flex: 1; }
+    .ai-summary-badge { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 100px; background: oklch(88% 0.06 290); color: var(--color-ai-text); margin-bottom: var(--space-2); }
+    .ai-summary-text { font-size: var(--text-sm); color: var(--color-ai-text); line-height: 1.5; }
+    .ai-summary-text strong { font-weight: 600; }
+    .ai-stats { display: flex; gap: var(--space-6); margin-top: var(--space-3); }
+    .ai-stat { display: flex; flex-direction: column; }
+    .ai-stat-value { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-800); font-variant-numeric: tabular-nums; }
+    .ai-stat-label { font-size: var(--text-xs); color: var(--color-neutral-500); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* Confidence filters */
+    .table-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); }
+    .filter-pills { display: flex; gap: var(--space-2); }
+    .filter-pill { display: inline-flex; align-items: center; gap: var(--space-1); height: 32px; padding: 0 var(--space-3); border-radius: 100px; border: 1px solid var(--color-neutral-200); background: var(--color-neutral-0); font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 500; color: var(--color-neutral-600); cursor: pointer; transition: all 0.12s ease; }
+    .filter-pill:hover { border-color: var(--color-neutral-300); }
+    .filter-pill.active { border-color: var(--color-primary-200); background: var(--color-primary-50); color: var(--color-primary-700); }
+    .filter-pill .pill-count { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .filter-pill .pill-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .pill-dot.high { background: var(--color-success); }
+    .pill-dot.medium { background: var(--color-warning); }
+    .pill-dot.low { background: var(--color-error); }
+
+    .btn-confirm-all { display: inline-flex; align-items: center; gap: var(--space-2); height: 40px; padding: 0 var(--space-5); background: var(--color-primary-500); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; cursor: pointer; transition: background 0.15s ease; }
+    .btn-confirm-all:hover { background: var(--color-primary-600); }
+    .btn-confirm-all svg { width: 16px; height: 16px; }
+
+    /* Data Table */
+    .table-wrapper { background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); overflow: hidden; flex: 1; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { position: sticky; top: 0; z-index: 2; }
+    th { background: var(--color-neutral-50); font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.05em; text-align: left; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-neutral-200); white-space: nowrap; }
+    td { font-size: var(--text-sm); color: var(--color-neutral-700); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-neutral-200); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: oklch(99% 0.002 250); }
+    tr.highlight td { background: oklch(97% 0.015 290); }
+
+    .control-name { font-weight: 600; color: var(--color-neutral-800); white-space: nowrap; }
+    .control-desc { font-size: var(--text-xs); color: var(--color-neutral-500); margin-top: 2px; max-width: 200px; }
+    .framework-ref { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 500; padding: 2px 6px; border-radius: 4px; white-space: nowrap; display: inline-block; margin-bottom: 2px; }
+    .ref-soc2 { background: oklch(95% 0.03 145); color: oklch(40% 0.12 145); }
+    .ref-iso { background: oklch(95% 0.04 85); color: oklch(40% 0.10 85); }
+    .ref-multi { border: 1px solid oklch(88% 0.06 290); background: var(--color-ai-light); color: var(--color-ai-text); }
+
+    /* Confidence badge */
+    .confidence { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); font-weight: 600; padding: var(--space-1) var(--space-2); border-radius: 100px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .confidence.high { background: var(--color-success-light); color: var(--color-success-text); }
+    .confidence.medium { background: var(--color-warning-light); color: var(--color-warning-text); }
+    .confidence.low { background: var(--color-error-light); color: var(--color-error-text); }
+    .confidence-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .confidence.high .confidence-dot { background: var(--color-success); }
+    .confidence.medium .confidence-dot { background: var(--color-warning); }
+    .confidence.low .confidence-dot { background: var(--color-error); }
+
+    .ai-explanation { font-size: var(--text-xs); color: var(--color-neutral-500); line-height: 1.4; max-width: 280px; }
+
+    /* Row actions */
+    .row-actions { display: flex; gap: var(--space-1); }
+    .row-action-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); border: none; background: none; color: var(--color-neutral-400); cursor: pointer; transition: all 0.12s ease; }
+    .row-action-btn:hover { color: var(--color-neutral-700); background: var(--color-neutral-100); }
+    .row-action-btn.confirm:hover { color: var(--color-success-text); background: var(--color-success-light); }
+    .row-action-btn.reject:hover { color: var(--color-error-text); background: var(--color-error-light); }
+    .row-action-btn svg { width: 14px; height: 14px; }
+
+    /* Pagination */
+    .table-footer { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-neutral-200); background: var(--color-neutral-50); }
+    .table-footer-info { font-size: var(--text-xs); color: var(--color-neutral-400); font-variant-numeric: tabular-nums; }
+    .pagination { display: flex; align-items: center; gap: var(--space-1); }
+    .page-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); border: 1px solid var(--color-neutral-200); background: var(--color-neutral-0); font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 500; color: var(--color-neutral-600); cursor: pointer; font-variant-numeric: tabular-nums; }
+    .page-btn:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
+    .page-btn.active { border-color: var(--color-primary-500); background: var(--color-primary-50); color: var(--color-primary-600); font-weight: 600; }
+    .page-btn.disabled { opacity: 0.4; cursor: default; }
+    .page-btn svg { width: 14px; height: 14px; }
+
+    /* Cross-framework highlight badge */
+    .cross-badge { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 100px; background: var(--color-ai-light); color: var(--color-ai-text); border: 1px solid oklch(88% 0.06 290); white-space: nowrap; }
+
+    .form-actions { display: flex; gap: var(--space-3); padding-top: var(--space-5); }
+    .btn-ghost { display: inline-flex; align-items: center; height: 40px; padding: 0 var(--space-5); background: none; color: var(--color-neutral-600); border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+    .btn-ghost:hover { color: var(--color-neutral-800); background: var(--color-neutral-100); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">A</div><span class="logo-text">Axiom</span></div>
+    <nav>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a class="nav-item active" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Engagements
+      </a>
+      <div class="nav-sub">
+        <a class="nav-item" href="#">Cloudvault Technologies</a>
+      </div>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Staff Management
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Firm Settings
+      </a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a>
+        <span>/</span>
+        <a href="#">Cloudvault Technologies</a>
+        <span>/</span>
+        <span class="current">Control Mapping</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <div class="avatar">SC</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-header">
+        <div class="page-header-left">
+          <div class="step-label">Step 4 of 6</div>
+          <h1>Review AI Control Mappings</h1>
+          <p>Axiom mapped your firm's control objectives to SOC 2 TSC and ISO 27001 Annex A requirements. Review and confirm the mappings below.</p>
+        </div>
+      </div>
+
+      <!-- AI Summary Banner -->
+      <div class="ai-summary">
+        <div class="ai-summary-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <div class="ai-summary-content">
+          <div class="ai-summary-badge">AI Generated</div>
+          <div class="ai-summary-text">
+            <strong>142 control mappings proposed</strong> across SOC 2 Trust Services Criteria and ISO 27001:2022 Annex A. 37 controls satisfy requirements in both frameworks simultaneously, reducing duplicate testing by approximately 26%. Based on prior engagements at your firm, AI control mapping accuracy is 94%.
+          </div>
+          <div class="ai-stats">
+            <div class="ai-stat"><span class="ai-stat-value">118</span><span class="ai-stat-label">High confidence</span></div>
+            <div class="ai-stat"><span class="ai-stat-value">19</span><span class="ai-stat-label">Medium</span></div>
+            <div class="ai-stat"><span class="ai-stat-value">5</span><span class="ai-stat-label">Low</span></div>
+            <div class="ai-stat"><span class="ai-stat-value">37</span><span class="ai-stat-label">Cross-framework</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="table-toolbar">
+        <div class="filter-pills">
+          <button class="filter-pill active"><span class="pill-count">142</span> All</button>
+          <button class="filter-pill"><span class="pill-dot high"></span> <span class="pill-count">118</span> High</button>
+          <button class="filter-pill"><span class="pill-dot medium"></span> <span class="pill-count">19</span> Medium</button>
+          <button class="filter-pill"><span class="pill-dot low"></span> <span class="pill-count">5</span> Low</button>
+          <button class="filter-pill"><span class="cross-badge" style="border:none;padding:0;background:none;font-size:var(--text-xs);">Cross</span> <span class="pill-count">37</span></button>
+        </div>
+        <button class="btn-confirm-all">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Confirm all 142 mappings
+        </button>
+      </div>
+
+      <!-- Data Table -->
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:22%">Control Objective</th>
+              <th style="width:14%">SOC 2 Requirement</th>
+              <th style="width:14%">ISO 27001 Requirement</th>
+              <th style="width:10%">Confidence</th>
+              <th style="width:32%">AI Explanation</th>
+              <th style="width:8%">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Row 1 - HIGHLIGHT ROW: Cross-framework "aha moment" -->
+            <tr class="highlight">
+              <td>
+                <div class="control-name">Logical Access Controls</div>
+                <div class="control-desc">Restrict system access to authorized users through authentication and authorization mechanisms</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC6.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Logical and physical access controls</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-iso">A.8.3</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Information access restriction</div>
+              </td>
+              <td><span class="confidence high"><span class="confidence-dot"></span> 97%</span><br><span class="cross-badge" style="margin-top:4px;">Cross-framework</span></td>
+              <td class="ai-explanation">CC6.1 requires logical access controls to restrict access to information assets. A.8.3 requires restricting access to information and information processing facilities in accordance with access control policy. Both controls address the same fundamental requirement: ensuring only authorized individuals can access systems and data. Testing access control configurations, user provisioning, and periodic access reviews satisfies both requirements simultaneously.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 2 -->
+            <tr>
+              <td>
+                <div class="control-name">User Authentication</div>
+                <div class="control-desc">Verify identity of users before granting access using MFA and password policies</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC6.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Logical and physical access controls</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-iso">A.8.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">User endpoint devices</div>
+              </td>
+              <td><span class="confidence high"><span class="confidence-dot"></span> 95%</span><br><span class="cross-badge" style="margin-top:4px;">Cross-framework</span></td>
+              <td class="ai-explanation">CC6.1 encompasses user identification and authentication mechanisms. A.8.1 addresses securing user endpoint devices including authentication requirements. Both require robust identity verification. Testing MFA enforcement and password complexity policies addresses both simultaneously.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 3 -->
+            <tr>
+              <td>
+                <div class="control-name">User Access Provisioning</div>
+                <div class="control-desc">Manage granting, modification, and revocation of user access rights</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC6.2</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Prior to issuing credentials, registered and authorized</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-iso">A.5.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Policies for information security</div>
+              </td>
+              <td><span class="confidence high"><span class="confidence-dot"></span> 92%</span><br><span class="cross-badge" style="margin-top:4px;">Cross-framework</span></td>
+              <td class="ai-explanation">CC6.2 requires that access credentials are registered and authorized before issuance. A.5.1 governs the policy framework under which access provisioning processes are defined. User provisioning workflows, approval chains, and joiner/mover/leaver processes satisfy both requirements.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 4 -->
+            <tr>
+              <td>
+                <div class="control-name">System Operations Monitoring</div>
+                <div class="control-desc">Detect and respond to anomalies in system operations and security events</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC7.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Detection and monitoring activities</div>
+              </td>
+              <td>
+                <span style="font-size:var(--text-xs);color:var(--color-neutral-400);font-style:italic;">No direct mapping</span>
+              </td>
+              <td><span class="confidence high"><span class="confidence-dot"></span> 94%</span></td>
+              <td class="ai-explanation">CC7.1 requires monitoring procedures to detect anomalies that could indicate security events. Mapped to SOC 2 only as ISO 27001:2022 addresses detection monitoring under A.8.16 (monitoring activities), which is outside the selected Annex A scope for this engagement.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 5 -->
+            <tr>
+              <td>
+                <div class="control-name">Incident Response Procedures</div>
+                <div class="control-desc">Identify, report, and remediate security incidents in a timely manner</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC7.2</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Security incident response</div>
+              </td>
+              <td>
+                <span style="font-size:var(--text-xs);color:var(--color-neutral-400);font-style:italic;">No direct mapping</span>
+              </td>
+              <td><span class="confidence high"><span class="confidence-dot"></span> 91%</span></td>
+              <td class="ai-explanation">CC7.2 addresses monitoring of the security incident management process including identification, response, and communication. SOC 2 specific; ISO 27001 incident management is covered under A.5.24-A.5.28 which are outside the selected scope.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 6 -->
+            <tr>
+              <td>
+                <div class="control-name">Change Management Process</div>
+                <div class="control-desc">Control changes to IT infrastructure and applications through formal approval workflows</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC8.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Change management process</div>
+              </td>
+              <td>
+                <span style="font-size:var(--text-xs);color:var(--color-neutral-400);font-style:italic;">No direct mapping</span>
+              </td>
+              <td><span class="confidence high"><span class="confidence-dot"></span> 96%</span></td>
+              <td class="ai-explanation">CC8.1 requires that changes to system components are authorized, designed, developed, configured, documented, tested, approved, and implemented. This is a well-established SOC 2 control area with direct template coverage. ISO 27001 change management falls under A.8.32.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 7 - Medium confidence -->
+            <tr>
+              <td>
+                <div class="control-name">Data Retention and Disposal</div>
+                <div class="control-desc">Retain and dispose of data in accordance with regulatory requirements and retention schedules</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC6.5</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Disposal of confidential information</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-iso">A.8.3</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Information access restriction</div>
+              </td>
+              <td><span class="confidence medium"><span class="confidence-dot"></span> 74%</span></td>
+              <td class="ai-explanation">CC6.5 addresses disposal of confidential information. A.8.3 is a partial match as it primarily covers access restriction rather than data lifecycle management. Consider mapping to A.8.10 (Information deletion) instead for stronger alignment. Review recommended.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 8 - Medium confidence -->
+            <tr>
+              <td>
+                <div class="control-name">Vendor Risk Assessment</div>
+                <div class="control-desc">Evaluate and monitor third-party service providers for security and compliance risks</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC9.2</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Risk mitigation through vendor mgmt</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-iso">A.5.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Policies for information security</div>
+              </td>
+              <td><span class="confidence medium"><span class="confidence-dot"></span> 68%</span></td>
+              <td class="ai-explanation">CC9.2 specifically addresses vendor risk management and monitoring. A.5.1 is a general policy control; a better ISO 27001 mapping may be A.5.19 (Information security in supplier relationships). The policy-level mapping is valid but imprecise. Manual review recommended.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 9 - Low confidence -->
+            <tr>
+              <td>
+                <div class="control-name">Business Continuity Planning</div>
+                <div class="control-desc">Maintain disaster recovery and business continuity plans with regular testing</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">A1.2</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Recovery planning (Availability)</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-iso">A.5.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Policies for information security</div>
+              </td>
+              <td><span class="confidence low"><span class="confidence-dot"></span> 52%</span></td>
+              <td class="ai-explanation">A1.2 addresses environmental and recovery controls for availability. The ISO mapping to A.5.1 (general policies) is weak. More appropriate ISO 27001 mapping would be A.5.29 (ICT readiness for business continuity) or A.5.30 (ICT readiness). Requires manual review and re-mapping.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Row 10 -->
+            <tr>
+              <td>
+                <div class="control-name">Encryption Key Management</div>
+                <div class="control-desc">Manage cryptographic keys throughout their lifecycle including generation, storage, and rotation</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-soc2">CC6.1</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Logical and physical access controls</div>
+              </td>
+              <td>
+                <span class="framework-ref ref-iso">A.8.3</span>
+                <div style="font-size:var(--text-xs);color:var(--color-neutral-500);margin-top:2px;">Information access restriction</div>
+              </td>
+              <td><span class="confidence high"><span class="confidence-dot"></span> 89%</span><br><span class="cross-badge" style="margin-top:4px;">Cross-framework</span></td>
+              <td class="ai-explanation">Encryption key management controls protect data confidentiality, mapping to CC6.1's requirement for access controls (including cryptographic protection) and A.8.3's access restriction requirements. Key rotation, storage in HSMs, and access logging are common test procedures for both frameworks.</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-action-btn confirm" title="Confirm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>
+                  <button class="row-action-btn reject" title="Reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="table-footer">
+          <span class="table-footer-info">Showing 1 &ndash; 10 of 142 mappings</span>
+          <div class="pagination">
+            <button class="page-btn disabled"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">...</button>
+            <button class="page-btn">15</button>
+            <button class="page-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-confirm-all">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Confirm all 142 mappings
+        </button>
+        <button class="btn-ghost">Back</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

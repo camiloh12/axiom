@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — Team Assignment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250); --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250); --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250); --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff; --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250); --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250); --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250); --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250); --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145); --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85); --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-info: oklch(55% 0.12 250); --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+    body { font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5; color: var(--color-neutral-800); background: var(--color-neutral-50); min-height: 100vh; display: flex; -webkit-font-smoothing: antialiased; }
+
+    .sidebar { width: 240px; min-height: 100vh; background: var(--color-neutral-100); border-right: 1px solid var(--color-neutral-200); display: flex; flex-direction: column; flex-shrink: 0; padding: var(--space-5) 0; }
+    .sidebar-logo { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-5); margin-bottom: var(--space-6); }
+    .sidebar-logo .logo-mark { width: 28px; height: 28px; background: var(--color-primary-500); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: var(--text-sm); }
+    .sidebar-logo .logo-text { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.03em; }
+    .nav-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-600); text-decoration: none; border-left: 2px solid transparent; cursor: pointer; transition: all 0.12s ease; }
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+    .nav-item.active { color: var(--color-primary-500); background: var(--color-primary-50); border-left-color: var(--color-primary-500); font-weight: 600; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-sub { padding-left: calc(var(--space-5) + 18px + var(--space-3)); }
+    .nav-sub .nav-item { padding-left: var(--space-3); font-size: var(--text-sm); border-left: none; }
+
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .header { height: 56px; background: var(--color-neutral-0); border-bottom: 1px solid var(--color-neutral-200); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-6); flex-shrink: 0; }
+    .header-breadcrumb { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-neutral-400); }
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+    .header-icon-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); color: var(--color-neutral-500); cursor: pointer; border: none; background: none; }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary-100); color: var(--color-primary-600); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; cursor: pointer; }
+
+    .content { flex: 1; padding: var(--space-8); overflow-y: auto; }
+
+    .wizard-steps { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-8); }
+    .wizard-step { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-neutral-400); font-weight: 500; }
+    .wizard-step.active { color: var(--color-primary-500); font-weight: 600; }
+    .wizard-step.completed { color: var(--color-success-text); }
+    .wizard-step-num { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--color-neutral-300); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; }
+    .wizard-step.active .wizard-step-num { border-color: var(--color-primary-500); background: var(--color-primary-50); color: var(--color-primary-500); }
+    .wizard-step.completed .wizard-step-num { border-color: var(--color-success); background: var(--color-success); color: white; }
+    .wizard-divider { width: 32px; height: 1px; background: var(--color-neutral-200); }
+
+    .page-header { margin-bottom: var(--space-8); }
+    .page-header .step-label { font-size: var(--text-sm); font-weight: 600; color: var(--color-primary-500); margin-bottom: var(--space-2); }
+    .page-header h1 { font-size: var(--text-xl); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.02em; line-height: 1.2; }
+    .page-header p { font-size: var(--text-base); color: var(--color-neutral-600); margin-top: var(--space-2); }
+
+    /* Team Assignment Panel */
+    .team-panel { background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); max-width: 700px; overflow: hidden; }
+    .team-panel-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--color-neutral-200); }
+    .team-panel-header h3 { font-size: var(--text-lg); font-weight: 600; color: var(--color-neutral-800); letter-spacing: -0.01em; }
+    .team-count { font-size: var(--text-sm); color: var(--color-neutral-400); font-weight: 500; font-variant-numeric: tabular-nums; }
+
+    .team-search { padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-neutral-200); }
+    .team-search input { width: 100%; height: 40px; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm); padding: 0 var(--space-3) 0 36px; font-family: var(--font-sans); font-size: var(--text-sm); color: var(--color-neutral-800); background: var(--color-neutral-0); outline: none; background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 10px center; }
+    .team-search input:focus { border-color: var(--color-primary-500); box-shadow: 0 0 0 3px oklch(50% 0.15 250 / 0.12); }
+
+    /* Rollforward team button */
+    .rollforward-team { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-6); background: var(--color-info-light); border-bottom: 1px solid oklch(90% 0.02 250); cursor: pointer; transition: background 0.12s ease; }
+    .rollforward-team:hover { background: oklch(93% 0.03 250); }
+    .rollforward-team svg { width: 16px; height: 16px; color: var(--color-info); flex-shrink: 0; }
+    .rollforward-team span { font-size: var(--text-sm); color: var(--color-info-text); font-weight: 500; }
+
+    /* Team member rows */
+    .team-member { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-neutral-200); }
+    .team-member:last-child { border-bottom: none; }
+    .member-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; flex-shrink: 0; }
+    .member-avatar.partner { background: oklch(93% 0.03 250); color: oklch(45% 0.12 250); }
+    .member-avatar.manager { background: oklch(93% 0.04 170); color: oklch(40% 0.10 170); }
+    .member-avatar.staff { background: oklch(93% 0.04 85); color: oklch(40% 0.10 85); }
+    .member-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .member-name { font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-800); }
+    .member-email { font-size: var(--text-xs); color: var(--color-neutral-400); }
+    .member-role-select { height: 32px; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm); padding: 0 28px 0 var(--space-2); font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 500; color: var(--color-neutral-700); background: var(--color-neutral-0); outline: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+    .member-prior-badge { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-xs); font-weight: 500; padding: 2px 8px; border-radius: 100px; background: var(--color-success-light); color: var(--color-success-text); white-space: nowrap; }
+    .remove-member { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); border: none; background: none; color: var(--color-neutral-400); cursor: pointer; }
+    .remove-member:hover { color: oklch(55% 0.20 25); background: oklch(95% 0.03 25); }
+    .remove-member svg { width: 14px; height: 14px; }
+
+    .form-actions { max-width: 700px; display: flex; gap: var(--space-3); padding-top: var(--space-6); }
+    .btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 var(--space-5); background: var(--color-primary-500); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: var(--color-primary-600); }
+    .btn-ghost { display: inline-flex; align-items: center; height: 40px; padding: 0 var(--space-5); background: none; color: var(--color-neutral-600); border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+    .btn-ghost:hover { color: var(--color-neutral-800); background: var(--color-neutral-100); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">A</div><span class="logo-text">Axiom</span></div>
+    <nav>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a class="nav-item active" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Engagements
+      </a>
+      <div class="nav-sub">
+        <a class="nav-item" href="#">Cloudvault Technologies</a>
+      </div>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Staff Management
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        Firm Settings
+      </a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a>
+        <span>/</span>
+        <a href="#">Cloudvault Technologies</a>
+        <span>/</span>
+        <span class="current">Team Assignment</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <div class="avatar">SC</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- Wizard Steps -->
+      <div class="wizard-steps">
+        <div class="wizard-step completed">
+          <div class="wizard-step-num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg></div>
+          Type &amp; Framework
+        </div>
+        <div class="wizard-divider"></div>
+        <div class="wizard-step completed">
+          <div class="wizard-step-num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg></div>
+          Details &amp; Team
+        </div>
+        <div class="wizard-divider"></div>
+        <div class="wizard-step active">
+          <div class="wizard-step-num">3</div>
+          Team Assignment
+        </div>
+        <div class="wizard-divider"></div>
+        <div class="wizard-step">
+          <div class="wizard-step-num">4</div>
+          Control Mapping
+        </div>
+        <div class="wizard-divider"></div>
+        <div class="wizard-step">
+          <div class="wizard-step-num">5</div>
+          Client Acceptance
+        </div>
+        <div class="wizard-divider"></div>
+        <div class="wizard-step">
+          <div class="wizard-step-num">6</div>
+          Begin Fieldwork
+        </div>
+      </div>
+
+      <div class="page-header">
+        <div class="step-label">Step 3 of 6</div>
+        <h1>Assign Engagement Team</h1>
+        <p>Add team members and assign their engagement roles. Each member will be notified when fieldwork begins.</p>
+      </div>
+
+      <div class="team-panel">
+        <div class="team-panel-header">
+          <h3>Team Members</h3>
+          <span class="team-count">4 assigned</span>
+        </div>
+
+        <div class="team-search">
+          <input type="text" placeholder="Search by name or email to add team members...">
+        </div>
+
+        <!-- Rollforward team suggestion -->
+        <div class="rollforward-team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          <span>Same team as last year &mdash; 4 members from Cloudvault SOC 2 Type II 2024</span>
+        </div>
+
+        <!-- Team member rows -->
+        <div class="team-member">
+          <div class="member-avatar partner">SC</div>
+          <div class="member-info">
+            <span class="member-name">Sarah Chen</span>
+            <span class="member-email">s.chen@meridian-cpas.com</span>
+          </div>
+          <span class="member-prior-badge">Prior year</span>
+          <select class="member-role-select">
+            <option selected>Partner</option>
+            <option>Manager</option>
+          </select>
+          <button class="remove-member" title="Remove member" disabled style="opacity:0.3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="team-member">
+          <div class="member-avatar manager">JR</div>
+          <div class="member-info">
+            <span class="member-name">James Rodriguez</span>
+            <span class="member-email">j.rodriguez@meridian-cpas.com</span>
+          </div>
+          <span class="member-prior-badge">Prior year</span>
+          <select class="member-role-select">
+            <option>Partner</option>
+            <option selected>Manager</option>
+            <option>Staff</option>
+          </select>
+          <button class="remove-member" title="Remove member">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="team-member">
+          <div class="member-avatar staff">EP</div>
+          <div class="member-info">
+            <span class="member-name">Emily Park</span>
+            <span class="member-email">e.park@meridian-cpas.com</span>
+          </div>
+          <span class="member-prior-badge">Prior year</span>
+          <select class="member-role-select">
+            <option>Manager</option>
+            <option selected>Staff</option>
+          </select>
+          <button class="remove-member" title="Remove member">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="team-member">
+          <div class="member-avatar staff">DK</div>
+          <div class="member-info">
+            <span class="member-name">David Kim</span>
+            <span class="member-email">d.kim@meridian-cpas.com</span>
+          </div>
+          <span class="member-prior-badge">Prior year</span>
+          <select class="member-role-select">
+            <option>Manager</option>
+            <option selected>Staff</option>
+          </select>
+          <button class="remove-member" title="Remove member">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-primary">Continue to Control Mapping</button>
+        <button class="btn-ghost">Back</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
