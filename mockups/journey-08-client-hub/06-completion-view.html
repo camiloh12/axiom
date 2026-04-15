@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Documents Received — Meridian & Associates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --text-xs: 0.64rem;
+      --text-sm: 0.8rem;
+      --text-base: 1rem;
+      --text-lg: 1.25rem;
+      --text-xl: 1.563rem;
+      --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-primary-900: oklch(20% 0.05 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      --space-12: 48px;
+      --space-16: 64px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: var(--space-10) var(--space-6);
+    }
+
+    /* Firm header */
+    .firm-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-3);
+      padding-bottom: var(--space-10);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    .firm-logo {
+      width: 56px;
+      height: 56px;
+      background: var(--color-primary-900);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: var(--text-xl);
+      letter-spacing: -0.02em;
+    }
+
+    .firm-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-600);
+    }
+
+    /* Content */
+    .content {
+      padding-top: var(--space-10);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-8);
+    }
+
+    /* Completion hero */
+    .completion-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-5);
+      text-align: center;
+    }
+
+    .completion-icon {
+      width: 72px;
+      height: 72px;
+      background: var(--color-success-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .completion-icon svg {
+      width: 36px;
+      height: 36px;
+      color: var(--color-success-text);
+    }
+
+    .completion-hero h1 {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .completion-hero p {
+      font-size: var(--text-base);
+      color: var(--color-neutral-600);
+      line-height: 1.6;
+      max-width: 480px;
+    }
+
+    /* Progress complete */
+    .progress-complete {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .progress-label {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-success-text);
+    }
+
+    .progress-count {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-success-text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-bar-track {
+      height: 8px;
+      background: var(--color-neutral-200);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--color-success);
+      border-radius: 4px;
+    }
+
+    /* Document list */
+    .document-list-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .document-list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .document-list-title {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+    }
+
+    .document-count {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Department sections in document list */
+    .dept-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .dept-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-neutral-400);
+      padding: var(--space-2) 0;
+    }
+
+    .document-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+    }
+
+    .doc-check {
+      width: 20px;
+      height: 20px;
+      color: var(--color-success);
+      flex-shrink: 0;
+    }
+
+    .doc-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .doc-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-800);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .doc-file {
+      font-size: var(--text-xs);
+      color: var(--color-neutral-400);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .doc-status {
+      display: inline-flex;
+      align-items: center;
+      padding: var(--space-1) var(--space-2);
+      border-radius: 100px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      background: var(--color-success-light);
+      color: var(--color-success-text);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    /* Engagement summary */
+    .engagement-summary {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .engagement-summary-title {
+      font-size: var(--text-base);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--color-neutral-100);
+    }
+
+    .summary-row:last-child {
+      border-bottom: none;
+    }
+
+    .summary-label {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    .summary-value {
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--color-neutral-700);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: var(--space-16);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-neutral-200);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .footer p {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-300);
+    }
+
+    .powered-by {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--color-neutral-300);
+    }
+
+    .axiom-mark {
+      width: 16px;
+      height: 16px;
+      background: var(--color-primary-500);
+      border-radius: 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 9px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="firm-header">
+      <div class="firm-logo">MA</div>
+      <span class="firm-name">Meridian & Associates CPAs</span>
+    </header>
+
+    <div class="content">
+      <!-- Completion hero -->
+      <div class="completion-hero">
+        <div class="completion-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h1>All documents received</h1>
+        <p>All 23 documents have been received. Your audit team at Meridian & Associates is reviewing them. You will be notified if any follow-up is needed.</p>
+      </div>
+
+      <!-- Full progress bar -->
+      <div class="progress-complete">
+        <div class="progress-header">
+          <span class="progress-label">All requests complete</span>
+          <span class="progress-count">23 of 23</span>
+        </div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" style="width: 100%"></div>
+        </div>
+      </div>
+
+      <!-- Engagement summary card -->
+      <div class="engagement-summary">
+        <div class="engagement-summary-title">Engagement Summary</div>
+        <div class="summary-row">
+          <span class="summary-label">Engagement</span>
+          <span class="summary-value">SOC 2 Type II</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Client</span>
+          <span class="summary-value">Cloudvault Technologies Inc.</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Audit period</span>
+          <span class="summary-value">Jan 1 &ndash; Dec 31, 2025</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Documents submitted</span>
+          <span class="summary-value">23</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Last submission</span>
+          <span class="summary-value">February 8, 2026</span>
+        </div>
+      </div>
+
+      <!-- Submitted documents list -->
+      <div class="document-list-section">
+        <div class="document-list-header">
+          <span class="document-list-title">Submitted Documents</span>
+          <span class="document-count">23 documents</span>
+        </div>
+
+        <!-- IT Security -->
+        <div class="dept-section">
+          <div class="dept-label">IT Security (12)</div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Access Control Policy</div>
+              <div class="doc-file">Cloudvault_Access_Control_Policy_v4.pdf &middot; 1.2 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Network Diagram</div>
+              <div class="doc-file">Network_Topology_2025.pdf &middot; 3.4 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Vulnerability Scan Reports</div>
+              <div class="doc-file">Cloudvault_VulnScan_Full_Year_2025.pdf &middot; 4.1 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Encryption Standards Documentation</div>
+              <div class="doc-file">Encryption_Standards_v2.docx &middot; 845 KB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Change Management Procedures</div>
+              <div class="doc-file">Cloudvault_Change_Management_Policy_v3.pdf &middot; 2.4 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Incident Response Plan</div>
+              <div class="doc-file">IRP_2025_v3.pdf &middot; 1.6 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">User Access Review Log</div>
+              <div class="doc-file">Access_Review_Q1-Q4_2025.xlsx &middot; 520 KB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Firewall Configuration Rules</div>
+              <div class="doc-file">FW_Rules_Export_Dec2025.pdf &middot; 890 KB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+        </div>
+
+        <!-- HR Policies -->
+        <div class="dept-section">
+          <div class="dept-label">HR Policies (8)</div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Employee Handbook</div>
+              <div class="doc-file">Cloudvault_Employee_Handbook_2025.pdf &middot; 5.2 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Background Check Policy</div>
+              <div class="doc-file">Background_Check_Procedure.docx &middot; 340 KB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Onboarding and Offboarding Procedures</div>
+              <div class="doc-file">Onboarding_Offboarding_Checklist.pdf &middot; 1.1 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Security Awareness Training Records</div>
+              <div class="doc-file">Training_Completion_Report_2025.xlsx &middot; 280 KB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+        </div>
+
+        <!-- Financial -->
+        <div class="dept-section">
+          <div class="dept-label">Financial (3)</div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Service Level Agreements</div>
+              <div class="doc-file">Customer_SLAs_Master.pdf &middot; 2.8 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Vendor Risk Assessments</div>
+              <div class="doc-file">Vendor_Risk_Assessment_2025.xlsx &middot; 1.5 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+
+          <div class="document-item">
+            <svg class="doc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div class="doc-info">
+              <div class="doc-name">Business Continuity Plan</div>
+              <div class="doc-file">BCP_DR_Plan_2025.pdf &middot; 3.2 MB</div>
+            </div>
+            <span class="doc-status">Accepted</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Questions? Contact your audit team at audit@meridian-cpa.com</p>
+      <div class="powered-by">
+        Powered by <span class="axiom-mark">A</span> Axiom
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meridian & Associates — Client Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --text-xs: 0.64rem;
+      --text-sm: 0.8rem;
+      --text-base: 1rem;
+      --text-lg: 1.25rem;
+      --text-xl: 1.563rem;
+      --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-primary-900: oklch(20% 0.05 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      --space-12: 48px;
+      --space-16: 64px;
+      --space-24: 96px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: var(--space-10) var(--space-6);
+    }
+
+    /* Firm branding header */
+    .firm-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-3);
+      padding-bottom: var(--space-10);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    .firm-logo {
+      width: 56px;
+      height: 56px;
+      background: var(--color-primary-900);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: var(--text-xl);
+      letter-spacing: -0.02em;
+    }
+
+    .firm-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-600);
+      letter-spacing: 0.02em;
+    }
+
+    /* Main content area */
+    .content {
+      padding-top: var(--space-10);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-8);
+    }
+
+    .greeting {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .greeting h1 {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .greeting p {
+      font-size: var(--text-base);
+      color: var(--color-neutral-600);
+      line-height: 1.6;
+    }
+
+    /* Engagement card */
+    .engagement-card {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+
+    .engagement-details {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .engagement-title {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+    }
+
+    .engagement-meta {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .meta-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-size: var(--text-sm);
+    }
+
+    .meta-label {
+      color: var(--color-neutral-400);
+      min-width: 100px;
+    }
+
+    .meta-value {
+      color: var(--color-neutral-700);
+      font-weight: 500;
+    }
+
+    /* Progress section */
+    .progress-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .progress-label {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-700);
+    }
+
+    .progress-count {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-primary-500);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-bar-track {
+      height: 8px;
+      background: var(--color-neutral-200);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--color-primary-500);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-note {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    /* Request summary */
+    .request-summary {
+      display: flex;
+      gap: var(--space-4);
+    }
+
+    .summary-stat {
+      flex: 1;
+      background: var(--color-neutral-50);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+      text-align: center;
+    }
+
+    .summary-stat .stat-number {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .summary-stat .stat-label {
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--color-neutral-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .summary-stat.pending .stat-number {
+      color: var(--color-warning-text);
+    }
+
+    .summary-stat.complete .stat-number {
+      color: var(--color-success-text);
+    }
+
+    /* CTA */
+    .cta-section {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .btn-primary {
+      height: 48px;
+      background: var(--color-primary-500);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      text-decoration: none;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-primary-600);
+    }
+
+    .btn-primary svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Link expiry notice */
+    .link-notice {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-neutral-100);
+      border-radius: var(--radius-sm);
+    }
+
+    .link-notice svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      color: var(--color-neutral-400);
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: var(--space-16);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-neutral-200);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .footer p {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-300);
+    }
+
+    .footer .powered-by {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--color-neutral-300);
+    }
+
+    .footer .powered-by .axiom-mark {
+      width: 16px;
+      height: 16px;
+      background: var(--color-primary-500);
+      border-radius: 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 9px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="firm-header">
+      <div class="firm-logo">MA</div>
+      <span class="firm-name">Meridian & Associates CPAs</span>
+    </header>
+
+    <div class="content">
+      <div class="greeting">
+        <h1>Welcome, Tom</h1>
+        <p>Meridian & Associates has requested documents for your SOC 2 Type II engagement. Review the outstanding requests below and upload your documents at your convenience.</p>
+      </div>
+
+      <div class="engagement-card">
+        <div class="engagement-details">
+          <div class="engagement-title">SOC 2 Type II Engagement</div>
+          <div class="engagement-meta">
+            <div class="meta-row">
+              <span class="meta-label">Client</span>
+              <span class="meta-value">Cloudvault Technologies Inc.</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Audit period</span>
+              <span class="meta-value">January 1 &ndash; December 31, 2025</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Your contact</span>
+              <span class="meta-value">Emily Park, Staff Auditor</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="progress-section">
+          <div class="progress-header">
+            <span class="progress-label">Documents received</span>
+            <span class="progress-count">5 of 23</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" style="width: 21.7%"></div>
+          </div>
+          <div class="progress-note">Next due date: January 31, 2026 (12 requests)</div>
+        </div>
+
+        <div class="request-summary">
+          <div class="summary-stat pending">
+            <span class="stat-number">18</span>
+            <span class="stat-label">Outstanding</span>
+          </div>
+          <div class="summary-stat complete">
+            <span class="stat-number">5</span>
+            <span class="stat-label">Submitted</span>
+          </div>
+          <div class="summary-stat">
+            <span class="stat-number">0</span>
+            <span class="stat-label">Sent back</span>
+          </div>
+        </div>
+
+        <div class="cta-section">
+          <a href="02-request-list.html" class="btn-primary">
+            View Requests
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="link-notice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        This link expires on April 15, 2026. Bookmark it for easy access.
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Questions? Contact your audit team at audit@meridian-cpa.com</p>
+      <div class="powered-by">
+        Powered by <span class="axiom-mark">A</span> Axiom
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

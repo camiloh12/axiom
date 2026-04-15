@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delegate Request — Meridian & Associates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --text-xs: 0.64rem;
+      --text-sm: 0.8rem;
+      --text-base: 1rem;
+      --text-lg: 1.25rem;
+      --text-xl: 1.563rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-primary-900: oklch(20% 0.05 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      --space-12: 48px;
+      --space-16: 64px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: var(--space-10) var(--space-6);
+    }
+
+    /* Firm header */
+    .firm-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding-bottom: var(--space-8);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    .firm-logo {
+      width: 40px;
+      height: 40px;
+      background: var(--color-primary-900);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: var(--text-base);
+      letter-spacing: -0.02em;
+    }
+
+    .firm-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-600);
+    }
+
+    .back-link {
+      margin-left: auto;
+      font-size: var(--text-sm);
+      color: var(--color-primary-500);
+      text-decoration: none;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    .back-link:hover { text-decoration: underline; }
+
+    .back-link svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Content */
+    .content {
+      padding-top: var(--space-8);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-8);
+    }
+
+    /* Request context */
+    .request-context {
+      background: var(--color-neutral-100);
+      border-radius: var(--radius-md);
+      padding: var(--space-4) var(--space-5);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .request-context-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-neutral-400);
+    }
+
+    .request-context-title {
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--color-neutral-800);
+    }
+
+    .request-context-dept {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    /* Delegation card */
+    .delegate-card {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+
+    .delegate-card h1 {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .delegate-card .description {
+      font-size: var(--text-base);
+      color: var(--color-neutral-600);
+      line-height: 1.6;
+      margin-top: calc(-1 * var(--space-2));
+    }
+
+    /* Form */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .form-group label {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-700);
+    }
+
+    .form-group input,
+    .form-group textarea {
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-sm);
+      padding: var(--space-3);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-0);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .form-group input {
+      height: 44px;
+    }
+
+    .form-group textarea {
+      min-height: 100px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .form-group input::placeholder,
+    .form-group textarea::placeholder {
+      color: var(--color-neutral-300);
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+      border-color: var(--color-primary-500);
+      box-shadow: 0 0 0 3px oklch(50% 0.15 250 / 0.12);
+    }
+
+    .form-hint {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    /* Buttons */
+    .btn-primary {
+      height: 44px;
+      background: var(--color-primary-500);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+    }
+
+    .btn-primary:hover {
+      background: var(--color-primary-600);
+    }
+
+    .btn-primary svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-secondary {
+      height: 44px;
+      background: transparent;
+      color: var(--color-neutral-700);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--color-neutral-300);
+      background: var(--color-neutral-50);
+    }
+
+    .button-row {
+      display: flex;
+      gap: var(--space-3);
+    }
+
+    .button-row .btn-secondary {
+      flex: 1;
+    }
+
+    .button-row .btn-primary {
+      flex: 2;
+    }
+
+    /* Success confirmation */
+    .success-card {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-6);
+      text-align: center;
+    }
+
+    .success-icon {
+      width: 56px;
+      height: 56px;
+      background: var(--color-success-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .success-icon svg {
+      width: 28px;
+      height: 28px;
+      color: var(--color-success-text);
+    }
+
+    .success-card h2 {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+    }
+
+    .success-card .success-details {
+      font-size: var(--text-base);
+      color: var(--color-neutral-600);
+      line-height: 1.6;
+      max-width: 480px;
+    }
+
+    .success-card .success-details strong {
+      color: var(--color-neutral-800);
+      font-weight: 600;
+    }
+
+    /* Scope notice */
+    .scope-notice {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      background: var(--color-info-light);
+      border-radius: var(--radius-md);
+      text-align: left;
+      width: 100%;
+    }
+
+    .scope-notice svg {
+      width: 18px;
+      height: 18px;
+      color: var(--color-info-text);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .scope-notice p {
+      font-size: var(--text-sm);
+      color: var(--color-info-text);
+      line-height: 1.5;
+    }
+
+    .back-to-requests {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-primary-500);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .back-to-requests:hover { text-decoration: underline; }
+
+    .back-to-requests svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: var(--space-16);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-neutral-200);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .footer p {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-300);
+    }
+
+    .powered-by {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--color-neutral-300);
+    }
+
+    .axiom-mark {
+      width: 16px;
+      height: 16px;
+      background: var(--color-primary-500);
+      border-radius: 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 9px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="firm-header">
+      <div class="firm-logo">MA</div>
+      <span class="firm-name">Meridian & Associates CPAs</span>
+      <a href="02-request-list.html" class="back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        All Requests
+      </a>
+    </header>
+
+    <div class="content">
+      <!-- Request being delegated -->
+      <div class="request-context">
+        <span class="request-context-label">Delegating request</span>
+        <span class="request-context-title">Onboarding and Offboarding Procedures</span>
+        <span class="request-context-dept">HR Policies &middot; Due January 31, 2026</span>
+      </div>
+
+      <!-- Delegation form -->
+      <div class="delegate-card">
+        <h1>Delegate this request</h1>
+        <p class="description">Send this request to a colleague who can provide the document. They will receive a secure link to upload the file directly, without seeing any other engagement details.</p>
+
+        <div class="form-group">
+          <label for="delegate-email">Colleague's email</label>
+          <input type="email" id="delegate-email" placeholder="e.g., maria@cloudvault.com" value="maria@cloudvault.com">
+        </div>
+
+        <div class="form-group">
+          <label for="delegate-message">Add a note (optional)</label>
+          <textarea id="delegate-message" placeholder="e.g., Hi Maria, can you upload the onboarding/offboarding checklist?">Hi Maria, can you upload the current onboarding and offboarding procedures? The audit team needs documentation showing the steps we follow when employees join or leave. The HR playbook in SharePoint should cover this. Thanks!</textarea>
+          <span class="form-hint">Your colleague will see this message along with the request instructions.</span>
+        </div>
+
+        <div class="button-row">
+          <button class="btn-secondary">Cancel</button>
+          <button class="btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Send Delegation
+          </button>
+        </div>
+      </div>
+
+      <!-- Success state (shown after delegation) -->
+      <div class="success-card">
+        <div class="success-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h2>Request delegated</h2>
+        <p class="success-details">
+          Request delegated to <strong>maria@cloudvault.com</strong>. They can only see this specific request and will receive a secure upload link via email.
+        </p>
+
+        <div class="scope-notice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <p>Your colleague will only see the request title, your note, and the upload area. They will not have access to other requests, engagement details, or any firm information.</p>
+        </div>
+
+        <a href="02-request-list.html" class="back-to-requests">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to all requests
+        </a>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Questions? Contact your audit team at audit@meridian-cpa.com</p>
+      <div class="powered-by">
+        Powered by <span class="axiom-mark">A</span> Axiom
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

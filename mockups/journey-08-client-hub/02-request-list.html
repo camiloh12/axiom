@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document Requests — Meridian & Associates</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --text-xs: 0.64rem;
+      --text-sm: 0.8rem;
+      --text-base: 1rem;
+      --text-lg: 1.25rem;
+      --text-xl: 1.563rem;
+      --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-primary-900: oklch(20% 0.05 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25);
+      --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      --space-12: 48px;
+      --space-16: 64px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: var(--space-10) var(--space-6);
+    }
+
+    /* Firm header */
+    .firm-header {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding-bottom: var(--space-8);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    .firm-logo {
+      width: 40px;
+      height: 40px;
+      background: var(--color-primary-900);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: var(--text-base);
+      letter-spacing: -0.02em;
+    }
+
+    .firm-name {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-600);
+    }
+
+    .back-link {
+      margin-left: auto;
+      font-size: var(--text-sm);
+      color: var(--color-primary-500);
+      text-decoration: none;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+
+    .back-link svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* Content */
+    .content {
+      padding-top: var(--space-8);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-8);
+    }
+
+    /* Page header */
+    .page-header {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .page-header h1 {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    /* Progress bar */
+    .progress-strip {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .progress-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .progress-text {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-700);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-percent {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-bar-track {
+      height: 8px;
+      background: var(--color-neutral-200);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--color-primary-500);
+      border-radius: 4px;
+    }
+
+    /* Department groups */
+    .department-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .department-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    .department-name {
+      font-size: var(--text-base);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+    }
+
+    .department-count {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Request items */
+    .request-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .request-item {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      padding: var(--space-4) var(--space-5);
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      text-decoration: none;
+      color: inherit;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
+    }
+
+    .request-item:hover {
+      border-color: var(--color-primary-200);
+      box-shadow: 0 1px 3px oklch(50% 0.15 250 / 0.06);
+    }
+
+    .request-item .item-status {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .request-item .item-status svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .item-status.pending {
+      background: var(--color-neutral-100);
+      border: 2px solid var(--color-neutral-300);
+    }
+
+    .item-status.pending svg { display: none; }
+
+    .item-status.submitted {
+      background: var(--color-primary-50);
+      border: 2px solid var(--color-primary-500);
+    }
+
+    .item-status.submitted svg {
+      color: var(--color-primary-500);
+    }
+
+    .item-status.complete {
+      background: var(--color-success-light);
+      border: 2px solid var(--color-success);
+    }
+
+    .item-status.complete svg {
+      color: var(--color-success-text);
+    }
+
+    .item-status.sent-back {
+      background: var(--color-error-light);
+      border: 2px solid var(--color-error);
+    }
+
+    .item-status.sent-back svg {
+      color: var(--color-error-text);
+    }
+
+    .item-content {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-1);
+    }
+
+    .item-title {
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--color-neutral-800);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-instructions {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      flex-shrink: 0;
+    }
+
+    .due-date {
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--color-neutral-400);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .due-date.approaching {
+      color: var(--color-warning-text);
+    }
+
+    .due-date.overdue {
+      color: var(--color-error-text);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: var(--space-1) var(--space-2);
+      border-radius: 100px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status-badge.pending {
+      background: var(--color-neutral-100);
+      color: var(--color-neutral-600);
+    }
+
+    .status-badge.submitted {
+      background: var(--color-primary-50);
+      color: var(--color-primary-700);
+    }
+
+    .status-badge.complete {
+      background: var(--color-success-light);
+      color: var(--color-success-text);
+    }
+
+    .status-badge.sent-back {
+      background: var(--color-error-light);
+      color: var(--color-error-text);
+    }
+
+    .item-arrow {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      color: var(--color-neutral-300);
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: var(--space-16);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-neutral-200);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .footer p {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-300);
+    }
+
+    .powered-by {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--color-neutral-300);
+    }
+
+    .axiom-mark {
+      width: 16px;
+      height: 16px;
+      background: var(--color-primary-500);
+      border-radius: 3px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 9px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="firm-header">
+      <div class="firm-logo">MA</div>
+      <span class="firm-name">Meridian & Associates CPAs</span>
+      <a href="01-client-landing.html" class="back-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Overview
+      </a>
+    </header>
+
+    <div class="content">
+      <div class="page-header">
+        <h1>Document Requests</h1>
+        <div class="progress-strip">
+          <div class="progress-top">
+            <span class="progress-text">5 of 23 complete</span>
+            <span class="progress-percent">22%</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" style="width: 22%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IT Security group -->
+      <div class="department-group">
+        <div class="department-header">
+          <span class="department-name">IT Security</span>
+          <span class="department-count">4 of 12 complete</span>
+        </div>
+        <div class="request-list">
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status complete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="item-content">
+              <div class="item-title">Access Control Policy</div>
+              <div class="item-instructions">Your company's policy for who has access to production systems</div>
+            </div>
+            <div class="item-meta">
+              <span class="status-badge complete">Accepted</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status complete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="item-content">
+              <div class="item-title">Network Diagram</div>
+              <div class="item-instructions">A diagram showing your network layout including firewalls and segments</div>
+            </div>
+            <div class="item-meta">
+              <span class="status-badge complete">Accepted</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="05-sent-back-feedback.html" class="request-item">
+            <div class="item-status sent-back">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </div>
+            <div class="item-content">
+              <div class="item-title">Vulnerability Scan Reports</div>
+              <div class="item-instructions">Results from your latest vulnerability scans of production systems</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date approaching">Due Jan 31</span>
+              <span class="status-badge sent-back">Sent back</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status submitted">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="item-content">
+              <div class="item-title">Encryption Standards Documentation</div>
+              <div class="item-instructions">Documentation of how data is encrypted at rest and in transit</div>
+            </div>
+            <div class="item-meta">
+              <span class="status-badge submitted">Submitted</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">Change Management Procedures</div>
+              <div class="item-instructions">Process for reviewing and approving changes to production systems</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Jan 31</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">Incident Response Plan</div>
+              <div class="item-instructions">Your plan for responding to security incidents</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Jan 31</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">User Access Review Log</div>
+              <div class="item-instructions">Quarterly review of who has access to key systems</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Feb 15</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">Firewall Configuration Rules</div>
+              <div class="item-instructions">Export of current firewall rules for production environment</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Feb 15</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- HR Policies group -->
+      <div class="department-group">
+        <div class="department-header">
+          <span class="department-name">HR Policies</span>
+          <span class="department-count">1 of 8 complete</span>
+        </div>
+        <div class="request-list">
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status complete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="item-content">
+              <div class="item-title">Employee Handbook</div>
+              <div class="item-instructions">Current version of the company employee handbook</div>
+            </div>
+            <div class="item-meta">
+              <span class="status-badge complete">Accepted</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">Background Check Policy</div>
+              <div class="item-instructions">Policy describing your pre-employment screening process</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Jan 31</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="04-delegate-request.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">Onboarding and Offboarding Procedures</div>
+              <div class="item-instructions">Steps followed when employees join or leave the company</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Jan 31</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">Security Awareness Training Records</div>
+              <div class="item-instructions">Proof that employees completed security training this year</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Feb 15</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Financial group -->
+      <div class="department-group">
+        <div class="department-header">
+          <span class="department-name">Financial</span>
+          <span class="department-count">0 of 3 complete</span>
+        </div>
+        <div class="request-list">
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status submitted">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="item-content">
+              <div class="item-title">Service Level Agreements</div>
+              <div class="item-instructions">SLAs with your key customers covering uptime and data handling</div>
+            </div>
+            <div class="item-meta">
+              <span class="status-badge submitted">Submitted</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">Vendor Risk Assessments</div>
+              <div class="item-instructions">Assessments of third-party vendors who access your systems or data</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Feb 15</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+
+          <a href="03-upload-interface.html" class="request-item">
+            <div class="item-status pending"></div>
+            <div class="item-content">
+              <div class="item-title">Business Continuity Plan</div>
+              <div class="item-instructions">Your plan for maintaining operations during a disruption</div>
+            </div>
+            <div class="item-meta">
+              <span class="due-date">Due Feb 15</span>
+              <span class="status-badge pending">Pending</span>
+            </div>
+            <svg class="item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Questions? Contact your audit team at audit@meridian-cpa.com</p>
+      <div class="powered-by">
+        Powered by <span class="axiom-mark">A</span> Axiom
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
