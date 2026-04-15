@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — Sign-Off Confirmation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem;
+      --color-primary-50: oklch(97% 0.01 250); --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250); --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff; --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250); --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250); --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250); --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250); --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145); --color-success-light: oklch(95% 0.03 145); --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85); --color-warning-light: oklch(95% 0.04 85); --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25); --color-error-light: oklch(95% 0.03 25); --color-error-text: oklch(40% 0.14 25);
+      --color-ai: oklch(55% 0.14 290); --color-ai-light: oklch(95% 0.03 290); --color-ai-text: oklch(38% 0.12 290);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+    body { font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5; color: var(--color-neutral-800); background: var(--color-neutral-50); min-height: 100vh; display: flex; -webkit-font-smoothing: antialiased; }
+
+    /* Sidebar */
+    .sidebar { width: 240px; min-height: 100vh; background: var(--color-neutral-100); border-right: 1px solid var(--color-neutral-200); display: flex; flex-direction: column; flex-shrink: 0; padding: var(--space-5) 0; }
+    .sidebar-logo { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-5); margin-bottom: var(--space-6); }
+    .sidebar-logo .logo-mark { width: 28px; height: 28px; background: var(--color-primary-500); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: var(--text-sm); }
+    .sidebar-logo .logo-text { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.03em; }
+    .nav-section { margin-bottom: var(--space-6); }
+    .nav-section-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.05em; padding: 0 var(--space-5); margin-bottom: var(--space-2); }
+    .nav-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-600); text-decoration: none; border-left: 2px solid transparent; cursor: pointer; transition: color 0.12s, background 0.12s; }
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+    .nav-item.active { color: var(--color-primary-500); background: var(--color-primary-50); border-left-color: var(--color-primary-500); font-weight: 600; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-sub { margin-left: var(--space-8); }
+    .nav-sub .nav-item { padding: var(--space-1) var(--space-5); font-size: var(--text-sm); border-left: none; }
+
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .header { height: 56px; background: var(--color-neutral-0); border-bottom: 1px solid var(--color-neutral-200); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-6); flex-shrink: 0; }
+    .header-breadcrumb { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-neutral-400); }
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+    .header-icon-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); color: var(--color-neutral-500); cursor: pointer; border: none; background: none; }
+    .header-icon-btn:hover { color: var(--color-neutral-700); background: var(--color-neutral-100); }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary-100); color: var(--color-primary-600); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; cursor: pointer; }
+
+    .content { flex: 1; padding: var(--space-8); overflow-y: auto; display: flex; justify-content: center; }
+
+    .sign-off-container { max-width: 640px; width: 100%; }
+
+    .page-header { margin-bottom: var(--space-6); }
+    .page-header h1 { font-size: var(--text-xl); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.02em; line-height: 1.2; }
+    .page-header p { font-size: var(--text-sm); color: var(--color-neutral-500); margin-top: var(--space-2); }
+
+    /* Sign-off card */
+    .sign-off-card { background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); overflow: hidden; margin-bottom: var(--space-6); }
+    .sign-off-card-header { padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--color-neutral-200); display: flex; align-items: center; justify-content: space-between; }
+    .sign-off-card-title { font-size: var(--text-lg); font-weight: 600; color: var(--color-neutral-900); }
+    .sign-off-card-body { padding: var(--space-6); }
+
+    /* Workpaper summary */
+    .wp-summary { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4) var(--space-8); margin-bottom: var(--space-6); }
+    .wp-summary-item {}
+    .wp-summary-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+    .wp-summary-value { font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-700); }
+
+    /* Review notes checklist */
+    .checklist { margin-bottom: var(--space-6); }
+    .checklist-title { font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-700); margin-bottom: var(--space-3); }
+    .checklist-item { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-neutral-200); }
+    .checklist-item:last-child { border-bottom: none; }
+    .check-icon { width: 20px; height: 20px; border-radius: 50%; background: var(--color-success); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .check-icon svg { width: 12px; height: 12px; color: white; }
+    .check-content { flex: 1; }
+    .check-label { font-size: var(--text-sm); color: var(--color-neutral-700); }
+    .check-detail { font-size: var(--text-xs); color: var(--color-neutral-400); margin-top: 1px; }
+
+    /* Sign-off preview */
+    .signoff-preview { background: var(--color-neutral-50); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); padding: var(--space-5); margin-bottom: var(--space-6); }
+    .signoff-preview-title { font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-3); }
+    .signoff-entry { font-size: var(--text-sm); color: var(--color-neutral-600); line-height: 1.6; }
+    .signoff-entry strong { color: var(--color-neutral-800); }
+    .signoff-timestamp { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-neutral-500); display: block; margin-top: var(--space-2); }
+
+    /* Audit log preview */
+    .auditlog-preview { background: var(--color-neutral-50); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); padding: var(--space-5); margin-bottom: var(--space-6); }
+    .auditlog-preview-title { font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-3); }
+    .auditlog-entry { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-neutral-600); background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm); padding: var(--space-3); line-height: 1.8; }
+    .auditlog-key { color: var(--color-primary-700); }
+    .auditlog-val { color: var(--color-neutral-800); }
+
+    /* Confirmation dialog area */
+    .confirmation-prompt { background: var(--color-success-light); border: 1px solid oklch(85% 0.06 145); border-radius: var(--radius-md); padding: var(--space-5); display: flex; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-6); }
+    .confirm-icon { width: 40px; height: 40px; border-radius: 50%; background: var(--color-success); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .confirm-icon svg { width: 20px; height: 20px; color: white; }
+    .confirm-content { flex: 1; }
+    .confirm-title { font-size: var(--text-base); font-weight: 700; color: var(--color-success-text); margin-bottom: var(--space-1); }
+    .confirm-detail { font-size: var(--text-sm); color: oklch(40% 0.08 145); line-height: 1.5; }
+
+    .actions { display: flex; gap: var(--space-3); justify-content: flex-end; }
+    .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 40px; padding: 0 var(--space-6); background: var(--color-success); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .btn-primary:hover { background: oklch(48% 0.16 145); }
+    .btn-secondary { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 var(--space-5); background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-700); cursor: pointer; }
+    .btn-secondary:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
+
+    .status-badge { display: inline-flex; align-items: center; font-size: var(--text-xs); font-weight: 600; padding: 2px 10px; border-radius: 100px; }
+    .status-badge.in-review { background: oklch(95% 0.02 250); color: oklch(35% 0.10 250); }
+    .status-badge.review-complete { background: var(--color-success-light); color: var(--color-success-text); }
+
+    .ai-badge { font-size: var(--text-xs); font-weight: 600; color: var(--color-ai-text); background: var(--color-ai-light); padding: 2px 8px; border-radius: 100px; }
+
+    .divider { height: 1px; background: var(--color-neutral-200); margin: var(--space-6) 0; }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="logo-mark">A</div><span class="logo-text">Axiom</span></div>
+    <nav>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a class="nav-item active" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Engagements
+        </a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Cloudvault SOC 2</div>
+        <div class="nav-sub">
+          <a class="nav-item" href="#">Overview</a>
+          <a class="nav-item" href="#">Controls</a>
+          <a class="nav-item" href="#">Workpapers</a>
+          <a class="nav-item" href="#">Evidence</a>
+        </div>
+      </div>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          Staff Management
+        </a>
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Firm Settings
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a>
+        <span>/</span>
+        <a href="#">Cloudvault SOC 2</a>
+        <span>/</span>
+        <a href="#">Workpapers</a>
+        <span>/</span>
+        <a href="#">CC6.1</a>
+        <span>/</span>
+        <span class="current">Sign-Off</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <div class="avatar">JR</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="sign-off-container">
+        <div class="page-header">
+          <h1>Clear Workpaper for Partner Sign-Off</h1>
+          <p>Review the checklist below and confirm that all items are resolved before clearing this workpaper.</p>
+        </div>
+
+        <!-- Confirmation prompt -->
+        <div class="confirmation-prompt">
+          <div class="confirm-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="confirm-content">
+            <div class="confirm-title">Ready for partner sign-off</div>
+            <div class="confirm-detail">All review notes have been resolved. This workpaper will advance to ReviewComplete status and Sarah Chen (Engagement Partner) will be notified.</div>
+          </div>
+        </div>
+
+        <!-- Workpaper summary card -->
+        <div class="sign-off-card">
+          <div class="sign-off-card-header">
+            <span class="sign-off-card-title">CC6.1 &mdash; Logical Access Controls</span>
+            <span class="status-badge in-review">In Review</span>
+          </div>
+          <div class="sign-off-card-body">
+            <div class="wp-summary">
+              <div class="wp-summary-item">
+                <div class="wp-summary-label">Engagement</div>
+                <div class="wp-summary-value">Cloudvault Technologies &mdash; SOC 2 Type II</div>
+              </div>
+              <div class="wp-summary-item">
+                <div class="wp-summary-label">Framework</div>
+                <div class="wp-summary-value">SOC 2 TSC (CC6.1)</div>
+              </div>
+              <div class="wp-summary-item">
+                <div class="wp-summary-label">Prepared By</div>
+                <div class="wp-summary-value">Emily Park &middot; Staff Auditor</div>
+              </div>
+              <div class="wp-summary-item">
+                <div class="wp-summary-label">Submitted</div>
+                <div class="wp-summary-value" style="font-variant-numeric: tabular-nums;">Apr 10, 2026</div>
+              </div>
+              <div class="wp-summary-item">
+                <div class="wp-summary-label">Control Result</div>
+                <div class="wp-summary-value">Effective (1 exception noted)</div>
+              </div>
+              <div class="wp-summary-item">
+                <div class="wp-summary-label">AI Content</div>
+                <div class="wp-summary-value"><span class="ai-badge">AI Generated</span> 5 of 8 sections modified</div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Review notes checklist -->
+            <div class="checklist">
+              <div class="checklist-title">Review Notes &mdash; All Resolved</div>
+              <div class="checklist-item">
+                <div class="check-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="check-content">
+                  <div class="check-label">#1 &mdash; Clarify IT Security approval workflow (Question)</div>
+                  <div class="check-detail">Resolved Apr 11 &middot; Emily Park updated narrative to reflect parallel approval</div>
+                </div>
+              </div>
+              <div class="checklist-item">
+                <div class="check-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="check-content">
+                  <div class="check-label">#2 &mdash; Add population size and sampling rationale (Suggestion)</div>
+                  <div class="check-detail">Resolved Apr 13 &middot; Added "25 of 142 events, systematic random sampling"</div>
+                </div>
+              </div>
+              <div class="checklist-item">
+                <div class="check-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="check-content">
+                  <div class="check-label">#3 &mdash; Strengthen exception analysis in conclusion (Required Change)</div>
+                  <div class="check-detail">Resolved Apr 14 &middot; Added privilege level, usage audit, and compensating control</div>
+                </div>
+              </div>
+              <div class="checklist-item">
+                <div class="check-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="check-content">
+                  <div class="check-label">#4 &mdash; Add Q4 access review forward-looking statement (Suggestion)</div>
+                  <div class="check-detail">Resolved Apr 14 &middot; Added status note referencing Q4 review completion</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Sign-off preview -->
+            <div class="signoff-preview">
+              <div class="signoff-preview-title">Sign-Off Preview</div>
+              <div class="signoff-entry">
+                <strong>Workpaper CC6.1 &mdash; Logical Access Controls</strong> reviewed and cleared for partner sign-off by <strong>James Rodriguez</strong> (Manager).
+                <br>All 4 review notes resolved. Status advancing from <em>InReview</em> to <em>ReviewComplete</em>.
+                <span class="signoff-timestamp">2026-04-14T14:32:00Z</span>
+              </div>
+            </div>
+
+            <!-- Audit log entry preview -->
+            <div class="auditlog-preview">
+              <div class="auditlog-preview-title">AuditLog Entry Preview</div>
+              <div class="auditlog-entry">
+                <span class="auditlog-key">action:</span> <span class="auditlog-val">workpaper.review_complete</span><br>
+                <span class="auditlog-key">actor:</span> <span class="auditlog-val">james.rodriguez@meridian-cpas.com</span><br>
+                <span class="auditlog-key">role:</span> <span class="auditlog-val">Manager</span><br>
+                <span class="auditlog-key">workpaper:</span> <span class="auditlog-val">CC6.1 &mdash; Logical Access Controls</span><br>
+                <span class="auditlog-key">engagement:</span> <span class="auditlog-val">Cloudvault Technologies SOC 2 Type II</span><br>
+                <span class="auditlog-key">review_notes:</span> <span class="auditlog-val">4 total, 4 resolved, 0 open</span><br>
+                <span class="auditlog-key">previous_status:</span> <span class="auditlog-val">InReview</span><br>
+                <span class="auditlog-key">new_status:</span> <span class="auditlog-val">ReviewComplete</span><br>
+                <span class="auditlog-key">timestamp:</span> <span class="auditlog-val">2026-04-14T14:32:00Z</span><br>
+                <span class="auditlog-key">immutable:</span> <span class="auditlog-val">true</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+          <button class="btn-secondary">Cancel</button>
+          <button class="btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Confirm Sign-Off
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
