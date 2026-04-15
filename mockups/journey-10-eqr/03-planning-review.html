@@ -349,6 +349,16 @@
     }
 
     .risk-table td:first-child { font-weight: 500; color: var(--color-neutral-800); }
+
+    /* ============================================================
+       DEMO NAVIGATION — not part of the final product
+       For design walkthroughs and feedback sessions only.
+       ============================================================ */
+    .demo-nav { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 9999; }
+    .demo-nav-label { font-family: monospace; font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; background: #fffde7; border: 1px dashed #ddd; padding: 2px 8px; border-radius: 4px; }
+    .demo-nav-arrows { display: flex; gap: 8px; }
+    .demo-nav-btn { font-family: monospace; font-size: 13px; font-weight: 600; color: #666; background: #fffde7; border: 1.5px dashed #bbb; border-radius: 8px; padding: 8px 18px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.10); display: inline-flex; align-items: center; gap: 6px; }
+    .demo-nav-btn:hover { background: #fff9c4; border-color: #aaa; color: #333; }
   </style>
 </head>
 <body>
@@ -618,6 +628,17 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+  <!-- ============================================================
+       DEMO NAVIGATION — not part of the final product
+       For design walkthroughs and feedback sessions only.
+       ============================================================ -->
+  <div class="demo-nav">
+    <span class="demo-nav-label">Demo nav &mdash; not in product</span>
+    <div class="demo-nav-arrows">
+      <a href="02-read-only-engagement.html" class="demo-nav-btn">&#8592; Prev</a>
+      <a href="04-testing-review.html" class="demo-nav-btn">Next &#8594;</a>
     </div>
   </div>
 </body>
