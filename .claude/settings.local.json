@@ -42,7 +42,19 @@
       "Bash(pip3.exe show:*)",
       "Bash(python3.12 -c \"import diagrams.aws.compute as m; print\\([x for x in dir\\(m\\) if 'ECR' in x.upper\\(\\) or 'ecr' in x.lower\\(\\)]\\)\")",
       "Bash(/c/Users/camil/AppData/Local/Programs/Python/Python312/python.exe -c \"import diagrams.aws.compute as m; print\\([x for x in dir\\(m\\) if 'ecr' in x.lower\\(\\) or 'ECR' in x]\\)\")",
-      "Bash(/c/Users/camil/AppData/Local/Programs/Python/Python312/python.exe axiom_infrastructure.py)"
+      "Bash(/c/Users/camil/AppData/Local/Programs/Python/Python312/python.exe axiom_infrastructure.py)",
+      "WebFetch(domain:impeccable.style)",
+      "WebFetch(domain:github.com)",
+      "Bash(npx skills *)",
+      "Bash(where npm *)",
+      "Bash(where node *)",
+      "Bash(where npx *)",
+      "Bash(\"/c/Program Files/nodejs/npx.cmd\" --version)",
+      "Bash(cmd.exe /c \"npx --version\")",
+      "Bash(cmd.exe *)",
+      "Bash(gh api *)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
