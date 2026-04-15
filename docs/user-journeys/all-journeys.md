@@ -22,18 +22,18 @@ Competitor workflows (Fieldguide, CaseWare, DataSnipper, Yak) informed the pain 
 
 ## Journey Index
 
-| # | Persona | Goal | Replaces |
-|---|---------|------|----------|
-| 1 | FirmAdmin | Set up firm and launch first engagement | Section 11A |
-| 2 | Staff Auditor | Join platform and reach first task | Section 11B |
-| 3 | Partner | Create and scope a new engagement | Module 1 |
-| 4 | Staff Auditor | Import and analyze a trial balance | Module 2 |
-| 5 | Staff Auditor | Test controls and prepare workpapers | Module 3 (execution) |
-| 6 | Manager | Review workpapers and advance the engagement | Module 3 (review) |
-| 7 | Staff Auditor | Manage document requests and collect evidence | Module 4 (auditor side) |
-| 8 | Client Contact | Fulfill audit document requests | Section 11C + Module 4 (client side) |
-| 9 | Partner | Generate report, finalize, and archive | Module 5 |
-| 10 | EQR Reviewer | Conduct engagement quality review | Module 3 (EQR) + Module 1 (EQR assignment) |
+| # | Persona | Goal |
+|---|---------|------|
+| [1](#journey-1-set-up-firm-and-launch-first-engagement) | FirmAdmin | Set up firm and launch first engagement |
+| [2](#journey-2-join-platform-and-reach-first-task) | Staff Auditor | Join platform and reach first task |
+| [3](#journey-3-create-and-scope-a-new-engagement) | Partner | Create and scope a new engagement |
+| [4](#journey-4-import-and-analyze-a-trial-balance) | Staff Auditor | Import and analyze a trial balance |
+| [5](#journey-5-test-controls-and-prepare-workpapers) | Staff Auditor | Test controls and prepare workpapers |
+| [6](#journey-6-review-workpapers-and-advance-the-engagement) | Manager | Review workpapers and advance the engagement |
+| [7](#journey-7-manage-document-requests-and-collect-evidence) | Staff Auditor | Manage document requests and collect evidence |
+| [8](#journey-8-fulfill-audit-document-requests) | Client Contact | Fulfill audit document requests |
+| [9](#journey-9-generate-report-finalize-and-archive) | Partner | Generate report, finalize, and archive |
+| [10](#journey-10-conduct-engagement-quality-review) | EQR Reviewer | Conduct engagement quality review |
 
 ---
 
