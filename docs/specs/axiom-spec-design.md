@@ -320,160 +320,48 @@ See [Domain and Data Model Design](domain-and-data-model-design.md) for complete
 
 ## 6. AI Architecture
 
-> Research: [05-ai-architecture.md](../research/05-ai-architecture.md)
+> **Full specification:** [AI Architecture Design](ai-architecture-design.md) — LLM provider decision, vector database, all eight AI features with model assignments and human review gates, AI content tracking, and cost estimates. What follows is a summary.
 
-### LLM Provider Decision
+### LLM Provider and Vector Database
 
-**Primary provider: AWS Bedrock with Claude models (Haiku and Sonnet), via the Anthropic/AWS partnership.**
+**AWS Bedrock with Claude Haiku and Sonnet**, accessed via VPC endpoint (PrivateLink). IAM-based auth, single AWS BAA, CloudWatch-native metrics. No external API keys, no additional sub-processor.
 
-Rationale:
-- **PrivateLink** — model API calls are made over a VPC endpoint and never leave the AWS network. No outbound HTTPS to an external provider; stronger posture than ZDR mode at the API level.
-- **IAM-based auth** — no separate vendor API keys to store in Secrets Manager, rotate, or audit. Access control is standard IAM policy.
-- **Single AWS BAA** — Bedrock is covered under the existing AWS HIPAA BAA. Anthropic is not an additional sub-processor in the DPA or the SOC 2 audit scope.
-- **Same models, same capability** — Bedrock provides Claude Haiku and Sonnet with the same 200K+ context window, prompt caching (0.1× the base input rate for cached reads), and batch inference (50% discount) as Anthropic direct. The cost model is effectively identical at this scale.
-- **CloudWatch metrics natively** — token counts, latency, and errors report to CloudWatch without additional instrumentation. No separate dashboard or custom metrics pipeline needed.
-- Single model family eliminates the prompt engineering and behavior consistency overhead of a multi-provider setup.
+**pgvector** (PostgreSQL extension) for embedding storage at launch. Migration path to Qdrant at 5–10M vectors.
 
-Model availability on Bedrock typically lags Anthropic's direct API by a few weeks on new releases. For a compliance platform where model stability is preferred over early access to new capabilities, this is a feature rather than a drawback — a validation period before switching models would be standard practice regardless.
+### Eight AI Features
 
-### Vector Database Decision
+| # | Feature | Model | Tier | Journeys |
+|---|---------|-------|------|----------|
+| 1 | Document completeness review | Sonnet | 2 | 7, 8 |
+| 2 | Control mapping (cross-framework) | Haiku | 2 | 3 |
+| 3 | Trial balance account mapping | Haiku | 2 | 4 |
+| 4 | Workpaper narrative draft | Sonnet | 2 | 5 |
+| 5 | Evidence link suggestion | Haiku | 2 | 5, 7 |
+| 6 | Risk category suggestion | Sonnet | 2 | 3 |
+| 7 | Trial balance anomaly detection | Haiku | 1 (Tier 2 for PCAOB) | 4 |
+| 8 | Report section draft | Sonnet | 2 | 9 |
 
-**pgvector (PostgreSQL extension) at launch, with migration path to Qdrant.**
-
-pgvector adds zero operational overhead (uses existing PostgreSQL instance), keeps vector data in the same security boundary as the rest of the application, and performs adequately (sub-20ms at 1M vectors with HNSW index) for the target scale. At maturity (50 firms × 100 engagements × 200 evidence items), the total vector count is approximately 1M — well within pgvector's comfortable range. Migrate to self-hosted Qdrant when approaching 5–10M vectors.
-
-Embeddings are stored for: firm methodology documents, framework requirement descriptions, control objective library entries, prior engagement evidence summaries, and workpaper templates.
-
-### Four AI Features
-
-#### Feature 1: Document Completeness Review
-
-**Purpose:** Eliminate the primary engagement bottleneck — the back-and-forth cycle when clients submit incomplete or wrong documents.
-
-**Trigger:** Client uploads a document in response to a `DocumentRequest`.
-
-**Inputs:**
-- `DocumentRequest` (title, description, instructions, linked `Control`, linked `TestProcedure`)
-- Uploaded document text (OCR pipeline output)
-- `ControlObjective` description and `FrameworkRequirement` text
-- RAG context: embeddings of prior accepted evidence for this request type (from same firm, anonymized)
-
-**Model:** Claude Sonnet (reasoning quality is critical; errors propagate into the audit file).
-
-**Process:** Extract document attributes (date range, parties, system names, amounts, format) → compare against request criteria → check period coverage for Type II engagements → score completeness against each test procedure → identify specific gaps → generate client-facing plain-language explanation → generate auditor-facing summary → produce recommendation: Accept | Request Clarification | Reject.
-
-**Output:** `AIDecision` record with `context_type = DocumentCompleteness`, `suggested_value`, `confidence` score, and full `raw_output`. Status: `Pending`.
-
-**Human review gate:** Required before any Accept action. The auditor sees the AI assessment and one-click actions (Accept / Modify / Reject). The `AIDecision` record captures which action was taken, by whom, and when. No document is marked as fulfilling a request without a named human decision.
-
-**Failure modes:**
-
-| Failure | Handling |
-|---|---|
-| Encrypted / password-protected document | Extraction fails → document flagged for manual review; client notified |
-| Non-English document | Detected language flagged → manual review queue |
-| AI confidence below 0.6 | Surfaced as "Low confidence — manual review recommended" without a definitive recommendation |
-| Image-only PDF | OCR attempted; if confidence below threshold, flagged for manual |
-| API error / timeout | Retry up to 3 times with exponential backoff; auditor notified if all retries fail |
-
----
-
-#### Feature 2: Control Mapping (Framework-Agnostic Evidence Linkage)
-
-**Purpose:** Propose `FirmControlObjectiveMapping` records across all frameworks in the engagement simultaneously — the architectural realization of the cross-framework differentiator.
-
-**Trigger:** New engagement created from a methodology template, or new `FirmControlObjective` added to an engagement.
-
-**Inputs:**
-- `FirmControlObjective` name + description
-- All `FrameworkRequirement` records for frameworks in the engagement
-- RAG context: `ControlObjectiveLibrary` entries with existing mappings as few-shot examples
-
-**Model:** Claude Haiku (structured classification task; high volume; speed matters at template instantiation).
-
-**Process:** Embed the `FirmControlObjective` description → retrieve top-k similar library entries → score semantic similarity against each applicable `FrameworkRequirement` → apply 0.75 similarity threshold → generate explanation per proposed mapping → return proposed mappings with confidence scores.
-
-**Output:** Mapping table displayed to auditor showing each proposed `FrameworkRequirement` link with confidence and explanation text. All proposed mappings remain in `Pending` state until confirmed.
-
-**Human review gate:** Auditor reviews proposed mappings in bulk. All confirmed by default; any can be rejected. No `FirmControlObjectiveMapping` record is created until confirmed. `AIDecision` records created per mapping.
-
----
-
-#### Feature 3: Trial Balance Account Mapping
-
-**Purpose:** Classify each trial balance account into a standard financial statement line item, eliminating manual mapping work at engagement start.
-
-**Trigger:** Trial balance imported (CSV/Excel upload or API).
-
-**Inputs:** Account number, account name, balance (debit/credit), prior year mapping if rollforward.
-
-**Model:** Claude Haiku (simple classification; high volume; prior year context improves accuracy significantly on rollforward engagements).
-
-**Process:** Few-shot classification against standard FS line items (Cash, Accounts Receivable, Fixed Assets, etc.) with anomaly flagging for accounts where classification confidence is low or account name doesn't match expected category.
-
-**Output:** `TrialBalanceAccount.mapping_status = AISuggested` with `ai_decision_id` populated for each mapped account. Low-confidence accounts highlighted in the Sheets UI for priority auditor review.
-
-**Human review gate:** Auditor reviews and confirms mappings in the Sheets interface. Unmapped and low-confidence accounts surfaced prominently. `mapping_status` changes to `Confirmed` or `Overridden` on auditor action.
-
----
-
-#### Feature 4: Workpaper Narrative Draft
-
-**Purpose:** Generate a first-draft workpaper narrative that a staff auditor would write, matching firm style — reducing blank-page time and ensuring consistent structure across the team.
-
-**Trigger:** Auditor marks a `TestProcedure` as Complete and explicitly requests a draft (not automatic).
-
-**Inputs:**
-- Control description and `TestProcedure` (type, description, expected result)
-- Linked evidence items (extracted text and filenames)
-- Exceptions noted (if any)
-- Prior year workpaper narrative if rollforward (style reference)
-- Firm workpaper template for this procedure type
-
-**Model:** Claude Sonnet (quality matters; workpaper narratives become part of the immutable audit file).
-
-**Output:** Draft text inserted into the workpaper editor. `WorkpaperVersion` record created with `is_ai_draft = true`. The draft is labeled "AI Draft — requires review" until any human edit changes `is_ai_draft` to false.
-
-**Human review gate:** Mandatory. The AI draft is always editable. The workpaper's `status` cannot advance to `PreparedPendingReview` or beyond if `is_ai_draft = true` and no human edits have been made. The auditor must actively modify and sign off. This satisfies the PCAOB requirement to distinguish AI-generated from auditor-authored content.
-
----
+Every Tier 2 feature creates an `AIDecision` record and requires explicit human review before affecting the audit file. Feature 7 elevates to Tier 2 behavior for PCAOB engagements per AS 1105 documentation requirements. See [ai-architecture-design.md](ai-architecture-design.md) for full feature definitions including inputs, process, outputs, failure modes, and human review gates.
 
 ### Human-in-the-Loop Policy
 
-**Tier 1 — Fully Automated (no human approval required):**
-AI may act without user interaction for: text extraction from uploaded documents, embedding generation, flagging documents as potentially incomplete (notification only, not decision), generating overdue reminder emails to clients, surfacing "this evidence was used in a prior engagement" suggestions, running anomaly detection on trial balance data (flagging in UI only), and computing trial balance analytics (variance, ratios).
+**Tier 1 — Fully Automated:** Text extraction, embedding generation, notification-only flags, overdue reminders, analytics computation, anomaly detection (nonissuer engagements).
 
-**Tier 2 — Human Approval Required Before Taking Effect:**
-AI suggests; human confirms. No audit file content changes without explicit auditor action: evidence links, control → framework requirement mappings, trial balance account category assignments, document request fulfillment decisions (accept/reject), risk assessment pre-population, workpaper narrative drafts.
+**Tier 2 — Human Approval Required:** All eight AI features above (except Feature 7 on nonissuer engagements). No audit file content changes without explicit auditor action.
 
-**Tier 3 — Human-Initiated Only (AI may assist but never initiates):**
-These actions can only be triggered by a named human: engagement status transitions, control conclusions (pass/fail), exception documentation, workpaper review and sign-off, EQR sign-off, report issuance, client acceptance documentation, and any action constituting professional judgment under AU-C or PCAOB standards.
+**Tier 3 — Human-Initiated Only:** Engagement status transitions, control conclusions, exception documentation, sign-offs, report issuance, client acceptance, and any action constituting professional judgment.
 
-This three-tier policy maps directly to PCAOB AS 1105: AI outputs inform professional judgments; they do not constitute them.
+### AI Content Tracking
+
+AI-drafted content (Features 4 and 8) is tracked at the **section level**, not as a document-level boolean. Each AI-generated section records: origin timestamp, whether it was human-edited, editor identity, and a modification ratio (Levenshtein distance between AI output and current text). The advancement gate requires all AI-generated sections to have at least one human edit. Sections with <5% modification trigger a soft confirmation gate. EQR reviewers and managers see per-workpaper and engagement-wide AI edit substantiveness summaries. See [ai-architecture-design.md § 5](ai-architecture-design.md#5-ai-content-tracking) for the full data model and gate logic.
 
 ### Per-Engagement AI Cost Estimate
 
-| AI Operation | Volume (per SOC 2 engagement) | Model | Approx. Cost |
-|---|---|---|---|
-| Document completeness review | 200 docs | Haiku (batch) | ~$0.30 |
-| Control mapping | 50 controls | Haiku (batch) | ~$0.11 |
-| Trial balance mapping | N/A for SOC 2 | — | — |
-| Workpaper narrative drafts | 20 drafts | Sonnet | ~$1.20 |
-| Evidence link suggestions | 200 links | Haiku | ~$0.15 |
-| RAG retrieval overhead | ~50K tokens | Haiku | ~$0.04 |
-| **Total per SOC 2 engagement** | | | **~$1.90** |
-| **Total per financial audit** | | | **~$3–6** (larger trial balance, more workpapers) |
-
-With prompt caching (system prompts reused within an engagement): effective cost **$0.75–$2.50 per engagement**. At 100 engagements/year for a mid-market firm, platform AI costs are $75–$250/year. This is absorbed into the subscription — AI consumption is not a separate line item on customer invoices at launch.
+~$5.80 per SOC 2 engagement, ~$6.15 per financial audit engagement at on-demand Bedrock pricing. With prompt caching: **$3–5 per SOC 2**, **$4–6 per financial audit**. At 100 engagements/year, platform AI costs are $300–$600/year — absorbed into the subscription. See [ai-architecture-design.md § 6](ai-architecture-design.md#6-per-engagement-ai-cost-estimate) for the full breakdown.
 
 ### What AI Does NOT Do at Launch
 
-- Fine-tuned models per firm (insufficient training data volume at this stage)
-- On-device / local model execution
-- Multi-agent orchestration (LangGraph, CrewAI) — single-step AI calls are sufficient; frameworks add debugging overhead with no benefit for the defined use cases
-- AI-generated audit opinions, professional conclusions, or materiality determinations
-- Autonomous multi-step actions without human review gates at each step
-- Auto-finalization of any audit content without a named human reviewer
+Fine-tuned models per firm, on-device execution, multi-agent orchestration, AI-generated audit opinions or professional conclusions, autonomous multi-step actions without human review gates, auto-finalization of any audit content
 
 ---
 
@@ -563,7 +451,7 @@ Step Functions state machines:
 
 ### Real-Time Collaboration: Two-Tier by Data Type
 
-**Workpaper rich text (TipTap + Yjs):** TipTap (ProseMirror-based editor) with Yjs CRDT for real-time co-editing of workpaper narratives. Yjs handles keystroke-level text concurrency naturally. Each save (triggered by idle timeout or explicit save) creates a `WorkpaperVersion` record. The `is_ai_draft` flag on `WorkpaperVersion` is cleared when any human edits content, satisfying PCAOB's requirement to distinguish AI-generated from auditor-authored content.
+**Workpaper rich text (TipTap + Yjs):** TipTap (ProseMirror-based editor) with Yjs CRDT for real-time co-editing of workpaper narratives. Yjs handles keystroke-level text concurrency naturally. Each save (triggered by idle timeout or explicit save) creates a `WorkpaperVersion` record. AI-generated content is tracked at the section level via `ai_content_metadata` on `WorkpaperVersion` (see [ai-architecture-design.md § 5](ai-architecture-design.md#5-ai-content-tracking)), satisfying PCAOB's requirement to distinguish AI-generated from auditor-authored content and providing EQR reviewers with edit substantiveness visibility.
 
 **Structured audit data (server-authoritative with field locking):** Trial balance cells, AI decision acceptance, control status, and engagement state transitions use server-authoritative operations with optimistic UI updates. For high-stakes operations (AI decision review, control conclusion, workpaper sign-off), field-level locking prevents concurrent conflicting professional judgments. If Auditor A opens an AI decision for review, the server marks it "in review by User A." Auditor B sees a "locked" indicator. Conflicts (network partitions, duplicate submissions) are resolved by the server: first committed action wins; the AuditLog records both attempts; the second user is notified.
 
@@ -790,13 +678,13 @@ Full journey maps with stage-by-stage detail (user actions, touchpoints, emotion
 |---|---------|------|-----------------------------|----------------|
 | 1 | FirmAdmin | Set up firm and launch first engagement | `Firm`, `MethodologyTemplate`, `Engagement` scaffold, 5-step onboarding checklist, 14-day trial clock | — |
 | 2 | Staff Auditor | Join platform and reach first task | Magic link auth, role assignment, 5-step guided tour, `EngagementTeamMember` assignment | — |
-| 3 | Partner | Create and scope a new engagement | `ClientAcceptance` gate (Planning → Fieldwork blocked until signed), EQR independence validation, framework version lock after Fieldwork | Control mapping (Feature 2, Tier 2), risk category suggestions (Tier 2) |
-| 4 | Staff Auditor | Import and analyze a trial balance | `TrialBalanceAccount` import, account mapping confirmation, lead schedule generation, sampling calculator (ISA 530 / AU-C 530) | Account mapping (Feature 3, Tier 2), anomaly detection (Tier 1) |
-| 5 | Staff Auditor | Test controls and prepare workpapers | `TestProcedure` status progression (NotStarted → InProgress → Complete), `is_ai_draft` edit gate, sign-off hierarchy (preparer → reviewer → partner) | Evidence link suggestions (Tier 2), workpaper narrative draft (Feature 4, Tier 2) |
+| 3 | Partner | Create and scope a new engagement | `ClientAcceptance` gate (Planning → Fieldwork blocked until signed), EQR independence validation, framework version lock after Fieldwork | Control mapping (Feature 2, Tier 2), risk category suggestions (Feature 6, Tier 2) |
+| 4 | Staff Auditor | Import and analyze a trial balance | `TrialBalanceAccount` import, account mapping confirmation, lead schedule generation, sampling calculator (ISA 530 / AU-C 530) | Account mapping (Feature 3, Tier 2), anomaly detection (Feature 7, Tier 1 / Tier 2 for PCAOB) |
+| 5 | Staff Auditor | Test controls and prepare workpapers | `TestProcedure` status progression (NotStarted → InProgress → Complete), AI content tracking gate, sign-off hierarchy (preparer → reviewer → partner) | Evidence link suggestions (Feature 5, Tier 2), workpaper narrative draft (Feature 4, Tier 2) |
 | 6 | Manager | Review workpapers and advance the engagement | Review notes (immutable, block advancement until resolved), `ReviewComplete` sign-off, phase transition guards (Fieldwork → Review → Reporting) | — |
-| 7 | Staff Auditor | Manage document requests and collect evidence | `DocumentRequest` lifecycle, AI review queue (sorted by confidence), automated reminder state machine, `EvidenceLink` on acceptance | Document completeness review (Feature 1, Tier 2), evidence link suggestion (Tier 2) |
+| 7 | Staff Auditor | Manage document requests and collect evidence | `DocumentRequest` lifecycle, AI review queue (sorted by confidence), automated reminder state machine, `EvidenceLink` on acceptance | Document completeness review (Feature 1, Tier 2), evidence link suggestion (Feature 5, Tier 2) |
 | 8 | Client Contact | Fulfill audit document requests | Tokenized Client Hub link (no login, engagement-scoped, 90-day expiry), `ClientAdmin` delegation (single-request scoped), post-archive read-only access | — |
-| 9 | Partner | Generate report, finalize, and archive | Report issuance triggers assembly deadline + retention computation, Finalized state locks all content, S3 Object Lock WORM archival, addendum workflow (AU-C 230 §.16) | Report section draft (Tier 2) |
+| 9 | Partner | Generate report, finalize, and archive | Report issuance triggers assembly deadline + retention computation, Finalized state locks all content, S3 Object Lock WORM archival, addendum workflow (AU-C 230 §.16) | Report section draft (Feature 8, Tier 2) |
 | 10 | EQR Reviewer | Conduct engagement quality review | Read-only access (not `EngagementTeamMember`), `EngagementQualityReview` sign-off gate (Review → Reporting blocked until signed), immutable EQR record | — |
 
 ### Regulatory constraints by journey
@@ -807,10 +695,11 @@ Full journey maps with stage-by-stage detail (user actions, touchpoints, emotion
 | EQR reviewer independence | SQMS 2 / PCAOB AS 1220 | 3, 10 |
 | Framework version locked after fieldwork begins | Section 4 requirement | 3 |
 | Sign-off hierarchy enforced at data layer | SQMS 1, AU-C 220 | 5, 6 |
-| AI draft must be edited before sign-off | PCAOB AS 1105 | 5 |
+| AI-drafted sections must be substantively edited before sign-off | PCAOB AS 1105 | 5, 9 |
 | Review notes cannot be deleted | AU-C 230 | 6 |
 | Period coverage check for SOC 2 Type II evidence | AT-C 320 | 7 |
-| All AI decisions logged as `AIDecision` records | PCAOB AS 1105 | 3, 4, 5, 7 |
+| All AI decisions logged as `AIDecision` records | PCAOB AS 1105 | 3, 4, 5, 7, 9 |
+| Anomaly detection flags documented for PCAOB engagements | PCAOB AS 1105 | 4 |
 | Sampling documentation requirements | AU-C 530 / PCAOB AS 2315 | 4 |
 | Assembly deadline enforcement | AU-C 230, PCAOB AS 1215 | 9 |
 | WORM archival | PCAOB AS 1215, SOX §802 | 9 |
@@ -826,7 +715,7 @@ These flows represent genuine Axiom innovation — no competitor (Fieldguide, Ca
 
 1. **Cross-framework evidence satisfaction display** (Journeys 3, 5) — one piece of evidence simultaneously satisfying SOC 2, ISO 27001, and HIPAA requirements, shown in real-time during testing
 2. **AI document completeness review with client-facing gap explanations** (Journeys 7, 8) — AI analyzes uploaded documents against request requirements and auto-drafts specific gap explanations for the client
-3. **System-enforced AI draft edit gate** (Journeys 5, 6) — workpapers with unedited AI content cannot be signed off, implementing PCAOB AS 1105 at the data layer
+3. **Section-level AI content tracking and edit gate** (Journeys 5, 6, 9, 10) — AI-drafted content tracked per section with modification ratios; unedited AI sections block sign-off; EQR reviewers see engagement-wide AI edit substantiveness summaries, implementing PCAOB AS 1105 at the data layer
 4. **EQR independence enforcement** (Journey 10) — system-level validation that the quality reviewer is not on the engagement team
 5. **Post-finalization addendum workflow** (Journey 9) — proper AU-C 230 §.16 implementation with immutable original content and versioned addenda
 6. **Full-population analytics as alternative to sampling** (Journey 4) — testing entire transaction datasets rather than statistical samples
@@ -846,7 +735,7 @@ The following capabilities are explicitly excluded from the MVP. Each exclusion 
 | **White-labeling / reseller channels** | Adds multi-tenancy complexity at the branding layer; requires reseller agreement infrastructure; dilutes the Axiom brand before it is established. |
 | **Custom AI model training per firm** | Insufficient training data at launch to produce a meaningfully differentiated firm-specific model. Standard Claude models with firm methodology context (via RAG) achieve the same functional goal at launch scale. Revisit at year 3 when engagement history volume is sufficient. |
 | **On-device / local model execution** | Not required for the target ICP's security posture. Adds significant infrastructure complexity. Revisit if enterprise customer demand signals an on-premise deployment requirement. |
-| **Multi-agent AI orchestration** | LangGraph, CrewAI, and similar frameworks add debugging overhead without adding value for the four defined AI features, all of which are single-step or multi-step-with-human-gates. Add orchestration when genuinely needed by a specific feature, not as a framework choice. |
+| **Multi-agent AI orchestration** | LangGraph, CrewAI, and similar frameworks add debugging overhead without adding value for the eight defined AI features (see [ai-architecture-design.md](ai-architecture-design.md)), all of which are single-step or multi-step-with-human-gates. Add orchestration when genuinely needed by a specific feature, not as a framework choice. |
 | **AI auto-finalization of any audit content** | Outside the human-in-the-loop policy. Creates professional liability exposure. The regulatory environment (PCAOB AS 1105) requires human review of AI outputs. |
 | **Direct ERP/accounting system API integrations (NetSuite, Sage, Xero)** | CSV/Excel import covers the MVP use case without the engineering and maintenance cost of direct integrations. Direct QBO integration is the only accounting API integration in the first 6-month roadmap. NetSuite and Sage are deferred to 6–18 months. |
 | **Direct cloud infrastructure integrations (AWS IAM, Okta, GitHub)** | Axiom is on the auditor side. The Drata/Vanta abstraction covers these at a higher value per integration. Direct infrastructure integrations are Tier 3 and evaluated only on firm-expressed demand. |

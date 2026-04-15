@@ -13,6 +13,7 @@ This repository currently contains no implemented code. All guidance below refle
 ## Specification Documents
 
 - **Product spec:** `docs/specs/axiom-spec-design.md` — full product design, data model, and feature requirements
+- **AI architecture:** `docs/specs/ai-architecture-design.md` — LLM provider, eight AI features, human-in-the-loop policy, AI content tracking, cost estimates
 - **Backend architecture:** `docs/specs/backend-architecture-design.md` — supersedes the tech stack section of the product spec
 - **Infrastructure:** `docs/specs/infrastructure-design.md` — AWS account structure, networking, Terraform workspaces, CI/CD, observability, security controls, cost estimates
 
