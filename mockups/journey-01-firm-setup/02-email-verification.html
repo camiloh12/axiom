@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — Check Your Inbox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250); --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-500: oklch(50% 0.15 250); --color-primary-600: oklch(43% 0.14 250);
+      --color-neutral-0: #fff; --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250); --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250); --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250); --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250); --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145); --color-success-light: oklch(95% 0.03 145);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px; --space-16: 64px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-6);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-10);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .logo-mark {
+      width: 36px; height: 36px;
+      background: var(--color-primary-500);
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 800; font-size: var(--text-lg);
+      letter-spacing: -0.02em;
+    }
+
+    .logo-text {
+      font-size: var(--text-xl); font-weight: 700;
+      color: var(--color-neutral-900); letter-spacing: -0.03em;
+    }
+
+    .card {
+      width: 100%;
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-10);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-6);
+      text-align: center;
+    }
+
+    .icon-circle {
+      width: 64px; height: 64px;
+      background: var(--color-primary-50);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .icon-circle svg {
+      width: 28px; height: 28px;
+      color: var(--color-primary-500);
+    }
+
+    .card h1 {
+      font-size: var(--text-2xl); font-weight: 700;
+      color: var(--color-neutral-900); letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .card p {
+      color: var(--color-neutral-600);
+      max-width: 340px;
+    }
+
+    .email-highlight {
+      font-weight: 600;
+      color: var(--color-neutral-800);
+    }
+
+    .trial-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      background: var(--color-success-light);
+      color: oklch(35% 0.10 145);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      padding: var(--space-2) var(--space-4);
+      border-radius: 100px;
+    }
+
+    .trial-badge svg {
+      width: 16px; height: 16px;
+    }
+
+    .spam-note {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+      max-width: 320px;
+    }
+
+    .resend-link {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    .resend-link a {
+      color: var(--color-primary-500);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .resend-link a:hover {
+      text-decoration: underline;
+    }
+
+    .back-link {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    .back-link a {
+      color: var(--color-neutral-400);
+      text-decoration: none;
+    }
+
+    .back-link a:hover {
+      color: var(--color-neutral-600);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+
+    <div class="card">
+      <div class="icon-circle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+      </div>
+
+      <h1>Check your inbox</h1>
+
+      <p>We sent a verification link to <span class="email-highlight">sarah.chen@meridian-cpas.com</span></p>
+
+      <div class="trial-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Your trial starts now — 14 days
+      </div>
+
+      <p class="spam-note">Can't find it? Check your spam or junk folder. The email comes from <strong>noreply@axiom.audit</strong></p>
+
+      <p class="resend-link">Didn't receive it? <a href="#">Resend verification email</a></p>
+    </div>
+
+    <p class="back-link"><a href="01-signup-form.html">&larr; Back to sign up</a></p>
+  </div>
+</body>
+</html>

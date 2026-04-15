@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — Start Free Trial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --text-xs: 0.64rem;
+      --text-sm: 0.8rem;
+      --text-base: 1rem;
+      --text-lg: 1.25rem;
+      --text-xl: 1.563rem;
+      --text-2xl: 1.953rem;
+      --text-3xl: 2.441rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-10: 40px;
+      --space-12: 48px;
+      --space-16: 64px;
+      --space-24: 96px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-6);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .signup-container {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-10);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .logo-mark {
+      width: 36px;
+      height: 36px;
+      background: var(--color-primary-500);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: var(--text-lg);
+      letter-spacing: -0.02em;
+    }
+
+    .logo-text {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.03em;
+    }
+
+    .signup-card {
+      width: 100%;
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      padding: var(--space-10);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+
+    .signup-card h1 {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      text-align: center;
+    }
+
+    .signup-card p.subtitle {
+      font-size: var(--text-base);
+      color: var(--color-neutral-600);
+      text-align: center;
+      line-height: 1.5;
+      margin-top: calc(-1 * var(--space-2));
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .form-group label {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-700);
+    }
+
+    .form-group input {
+      height: 44px;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-sm);
+      padding: 0 var(--space-3);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-0);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .form-group input::placeholder {
+      color: var(--color-neutral-300);
+    }
+
+    .form-group input:focus {
+      border-color: var(--color-primary-500);
+      box-shadow: 0 0 0 3px oklch(50% 0.15 250 / 0.12);
+    }
+
+    .btn-primary {
+      height: 44px;
+      background: var(--color-primary-500);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      letter-spacing: -0.01em;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-primary-600);
+    }
+
+    .btn-primary:active {
+      background: var(--color-primary-700);
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      color: var(--color-neutral-300);
+      font-size: var(--text-sm);
+    }
+
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--color-neutral-200);
+    }
+
+    .sso-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .btn-sso {
+      height: 44px;
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      font-weight: 500;
+      color: var(--color-neutral-700);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-3);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .btn-sso:hover {
+      border-color: var(--color-neutral-300);
+      background: var(--color-neutral-50);
+    }
+
+    .btn-sso svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .trust-signals {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .trust-signals .badge {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    .trust-signals .badge svg {
+      width: 16px;
+      height: 16px;
+      color: oklch(55% 0.16 145);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: var(--space-4);
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    .footer-links a {
+      color: var(--color-neutral-400);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--color-neutral-600);
+    }
+
+    .login-link {
+      text-align: center;
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    .login-link a {
+      color: var(--color-primary-500);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .login-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="signup-container">
+    <div class="logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+
+    <div class="signup-card">
+      <h1>Start your free trial</h1>
+      <p class="subtitle">Set up your firm in under an hour. No credit card required.</p>
+
+      <div class="sso-buttons">
+        <button class="btn-sso">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          Continue with Google
+        </button>
+        <button class="btn-sso">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M11.4 24H0V12.6L11.4 0v7.2H24v5.4H11.4V24z" fill="#00A4EF"/><path d="M24 12.6V24H11.4V12.6H24z" fill="#FFB900"/><path d="M11.4 0H0v12.6h11.4V7.2H24V0H11.4z" fill="#F25022"/><path d="M0 12.6V24h11.4V12.6H0z" fill="#7FBA00"/></svg>
+          Continue with Microsoft
+        </button>
+      </div>
+
+      <div class="divider">or</div>
+
+      <form>
+        <div class="form-group">
+          <label for="email">Work email</label>
+          <input type="email" id="email" placeholder="you@yourfirm.com" autocomplete="email">
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: var(--space-4);">Start Free Trial</button>
+      </form>
+
+      <p class="login-link">Already have an account? <a href="#">Sign in</a></p>
+    </div>
+
+    <div class="trust-signals">
+      <div class="badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        14-day full-feature trial
+      </div>
+      <div class="badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        No credit card required
+      </div>
+      <div class="badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        SOC 2 &amp; ISO 27001 compliant
+      </div>
+    </div>
+
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Security</a>
+    </div>
+  </div>
+</body>
+</html>
