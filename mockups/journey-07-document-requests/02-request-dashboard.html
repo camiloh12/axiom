@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — Request Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-primary-900: oklch(20% 0.05 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25);
+      --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --color-info: oklch(55% 0.12 250);
+      --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --color-ai: oklch(55% 0.14 290);
+      --color-ai-light: oklch(95% 0.03 290);
+      --color-ai-text: oklch(38% 0.12 290);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px; --space-16: 64px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      display: flex;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 240px; min-height: 100vh;
+      background: var(--color-neutral-100);
+      border-right: 1px solid var(--color-neutral-200);
+      display: flex; flex-direction: column; flex-shrink: 0;
+      padding: var(--space-5) 0;
+    }
+
+    .sidebar-logo {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: 0 var(--space-5); margin-bottom: var(--space-6);
+    }
+
+    .sidebar-logo .logo-mark {
+      width: 28px; height: 28px;
+      background: var(--color-primary-500); border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 800; font-size: var(--text-sm);
+    }
+
+    .sidebar-logo .logo-text {
+      font-size: var(--text-lg); font-weight: 700;
+      color: var(--color-neutral-900); letter-spacing: -0.03em;
+    }
+
+    .nav-section { margin-bottom: var(--space-6); }
+
+    .nav-section-label {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-neutral-400); text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 0 var(--space-5); margin-bottom: var(--space-2);
+    }
+
+    .nav-item {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-2) var(--space-5);
+      font-size: var(--text-sm); font-weight: 500;
+      color: var(--color-neutral-600); text-decoration: none;
+      transition: color 0.12s ease, background 0.12s ease;
+      border-left: 2px solid transparent; cursor: pointer;
+    }
+
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+
+    .nav-item.active {
+      color: var(--color-primary-500); background: var(--color-primary-50);
+      border-left-color: var(--color-primary-500); font-weight: 600;
+    }
+
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    .nav-item .nav-badge {
+      margin-left: auto; font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-error-text); background: var(--color-error-light);
+      padding: 1px 6px; border-radius: 100px;
+    }
+
+    .nav-sub { padding-left: var(--space-10); }
+    .nav-sub .nav-item { font-size: var(--text-sm); padding: 6px var(--space-5); }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    .header {
+      height: 56px; background: var(--color-neutral-0);
+      border-bottom: 1px solid var(--color-neutral-200);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 var(--space-6); flex-shrink: 0;
+    }
+
+    .header-breadcrumb {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-sm); color: var(--color-neutral-400);
+    }
+
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+
+    .header-icon-btn {
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-sm); color: var(--color-neutral-500);
+      cursor: pointer; border: none; background: none;
+    }
+
+    .header-icon-btn:hover { color: var(--color-neutral-700); background: var(--color-neutral-100); }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--color-primary-100); color: var(--color-primary-600);
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+    }
+
+    /* ── Content ── */
+    .content { flex: 1; padding: var(--space-8); overflow-y: auto; }
+
+    .page-header {
+      margin-bottom: var(--space-6);
+      display: flex; align-items: flex-start; justify-content: space-between;
+    }
+
+    .page-header-left h1 {
+      font-size: var(--text-xl); font-weight: 700;
+      color: var(--color-neutral-900); letter-spacing: -0.02em; line-height: 1.2;
+    }
+
+    .page-header-left p {
+      font-size: var(--text-sm); color: var(--color-neutral-600); margin-top: var(--space-1);
+    }
+
+    .page-header-actions { display: flex; gap: var(--space-3); }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+      height: 40px; padding: 0 var(--space-5);
+      background: var(--color-primary-500); color: white; border: none;
+      border-radius: var(--radius-sm); font-family: var(--font-sans);
+      font-size: var(--text-sm); font-weight: 600; cursor: pointer;
+    }
+
+    .btn-primary:hover { background: var(--color-primary-600); }
+    .btn-primary svg { width: 16px; height: 16px; }
+
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      height: 40px; padding: 0 var(--space-5);
+      background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-sm); font-family: var(--font-sans);
+      font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-700); cursor: pointer;
+    }
+
+    .btn-secondary:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
+    .btn-secondary svg { width: 16px; height: 16px; }
+
+    /* ── Summary Cards ── */
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-4);
+      margin-bottom: var(--space-6);
+    }
+
+    .summary-card {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+    }
+
+    .summary-card .sc-label {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-neutral-400); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: var(--space-2);
+    }
+
+    .summary-card .sc-value {
+      font-family: var(--font-mono); font-size: var(--text-2xl);
+      font-weight: 500; color: var(--color-neutral-900);
+      font-variant-numeric: tabular-nums; line-height: 1.2;
+    }
+
+    .summary-card .sc-sub {
+      font-size: var(--text-sm); color: var(--color-neutral-400); margin-top: var(--space-1);
+    }
+
+    .summary-card.highlight {
+      border-left: 3px solid var(--color-primary-500);
+    }
+
+    /* ── Progress + Readiness ── */
+    .progress-readiness {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: var(--space-4);
+      margin-bottom: var(--space-6);
+    }
+
+    .progress-card {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+    }
+
+    .progress-card h3 {
+      font-size: var(--text-sm); font-weight: 600;
+      color: var(--color-neutral-700); margin-bottom: var(--space-3);
+    }
+
+    .progress-bar-wrap {
+      display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2);
+    }
+
+    .progress-bar {
+      flex: 1; height: 8px;
+      background: var(--color-neutral-200); border-radius: 4px; overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%; background: var(--color-primary-500); border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-pct {
+      font-family: var(--font-mono); font-size: var(--text-lg);
+      font-weight: 500; color: var(--color-neutral-900);
+      font-variant-numeric: tabular-nums; min-width: 48px; text-align: right;
+    }
+
+    .progress-breakdown {
+      display: flex; gap: var(--space-5); margin-top: var(--space-3);
+    }
+
+    .progress-stat {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-sm); color: var(--color-neutral-600);
+    }
+
+    .progress-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+
+    .readiness-card {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-left: 3px solid var(--color-ai);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+    }
+
+    .readiness-card .ai-badge {
+      display: inline-flex; align-items: center; gap: var(--space-1);
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-ai-text); background: var(--color-ai-light);
+      padding: 2px 8px; border-radius: 100px; margin-bottom: var(--space-3);
+    }
+
+    .readiness-card h3 {
+      font-size: var(--text-sm); font-weight: 600;
+      color: var(--color-neutral-700); margin-bottom: var(--space-2);
+    }
+
+    .readiness-card .readiness-value {
+      font-family: var(--font-mono); font-size: var(--text-lg);
+      font-weight: 500; color: var(--color-neutral-900);
+      font-variant-numeric: tabular-nums; margin-bottom: var(--space-1);
+    }
+
+    .readiness-card .readiness-detail {
+      font-size: var(--text-sm); color: var(--color-neutral-500);
+    }
+
+    .reminder-config {
+      margin-top: var(--space-4);
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-neutral-200);
+      font-size: var(--text-sm); color: var(--color-neutral-500);
+    }
+
+    .reminder-config strong { color: var(--color-neutral-700); font-weight: 600; }
+
+    /* ── Filters ── */
+    .filters {
+      display: flex; align-items: center; gap: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+
+    .filter-pill {
+      display: inline-flex; align-items: center;
+      padding: 6px 14px; border-radius: 100px;
+      font-size: var(--text-sm); font-weight: 500;
+      color: var(--color-neutral-600); background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200); cursor: pointer;
+    }
+
+    .filter-pill:hover { border-color: var(--color-neutral-300); }
+
+    .filter-pill.active {
+      background: var(--color-primary-50); border-color: var(--color-primary-200);
+      color: var(--color-primary-600); font-weight: 600;
+    }
+
+    .filter-pill .pill-count {
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      margin-left: var(--space-2); font-variant-numeric: tabular-nums;
+    }
+
+    .search-input {
+      margin-left: auto;
+      height: 36px; width: 240px;
+      border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm);
+      padding: 0 var(--space-3); font-family: var(--font-sans);
+      font-size: var(--text-sm); color: var(--color-neutral-800);
+      background: var(--color-neutral-0); outline: none;
+    }
+
+    .search-input:focus {
+      border-color: var(--color-primary-500);
+      box-shadow: 0 0 0 3px oklch(50% 0.15 250 / 0.12);
+    }
+
+    /* ── Data Table ── */
+    .data-table {
+      width: 100%;
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border-collapse: collapse;
+    }
+
+    .data-table thead th {
+      background: var(--color-neutral-50);
+      font-size: var(--text-sm); font-weight: 600;
+      color: var(--color-neutral-400); text-transform: uppercase;
+      letter-spacing: 0.05em; text-align: left;
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    .data-table tbody td {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--color-neutral-200);
+      font-size: var(--text-sm); color: var(--color-neutral-700);
+      vertical-align: middle;
+    }
+
+    .data-table tbody tr:last-child td { border-bottom: none; }
+
+    .data-table tbody tr:hover { background: var(--color-neutral-50); }
+
+    .req-title-cell {
+      font-weight: 500; color: var(--color-neutral-800);
+    }
+
+    .req-control {
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      color: var(--color-neutral-400); font-variant-numeric: tabular-nums;
+    }
+
+    .due-date {
+      font-family: var(--font-mono); font-size: var(--text-sm);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .due-date.overdue { color: var(--color-error-text); font-weight: 600; }
+
+    /* ── Status Badge ── */
+    .status-badge {
+      display: inline-flex; align-items: center;
+      padding: var(--space-1) var(--space-2);
+      border-radius: 100px; font-size: var(--text-xs); font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status-badge.pending { background: var(--color-neutral-200); color: var(--color-neutral-600); }
+    .status-badge.submitted { background: var(--color-info-light); color: var(--color-info-text); }
+    .status-badge.in-review { background: var(--color-warning-light); color: var(--color-warning-text); }
+    .status-badge.accepted { background: var(--color-success-light); color: var(--color-success-text); }
+    .status-badge.rejected { background: var(--color-error-light); color: var(--color-error-text); }
+    .status-badge.overdue { background: var(--color-error-light); color: var(--color-error-text); }
+
+    .reminder-cell {
+      font-size: var(--text-xs); color: var(--color-neutral-400);
+    }
+
+    .reminder-cell .sent { color: var(--color-warning-text); font-weight: 500; }
+
+    .action-link {
+      font-size: var(--text-sm); color: var(--color-primary-500);
+      text-decoration: none; font-weight: 500; cursor: pointer;
+    }
+
+    .action-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+    <nav>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a class="nav-item active" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Engagements
+        </a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Cloudvault Technologies</div>
+        <div class="nav-sub">
+          <a class="nav-item" href="#">Overview</a>
+          <a class="nav-item" href="#">Controls</a>
+          <a class="nav-item" href="#">Trial Balance</a>
+          <a class="nav-item" href="#">Workpapers</a>
+          <a class="nav-item" href="#">Evidence</a>
+          <a class="nav-item active" href="#">
+            Document Requests
+            <span class="nav-badge">5</span>
+          </a>
+          <a class="nav-item" href="#">Reports</a>
+          <a class="nav-item" href="#">Settings</a>
+        </div>
+      </div>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Staff Management
+        </a>
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Firm Settings
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a>
+        <span>/</span>
+        <a href="#">Cloudvault Technologies</a>
+        <span>/</span>
+        <span class="current">Document Requests</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <button class="header-icon-btn" title="Help">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+        <div class="avatar">EP</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-header">
+        <div class="page-header-left">
+          <h1>Document Requests</h1>
+          <p>SOC 2 Type II &mdash; Cloudvault Technologies Inc. &mdash; Jan 1 &ndash; Dec 31, 2025</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Configure Reminders
+          </button>
+          <button class="btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Request
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="summary-row">
+        <div class="summary-card">
+          <div class="sc-label">Total Requests</div>
+          <div class="sc-value">83</div>
+          <div class="sc-sub">Across 5 categories</div>
+        </div>
+        <div class="summary-card highlight">
+          <div class="sc-label">Fulfilled</div>
+          <div class="sc-value">60</div>
+          <div class="sc-sub">Accepted or in review</div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">Pending</div>
+          <div class="sc-value">18</div>
+          <div class="sc-sub">Awaiting client response</div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">Overdue</div>
+          <div class="sc-value" style="color: var(--color-error-text)">5</div>
+          <div class="sc-sub">Past due date</div>
+        </div>
+      </div>
+
+      <!-- Progress + Readiness -->
+      <div class="progress-readiness">
+        <div class="progress-card">
+          <h3>Fulfillment Progress</h3>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: 72%"></div>
+            </div>
+            <span class="progress-pct">72%</span>
+          </div>
+          <div class="progress-breakdown">
+            <div class="progress-stat">
+              <span class="progress-dot" style="background: var(--color-success)"></span>
+              Accepted: 48
+            </div>
+            <div class="progress-stat">
+              <span class="progress-dot" style="background: var(--color-warning)"></span>
+              In Review: 7
+            </div>
+            <div class="progress-stat">
+              <span class="progress-dot" style="background: var(--color-info)"></span>
+              Submitted: 5
+            </div>
+            <div class="progress-stat">
+              <span class="progress-dot" style="background: var(--color-neutral-300)"></span>
+              Pending: 18
+            </div>
+            <div class="progress-stat">
+              <span class="progress-dot" style="background: var(--color-error)"></span>
+              Overdue: 5
+            </div>
+          </div>
+        </div>
+        <div class="readiness-card">
+          <span class="ai-badge">AI Estimate</span>
+          <h3>Fieldwork Readiness</h3>
+          <div class="readiness-value">Estimated fieldwork start: May 15</div>
+          <div class="readiness-detail">72% fulfilled. At the current rate, remaining requests should be fulfilled by May 12. Three overdue items assigned to IT department may delay this estimate.</div>
+          <div class="reminder-config">
+            <strong>Reminders:</strong> 7 days before due, on due date, 7 days after. <a class="action-link" href="#">Edit schedule</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters">
+        <span class="filter-pill active">All <span class="pill-count">83</span></span>
+        <span class="filter-pill">Pending <span class="pill-count">18</span></span>
+        <span class="filter-pill">Submitted <span class="pill-count">5</span></span>
+        <span class="filter-pill">In Review <span class="pill-count">7</span></span>
+        <span class="filter-pill">Accepted <span class="pill-count">48</span></span>
+        <span class="filter-pill">Overdue <span class="pill-count">5</span></span>
+        <input class="search-input" type="text" placeholder="Search requests...">
+      </div>
+
+      <!-- Data Table -->
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Request</th>
+            <th>Control</th>
+            <th>Contact</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th>Reminders</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="req-title-cell">Access Control Policy &mdash; Full Period</td>
+            <td><span class="req-control">CC6.1</span></td>
+            <td>Rachel Chen</td>
+            <td><span class="due-date overdue">Apr 07</span></td>
+            <td><span class="status-badge overdue">Overdue</span></td>
+            <td class="reminder-cell"><span class="sent">3 sent</span> &mdash; Escalated</td>
+            <td><a class="action-link" href="#">Follow Up</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">User Access Listing &mdash; All Systems</td>
+            <td><span class="req-control">CC6.2</span></td>
+            <td>Rachel Chen</td>
+            <td><span class="due-date overdue">Apr 07</span></td>
+            <td><span class="status-badge overdue">Overdue</span></td>
+            <td class="reminder-cell"><span class="sent">3 sent</span> &mdash; Escalated</td>
+            <td><a class="action-link" href="#">Follow Up</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">Change Management Procedures</td>
+            <td><span class="req-control">CC7.2</span></td>
+            <td>Tom Morris</td>
+            <td><span class="due-date">Apr 21</span></td>
+            <td><span class="status-badge in-review">In Review</span></td>
+            <td class="reminder-cell">&mdash;</td>
+            <td><a class="action-link" href="#">Review</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">Incident Response Plan</td>
+            <td><span class="req-control">CC8.1</span></td>
+            <td>Tom Morris</td>
+            <td><span class="due-date">Apr 21</span></td>
+            <td><span class="status-badge submitted">Submitted</span></td>
+            <td class="reminder-cell">&mdash;</td>
+            <td><a class="action-link" href="#">Review</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">Network Diagram &mdash; Current Topology</td>
+            <td><span class="req-control">CC6.1</span></td>
+            <td>Rachel Chen</td>
+            <td><span class="due-date overdue">Apr 10</span></td>
+            <td><span class="status-badge overdue">Overdue</span></td>
+            <td class="reminder-cell"><span class="sent">2 sent</span></td>
+            <td><a class="action-link" href="#">Follow Up</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">System Monitoring &amp; Alerting Configuration</td>
+            <td><span class="req-control">CC7.1</span></td>
+            <td>Tom Morris</td>
+            <td><span class="due-date">Apr 28</span></td>
+            <td><span class="status-badge pending">Pending</span></td>
+            <td class="reminder-cell">1 scheduled</td>
+            <td><a class="action-link" href="#">Send Reminder</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">Encryption Key Management Policy</td>
+            <td><span class="req-control">CC6.1</span></td>
+            <td>Tom Morris</td>
+            <td><span class="due-date">Apr 28</span></td>
+            <td><span class="status-badge accepted">Accepted</span></td>
+            <td class="reminder-cell">&mdash;</td>
+            <td><a class="action-link" href="#">View</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">Employee Background Check Policy</td>
+            <td><span class="req-control">CC1.4</span></td>
+            <td>Janet Lee</td>
+            <td><span class="due-date">Apr 28</span></td>
+            <td><span class="status-badge accepted">Accepted</span></td>
+            <td class="reminder-cell">&mdash;</td>
+            <td><a class="action-link" href="#">View</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">Vendor Risk Assessment Report</td>
+            <td><span class="req-control">CC9.2</span></td>
+            <td>Mike Kumar</td>
+            <td><span class="due-date">Apr 28</span></td>
+            <td><span class="status-badge in-review">In Review</span></td>
+            <td class="reminder-cell">&mdash;</td>
+            <td><a class="action-link" href="#">Review</a></td>
+          </tr>
+          <tr>
+            <td class="req-title-cell">Business Continuity Plan &mdash; Annual Test Results</td>
+            <td><span class="req-control">A1.2</span></td>
+            <td>Mike Kumar</td>
+            <td><span class="due-date overdue">Apr 07</span></td>
+            <td><span class="status-badge overdue">Overdue</span></td>
+            <td class="reminder-cell"><span class="sent">3 sent</span> &mdash; Escalated</td>
+            <td><a class="action-link" href="#">Follow Up</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
