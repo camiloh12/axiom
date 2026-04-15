@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — My Assignments</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25);
+      --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --color-info: oklch(55% 0.12 250);
+      --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --color-ai: oklch(55% 0.14 290);
+      --color-ai-light: oklch(95% 0.03 290);
+      --color-ai-text: oklch(38% 0.12 290);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px; --space-16: 64px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      display: flex;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 240px;
+      min-height: 100vh;
+      background: var(--color-neutral-100);
+      border-right: 1px solid var(--color-neutral-200);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      padding: var(--space-5) 0;
+    }
+
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 0 var(--space-5);
+      margin-bottom: var(--space-6);
+    }
+
+    .sidebar-logo .logo-mark {
+      width: 28px; height: 28px;
+      background: var(--color-primary-500);
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 800; font-size: var(--text-sm);
+    }
+
+    .sidebar-logo .logo-text {
+      font-size: var(--text-lg); font-weight: 700;
+      color: var(--color-neutral-900); letter-spacing: -0.03em;
+    }
+
+    .nav-section { margin-bottom: var(--space-6); }
+
+    .nav-section-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-neutral-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0 var(--space-5);
+      margin-bottom: var(--space-2);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-5);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--color-neutral-600);
+      text-decoration: none;
+      transition: color 0.12s ease, background 0.12s ease;
+      border-left: 2px solid transparent;
+      cursor: pointer;
+    }
+
+    .nav-item:hover {
+      color: var(--color-neutral-800);
+      background: oklch(92% 0.005 250);
+    }
+
+    .nav-item.active {
+      color: var(--color-primary-500);
+      background: var(--color-primary-50);
+      border-left-color: var(--color-primary-500);
+      font-weight: 600;
+    }
+
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    .nav-sub { padding-left: var(--space-10); }
+
+    .nav-sub .nav-item {
+      font-size: var(--text-sm);
+      padding: var(--space-1) var(--space-4);
+      border-left: none;
+    }
+
+    .nav-sub .nav-item.active {
+      border-left: none;
+      background: var(--color-primary-50);
+      color: var(--color-primary-500);
+      font-weight: 600;
+    }
+
+    /* ── Main Area ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .header {
+      height: 56px;
+      background: var(--color-neutral-0);
+      border-bottom: 1px solid var(--color-neutral-200);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--space-6);
+      flex-shrink: 0;
+    }
+
+    .header-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-neutral-400);
+    }
+
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .header-icon-btn {
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-sm);
+      color: var(--color-neutral-500);
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+
+    .header-icon-btn:hover {
+      color: var(--color-neutral-700);
+      background: var(--color-neutral-100);
+    }
+
+    .header-icon-btn svg { width: 20px; height: 20px; }
+
+    .avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--color-primary-100);
+      color: var(--color-primary-600);
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-xs); font-weight: 700;
+      cursor: pointer;
+    }
+
+    .content {
+      flex: 1;
+      padding: var(--space-8);
+      overflow-y: auto;
+    }
+
+    .page-header {
+      margin-bottom: var(--space-6);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    .page-header h1 {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .page-header p {
+      font-size: var(--text-sm);
+      color: var(--color-neutral-600);
+      margin-top: var(--space-1);
+    }
+
+    /* ── Stats ── */
+    .stats-row {
+      display: flex;
+      gap: var(--space-4);
+      margin-bottom: var(--space-6);
+    }
+
+    .stat-card {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      padding: var(--space-4) var(--space-5);
+      flex: 1;
+    }
+
+    .stat-card .stat-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-neutral-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: var(--space-1);
+    }
+
+    .stat-card .stat-value {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-card .stat-sub {
+      font-size: var(--text-xs);
+      color: var(--color-neutral-400);
+      margin-top: 2px;
+    }
+
+    /* ── Table ── */
+    .table-card {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .table-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    .table-toolbar .table-title {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-neutral-700);
+    }
+
+    .table-filters {
+      display: flex;
+      gap: var(--space-2);
+    }
+
+    .filter-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      height: 32px;
+      padding: 0 var(--space-3);
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      color: var(--color-neutral-600);
+      cursor: pointer;
+    }
+
+    .filter-btn:hover { border-color: var(--color-neutral-300); }
+
+    .filter-btn.active {
+      background: var(--color-primary-50);
+      border-color: var(--color-primary-200);
+      color: var(--color-primary-500);
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    thead th {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-neutral-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: left;
+      padding: var(--space-3) var(--space-5);
+      background: var(--color-neutral-50);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    tbody td {
+      padding: var(--space-3) var(--space-5);
+      border-bottom: 1px solid var(--color-neutral-200);
+      font-size: var(--text-sm);
+      color: var(--color-neutral-700);
+      vertical-align: middle;
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+
+    tbody tr:hover { background: var(--color-neutral-50); }
+
+    .control-name {
+      font-weight: 600;
+      color: var(--color-neutral-800);
+    }
+
+    .control-id {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--color-neutral-400);
+      margin-top: 2px;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 100px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge-not-started { background: var(--color-neutral-100); color: var(--color-neutral-500); }
+    .badge-in-progress { background: var(--color-info-light); color: var(--color-info-text); }
+    .badge-complete { background: var(--color-success-light); color: var(--color-success-text); }
+    .badge-exception { background: var(--color-error-light); color: var(--color-error-text); }
+    .badge-prior-cleared { background: oklch(95% 0.02 145); color: oklch(38% 0.10 145); }
+    .badge-prior-exception { background: oklch(95% 0.03 25); color: oklch(40% 0.12 25); }
+
+    .framework-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .fw-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: var(--text-xs);
+      font-weight: 500;
+      font-family: var(--font-mono);
+      background: var(--color-neutral-100);
+      color: var(--color-neutral-600);
+    }
+
+    .fw-badge.cross {
+      background: var(--color-ai-light);
+      color: var(--color-ai-text);
+    }
+
+    .procedure-type {
+      font-size: var(--text-xs);
+      color: var(--color-neutral-500);
+    }
+
+    .cross-framework-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      background: var(--color-ai-light);
+      color: var(--color-ai-text);
+      white-space: nowrap;
+    }
+
+    .cross-framework-tag svg { width: 12px; height: 12px; }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+
+    <nav>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a class="nav-item active" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Engagements
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Cloudvault Technologies</div>
+        <div class="nav-sub">
+          <a class="nav-item" href="#">Overview</a>
+          <a class="nav-item active" href="#">Controls</a>
+          <a class="nav-item" href="#">Trial Balance</a>
+          <a class="nav-item" href="#">Workpapers</a>
+          <a class="nav-item" href="#">Evidence</a>
+          <a class="nav-item" href="#">Document Requests</a>
+          <a class="nav-item" href="#">Reports</a>
+          <a class="nav-item" href="#">Settings</a>
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Staff Management
+        </a>
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Firm Settings
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a>
+        <span>/</span>
+        <a href="#">Cloudvault Technologies</a>
+        <span>/</span>
+        <span class="current">My Assignments</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <button class="header-icon-btn" title="Help">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+        <div class="avatar">EP</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-header">
+        <div>
+          <h1>My Assignments</h1>
+          <p>Cloudvault Technologies Inc. &mdash; SOC 2 Type II &middot; Jan 1 &ndash; Dec 31, 2025</p>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Assigned</div>
+          <div class="stat-value">10</div>
+          <div class="stat-sub">controls</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Not Started</div>
+          <div class="stat-value">4</div>
+          <div class="stat-sub">controls</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">In Progress</div>
+          <div class="stat-value">3</div>
+          <div class="stat-sub">controls</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Complete</div>
+          <div class="stat-value">3</div>
+          <div class="stat-sub">controls</div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="table-title">Assigned Controls</span>
+          <div class="table-filters">
+            <button class="filter-btn active">All</button>
+            <button class="filter-btn">Not Started</button>
+            <button class="filter-btn">In Progress</button>
+            <button class="filter-btn">Complete</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Control</th>
+              <th>Framework Requirements</th>
+              <th>Procedure Type</th>
+              <th>Status</th>
+              <th>Prior Year</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="control-name">Logical and Physical Access Controls</div>
+                <div class="control-id">CTRL-001</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="cross-framework-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M3 16v5h5"/><path d="M16 21h5v-5"/></svg>
+                    SOC 2 CC6.1 + ISO A.8.3
+                  </span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inspection, Reperformance</span></td>
+              <td><span class="badge badge-in-progress">In Progress</span></td>
+              <td><span class="badge badge-prior-cleared">Cleared</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">Authentication and Access Management</div>
+                <div class="control-id">CTRL-002</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="cross-framework-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M3 16v5h5"/><path d="M16 21h5v-5"/></svg>
+                    SOC 2 CC6.2 + ISO A.8.1
+                  </span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inquiry, Inspection</span></td>
+              <td><span class="badge badge-complete">Complete</span></td>
+              <td><span class="badge badge-prior-cleared">Cleared</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">Change Management Process</div>
+                <div class="control-id">CTRL-003</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="fw-badge">SOC 2 CC7.1</span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inspection, Reperformance</span></td>
+              <td><span class="badge badge-in-progress">In Progress</span></td>
+              <td><span class="badge badge-prior-cleared">Cleared</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">System Component Inventory</div>
+                <div class="control-id">CTRL-004</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="fw-badge">SOC 2 CC7.2</span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inquiry, Observation</span></td>
+              <td><span class="badge badge-not-started">Not Started</span></td>
+              <td><span class="badge badge-prior-cleared">Cleared</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">Monitoring Activities</div>
+                <div class="control-id">CTRL-005</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="cross-framework-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M3 16v5h5"/><path d="M16 21h5v-5"/></svg>
+                    SOC 2 CC8.1 + ISO A.5.1
+                  </span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inquiry, Inspection</span></td>
+              <td><span class="badge badge-not-started">Not Started</span></td>
+              <td><span class="badge badge-prior-exception">Exception</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">Encryption Key Management</div>
+                <div class="control-id">CTRL-006</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="cross-framework-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M3 16v5h5"/><path d="M16 21h5v-5"/></svg>
+                    SOC 2 CC6.1 + ISO A.8.3
+                  </span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inspection</span></td>
+              <td><span class="badge badge-complete">Complete</span></td>
+              <td><span class="badge badge-prior-cleared">Cleared</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">User Access Review Process</div>
+                <div class="control-id">CTRL-007</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="fw-badge">SOC 2 CC6.2</span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Reperformance</span></td>
+              <td><span class="badge badge-in-progress">In Progress</span></td>
+              <td><span class="badge badge-prior-cleared">Cleared</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">Incident Response Procedures</div>
+                <div class="control-id">CTRL-008</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="fw-badge">SOC 2 CC7.2</span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inquiry, Observation</span></td>
+              <td><span class="badge badge-not-started">Not Started</span></td>
+              <td><span class="badge badge-prior-cleared">Cleared</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">Network Segmentation Controls</div>
+                <div class="control-id">CTRL-009</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="cross-framework-tag">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M3 16v5h5"/><path d="M16 21h5v-5"/></svg>
+                    SOC 2 CC6.1 + ISO A.8.1
+                  </span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inspection, Analytics</span></td>
+              <td><span class="badge badge-complete">Complete</span></td>
+              <td><span class="badge badge-prior-cleared">Cleared</span></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="control-name">Vulnerability Management Program</div>
+                <div class="control-id">CTRL-010</div>
+              </td>
+              <td>
+                <div class="framework-badges">
+                  <span class="fw-badge">SOC 2 CC7.1</span>
+                </div>
+              </td>
+              <td><span class="procedure-type">Inspection, Reperformance</span></td>
+              <td><span class="badge badge-not-started">Not Started</span></td>
+              <td><span class="badge badge-prior-exception">Exception</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

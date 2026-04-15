@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — Submit for Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25);
+      --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --color-info: oklch(55% 0.12 250);
+      --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --color-ai: oklch(55% 0.14 290);
+      --color-ai-light: oklch(95% 0.03 290);
+      --color-ai-text: oklch(38% 0.12 290);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px; --space-16: 64px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    body { font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5; color: var(--color-neutral-800); background: var(--color-neutral-50); min-height: 100vh; display: flex; -webkit-font-smoothing: antialiased; }
+
+    /* ── Sidebar ── */
+    .sidebar { width: 240px; min-height: 100vh; background: var(--color-neutral-100); border-right: 1px solid var(--color-neutral-200); display: flex; flex-direction: column; flex-shrink: 0; padding: var(--space-5) 0; }
+    .sidebar-logo { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-5); margin-bottom: var(--space-6); }
+    .sidebar-logo .logo-mark { width: 28px; height: 28px; background: var(--color-primary-500); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: var(--text-sm); }
+    .sidebar-logo .logo-text { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.03em; }
+    .nav-section { margin-bottom: var(--space-6); }
+    .nav-section-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.05em; padding: 0 var(--space-5); margin-bottom: var(--space-2); }
+    .nav-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-600); text-decoration: none; border-left: 2px solid transparent; cursor: pointer; }
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+    .nav-item.active { color: var(--color-primary-500); background: var(--color-primary-50); border-left-color: var(--color-primary-500); font-weight: 600; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-sub { padding-left: var(--space-10); }
+    .nav-sub .nav-item { font-size: var(--text-sm); padding: var(--space-1) var(--space-4); border-left: none; }
+    .nav-sub .nav-item.active { border-left: none; background: var(--color-primary-50); color: var(--color-primary-500); font-weight: 600; }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; position: relative; }
+    .header { height: 56px; background: var(--color-neutral-0); border-bottom: 1px solid var(--color-neutral-200); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-6); flex-shrink: 0; }
+    .header-breadcrumb { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-neutral-400); }
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+    .header-icon-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); color: var(--color-neutral-500); cursor: pointer; border: none; background: none; }
+    .header-icon-btn:hover { color: var(--color-neutral-700); background: var(--color-neutral-100); }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary-100); color: var(--color-primary-600); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; cursor: pointer; }
+
+    /* ── Background (dimmed workpaper) ── */
+    .background-content {
+      flex: 1; padding: var(--space-8); overflow-y: auto;
+      filter: blur(1px); opacity: 0.4; pointer-events: none;
+    }
+    .bg-editor {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      padding: var(--space-8);
+      max-width: 800px;
+    }
+    .bg-editor h2 { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); margin-bottom: var(--space-3); margin-top: var(--space-5); }
+    .bg-editor h2:first-child { margin-top: 0; }
+    .bg-editor p { font-size: var(--text-sm); color: var(--color-neutral-700); line-height: 1.7; margin-bottom: var(--space-3); }
+
+    /* ── Dialog Overlay ── */
+    .dialog-overlay {
+      position: absolute; inset: 0;
+      background: oklch(25% 0.008 250 / 0.5);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+
+    .dialog {
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      width: 520px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 48px oklch(25% 0.008 250 / 0.2);
+    }
+
+    .dialog-header {
+      padding: var(--space-6);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+    .dialog-title { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.02em; }
+    .dialog-subtitle { font-size: var(--text-sm); color: var(--color-neutral-500); margin-top: var(--space-1); }
+
+    .dialog-body { padding: var(--space-6); }
+
+    /* ── Validation Checklist ── */
+    .checklist-title {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-neutral-400); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: var(--space-3);
+    }
+
+    .checklist { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-6); }
+
+    .checklist-item {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+    }
+
+    .checklist-item.passed {
+      background: var(--color-success-light);
+      color: var(--color-success-text);
+    }
+    .checklist-item.failed {
+      background: var(--color-error-light);
+      color: var(--color-error-text);
+    }
+    .checklist-item.warning {
+      background: var(--color-warning-light);
+      color: var(--color-warning-text);
+    }
+
+    .check-icon {
+      width: 20px; height: 20px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .check-icon.pass { background: var(--color-success); color: white; }
+    .check-icon.fail { background: var(--color-error); color: white; }
+    .check-icon.warn { background: var(--color-warning); color: white; }
+    .check-icon svg { width: 12px; height: 12px; }
+
+    .check-text { flex: 1; font-weight: 500; }
+    .check-detail { font-size: var(--text-xs); font-weight: 400; margin-top: 1px; }
+
+    /* ── Reviewer Assignment ── */
+    .form-section { margin-bottom: var(--space-6); }
+    .form-section-title {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-neutral-400); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: var(--space-3);
+    }
+
+    .reviewer-select {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-sm);
+      background: var(--color-neutral-0);
+    }
+    .reviewer-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--color-primary-100); color: var(--color-primary-600);
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-xs); font-weight: 700; flex-shrink: 0;
+    }
+    .reviewer-info { flex: 1; }
+    .reviewer-name { font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-800); }
+    .reviewer-role { font-size: var(--text-xs); color: var(--color-neutral-400); }
+    .reviewer-queue { font-size: var(--text-xs); color: var(--color-neutral-400); display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+    .reviewer-queue svg { width: 12px; height: 12px; }
+    .change-reviewer {
+      font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-primary-500); cursor: pointer;
+      border: none; background: none; font-family: var(--font-sans);
+    }
+    .change-reviewer:hover { color: var(--color-primary-600); text-decoration: underline; }
+
+    /* Notes textarea */
+    .form-group { display: flex; flex-direction: column; gap: var(--space-2); }
+    .form-group label { font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-700); }
+    .form-group .hint { font-size: var(--text-xs); color: var(--color-neutral-400); }
+    .form-group textarea {
+      border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm);
+      padding: var(--space-3); font-family: var(--font-sans); font-size: var(--text-sm);
+      color: var(--color-neutral-800); background: var(--color-neutral-0); outline: none;
+      min-height: 100px; resize: vertical; line-height: 1.6;
+    }
+    .form-group textarea:focus {
+      border-color: var(--color-primary-500);
+      box-shadow: 0 0 0 3px oklch(50% 0.15 250 / 0.12);
+    }
+    .form-group textarea::placeholder { color: var(--color-neutral-300); }
+
+    /* Dialog footer */
+    .dialog-footer {
+      padding: var(--space-4) var(--space-6);
+      border-top: 1px solid var(--color-neutral-200);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .dialog-footer-info {
+      font-size: var(--text-xs); color: var(--color-neutral-400);
+      display: flex; align-items: center; gap: var(--space-2);
+    }
+    .dialog-footer-info svg { width: 14px; height: 14px; }
+
+    .dialog-footer-actions { display: flex; gap: var(--space-3); }
+
+    .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 40px; padding: 0 var(--space-5); background: var(--color-primary-500); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: var(--color-primary-600); }
+
+    .btn-success { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 40px; padding: 0 var(--space-5); background: var(--color-success); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+    .btn-success:hover { background: oklch(48% 0.16 145); }
+    .btn-success svg { width: 16px; height: 16px; }
+
+    .btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 var(--space-5); background: none; color: var(--color-neutral-600); border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+    .btn-ghost:hover { color: var(--color-neutral-800); background: var(--color-neutral-100); }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+    <nav>
+      <div class="nav-section">
+        <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Dashboard</a>
+        <a class="nav-item active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Engagements</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Cloudvault Technologies</div>
+        <div class="nav-sub">
+          <a class="nav-item" href="#">Overview</a>
+          <a class="nav-item" href="#">Controls</a>
+          <a class="nav-item" href="#">Trial Balance</a>
+          <a class="nav-item active" href="#">Workpapers</a>
+          <a class="nav-item" href="#">Evidence</a>
+          <a class="nav-item" href="#">Document Requests</a>
+          <a class="nav-item" href="#">Reports</a>
+          <a class="nav-item" href="#">Settings</a>
+        </div>
+      </div>
+      <div class="nav-section">
+        <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Staff Management</a>
+        <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> Firm Settings</a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a><span>/</span>
+        <a href="#">Cloudvault Technologies</a><span>/</span>
+        <a href="#">Workpapers</a><span>/</span>
+        <span class="current">CTRL-001 Logical Access</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></button>
+        <button class="header-icon-btn" title="Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+        <div class="avatar">EP</div>
+      </div>
+    </header>
+
+    <!-- Dimmed background workpaper -->
+    <div class="background-content">
+      <div class="bg-editor">
+        <h2>Objective</h2>
+        <p>To evaluate the design and operating effectiveness of logical and physical access controls implemented by Cloudvault Technologies Inc. to protect information assets from unauthorized access during the audit period January 1 through December 31, 2025.</p>
+        <h2>Scope</h2>
+        <p>This workpaper covers control CTRL-001 (Logical and Physical Access Controls), which satisfies SOC 2 Trust Services Criteria CC6.1 and ISO 27001 Annex A control A.8.3.</p>
+        <h2>Procedures Performed</h2>
+        <p>TP-001: Inspection of Access Control Policy Documentation. Obtained and inspected the Role-Based Access Policy (v4.2)...</p>
+        <h2>Results</h2>
+        <p>TP-001 completed with no exceptions. TP-002 identified two exceptions out of 25 sampled provisioning events...</p>
+        <h2>Conclusion</h2>
+        <p>Based on the procedures performed, the logical and physical access control design is effective. However, operating effectiveness is not fully effective due to two provisioning exceptions...</p>
+      </div>
+    </div>
+
+    <!-- Dialog Overlay -->
+    <div class="dialog-overlay">
+      <div class="dialog">
+        <div class="dialog-header">
+          <div class="dialog-title">Submit Workpaper for Review</div>
+          <div class="dialog-subtitle">CTRL-001 &mdash; Logical and Physical Access Controls</div>
+        </div>
+
+        <div class="dialog-body">
+          <!-- Validation Checklist -->
+          <div class="checklist-title">Validation Checklist</div>
+          <div class="checklist">
+            <div class="checklist-item passed">
+              <div class="check-icon pass">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <div class="check-text">All test procedures complete</div>
+                <div class="check-detail">4 of 4 procedures marked complete</div>
+              </div>
+            </div>
+            <div class="checklist-item passed">
+              <div class="check-icon pass">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <div class="check-text">Evidence linked to all procedures</div>
+                <div class="check-detail">4 evidence items linked across 4 procedures</div>
+              </div>
+            </div>
+            <div class="checklist-item passed">
+              <div class="check-icon pass">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <div class="check-text">AI draft has been reviewed and edited</div>
+                <div class="check-detail">Human edits made in 4 of 5 sections (v2)</div>
+              </div>
+            </div>
+            <div class="checklist-item passed">
+              <div class="check-icon pass">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <div class="check-text">Workpaper sections complete</div>
+                <div class="check-detail">Objective, scope, procedures, results, and conclusion are all present</div>
+              </div>
+            </div>
+            <div class="checklist-item warning">
+              <div class="check-icon warn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div>
+                <div class="check-text">2 exceptions documented</div>
+                <div class="check-detail">Ensure exceptions are accurately described and severity levels are appropriate</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reviewer Assignment -->
+          <div class="form-section">
+            <div class="form-section-title">Assigned Reviewer</div>
+            <div class="reviewer-select">
+              <div class="reviewer-avatar">JR</div>
+              <div class="reviewer-info">
+                <div class="reviewer-name">James Rodriguez</div>
+                <div class="reviewer-role">Manager &middot; Engagement Lead</div>
+                <div class="reviewer-queue">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  4 workpapers ahead in review queue
+                </div>
+              </div>
+              <button class="change-reviewer">Change</button>
+            </div>
+          </div>
+
+          <!-- Notes for Reviewer -->
+          <div class="form-section" style="margin-bottom:0;">
+            <div class="form-group">
+              <label for="reviewer-notes">Notes for Reviewer</label>
+              <textarea id="reviewer-notes" placeholder="Add any context the reviewer should know about...">Two exceptions documented in TP-002 (user provisioning). Exception 1 is moderate severity (verbal-only approval). Exception 2 is high severity (excessive CRM permissions without documented justification). Recommend discussion on whether to expand the sample size given the 8% exception rate.
+
+Also note: this control now maps to ISO A.8.3 in addition to SOC 2 CC6.1 (new this year).</textarea>
+              <span class="hint">These notes will be visible to the reviewer alongside the workpaper.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="dialog-footer">
+          <div class="dialog-footer-info">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            Once submitted, this workpaper will be locked for editing until the reviewer returns it or clears it.
+          </div>
+          <div class="dialog-footer-actions">
+            <button class="btn-ghost">Cancel</button>
+            <button class="btn-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              Submit for Review
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

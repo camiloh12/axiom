@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — Test Procedure</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25);
+      --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --color-info: oklch(55% 0.12 250);
+      --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --color-ai: oklch(55% 0.14 290);
+      --color-ai-light: oklch(95% 0.03 290);
+      --color-ai-text: oklch(38% 0.12 290);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px; --space-16: 64px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    body { font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5; color: var(--color-neutral-800); background: var(--color-neutral-50); min-height: 100vh; display: flex; -webkit-font-smoothing: antialiased; }
+
+    /* ── Sidebar ── */
+    .sidebar { width: 240px; min-height: 100vh; background: var(--color-neutral-100); border-right: 1px solid var(--color-neutral-200); display: flex; flex-direction: column; flex-shrink: 0; padding: var(--space-5) 0; }
+    .sidebar-logo { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-5); margin-bottom: var(--space-6); }
+    .sidebar-logo .logo-mark { width: 28px; height: 28px; background: var(--color-primary-500); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: var(--text-sm); }
+    .sidebar-logo .logo-text { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.03em; }
+    .nav-section { margin-bottom: var(--space-6); }
+    .nav-section-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.05em; padding: 0 var(--space-5); margin-bottom: var(--space-2); }
+    .nav-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-600); text-decoration: none; border-left: 2px solid transparent; cursor: pointer; }
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+    .nav-item.active { color: var(--color-primary-500); background: var(--color-primary-50); border-left-color: var(--color-primary-500); font-weight: 600; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-sub { padding-left: var(--space-10); }
+    .nav-sub .nav-item { font-size: var(--text-sm); padding: var(--space-1) var(--space-4); border-left: none; }
+    .nav-sub .nav-item.active { border-left: none; background: var(--color-primary-50); color: var(--color-primary-500); font-weight: 600; }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .header { height: 56px; background: var(--color-neutral-0); border-bottom: 1px solid var(--color-neutral-200); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-6); flex-shrink: 0; }
+    .header-breadcrumb { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-neutral-400); }
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+    .header-icon-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); color: var(--color-neutral-500); cursor: pointer; border: none; background: none; }
+    .header-icon-btn:hover { color: var(--color-neutral-700); background: var(--color-neutral-100); }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary-100); color: var(--color-primary-600); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; cursor: pointer; }
+
+    .content { flex: 1; padding: var(--space-8); overflow-y: auto; }
+
+    /* ── Page ── */
+    .page-header { margin-bottom: var(--space-6); display: flex; align-items: flex-start; justify-content: space-between; }
+    .page-header h1 { font-size: var(--text-xl); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.02em; line-height: 1.2; }
+    .page-header-meta { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); }
+    .page-header-actions { display: flex; gap: var(--space-3); }
+
+    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 100px; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+    .badge-in-progress { background: var(--color-info-light); color: var(--color-info-text); }
+    .badge-complete { background: var(--color-success-light); color: var(--color-success-text); }
+    .badge-not-started { background: var(--color-neutral-100); color: var(--color-neutral-500); }
+
+    .control-id-badge { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--color-neutral-500); background: var(--color-neutral-100); padding: 2px 8px; border-radius: 4px; }
+
+    /* ── Cards ── */
+    .card { background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md); padding: var(--space-6); margin-bottom: var(--space-6); }
+    .card-title { font-size: var(--text-lg); font-weight: 600; color: var(--color-neutral-800); margin-bottom: var(--space-4); letter-spacing: -0.02em; line-height: 1.2; }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+    .form-group { display: flex; flex-direction: column; gap: var(--space-2); }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-group label { font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-700); }
+    .form-group .hint { font-size: var(--text-xs); color: var(--color-neutral-400); }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm);
+      padding: var(--space-3); font-family: var(--font-sans); font-size: var(--text-sm);
+      color: var(--color-neutral-800); background: var(--color-neutral-0); outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .form-group input, .form-group select { height: 40px; }
+    .form-group textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      border-color: var(--color-primary-500);
+      box-shadow: 0 0 0 3px oklch(50% 0.15 250 / 0.12);
+    }
+
+    .form-group select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: var(--space-10);
+    }
+
+    .readonly-field {
+      display: flex; align-items: center; gap: var(--space-2);
+      height: 40px; padding: 0 var(--space-3);
+      background: var(--color-neutral-50); border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--color-neutral-600);
+      font-family: var(--font-mono);
+    }
+
+    /* ── Status Progression ── */
+    .status-track { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-6); }
+    .status-step {
+      display: flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-xs); font-weight: 600;
+    }
+    .status-step.past { background: var(--color-success-light); color: var(--color-success-text); }
+    .status-step.current { background: var(--color-info-light); color: var(--color-info-text); }
+    .status-step.future { background: var(--color-neutral-100); color: var(--color-neutral-400); }
+    .status-connector { width: 24px; height: 2px; background: var(--color-neutral-200); }
+    .status-connector.done { background: var(--color-success); }
+
+    /* ── Exceptions Panel ── */
+    .exception-panel { background: var(--color-error-light); border: 1px solid oklch(88% 0.06 25); border-radius: var(--radius-md); padding: var(--space-5); }
+    .exception-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
+    .exception-panel-title { font-size: var(--text-sm); font-weight: 600; color: var(--color-error-text); display: flex; align-items: center; gap: var(--space-2); }
+    .exception-panel-title svg { width: 16px; height: 16px; }
+    .exception-count { font-size: var(--text-xs); font-weight: 600; color: var(--color-error-text); background: oklch(90% 0.05 25); padding: 1px 6px; border-radius: 100px; }
+    .exception-item { padding: var(--space-3); background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm); margin-bottom: var(--space-2); }
+    .exception-item:last-child { margin-bottom: 0; }
+    .exception-item-title { font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-800); margin-bottom: 2px; }
+    .exception-item-desc { font-size: var(--text-xs); color: var(--color-neutral-600); }
+    .exception-item-meta { font-size: var(--text-xs); color: var(--color-neutral-400); margin-top: var(--space-1); display: flex; align-items: center; gap: var(--space-2); }
+
+    .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 40px; padding: 0 var(--space-5); background: var(--color-primary-500); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: var(--color-primary-600); }
+    .btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 36px; padding: 0 var(--space-4); background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-700); cursor: pointer; }
+    .btn-secondary:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
+    .btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 var(--space-5); background: none; color: var(--color-neutral-600); border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+    .btn-ghost:hover { color: var(--color-neutral-800); background: var(--color-neutral-100); }
+    .btn-error { display: inline-flex; align-items: center; gap: var(--space-2); height: 32px; padding: 0 var(--space-3); background: var(--color-neutral-0); border: 1px solid oklch(88% 0.06 25); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600; color: var(--color-error-text); cursor: pointer; }
+    .btn-error svg { width: 14px; height: 14px; }
+
+    .form-actions { display: flex; gap: var(--space-3); padding-top: var(--space-5); border-top: 1px solid var(--color-neutral-200); margin-top: var(--space-5); }
+
+    .content-grid { display: grid; grid-template-columns: 1fr 360px; gap: var(--space-6); }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+    <nav>
+      <div class="nav-section">
+        <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> Dashboard</a>
+        <a class="nav-item active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Engagements</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Cloudvault Technologies</div>
+        <div class="nav-sub">
+          <a class="nav-item" href="#">Overview</a>
+          <a class="nav-item active" href="#">Controls</a>
+          <a class="nav-item" href="#">Trial Balance</a>
+          <a class="nav-item" href="#">Workpapers</a>
+          <a class="nav-item" href="#">Evidence</a>
+          <a class="nav-item" href="#">Document Requests</a>
+          <a class="nav-item" href="#">Reports</a>
+          <a class="nav-item" href="#">Settings</a>
+        </div>
+      </div>
+      <div class="nav-section">
+        <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg> Staff Management</a>
+        <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> Firm Settings</a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a><span>/</span>
+        <a href="#">Cloudvault Technologies</a><span>/</span>
+        <a href="#">CTRL-001</a><span>/</span>
+        <span class="current">TP-002: User Access Provisioning</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></button>
+        <button class="header-icon-btn" title="Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></button>
+        <div class="avatar">EP</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page-header">
+        <div>
+          <h1>Reperform User Access Provisioning</h1>
+          <div class="page-header-meta">
+            <span class="control-id-badge">TP-002</span>
+            <span class="badge badge-in-progress">In Progress</span>
+            <span style="font-size:var(--text-xs);color:var(--color-neutral-400);">Parent: CTRL-001 &mdash; Logical and Physical Access Controls</span>
+          </div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Link Evidence
+          </button>
+          <button class="btn-primary">Save Progress</button>
+        </div>
+      </div>
+
+      <!-- Status Progression -->
+      <div class="status-track">
+        <div class="status-step past">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg>
+          Not Started
+        </div>
+        <div class="status-connector done"></div>
+        <div class="status-step current">In Progress</div>
+        <div class="status-connector"></div>
+        <div class="status-step future">Complete</div>
+      </div>
+
+      <div class="content-grid">
+        <div>
+          <!-- Procedure Details -->
+          <div class="card">
+            <div class="card-title">Procedure Details</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Procedure Type</label>
+                <select>
+                  <option>Inquiry</option>
+                  <option>Observation</option>
+                  <option>Inspection of Document</option>
+                  <option selected>Reperformance</option>
+                  <option>Analytics</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Status</label>
+                <div class="readonly-field">
+                  <span class="badge badge-in-progress" style="font-size:10px;">In Progress</span>
+                  Started Apr 8, 2026
+                </div>
+              </div>
+              <div class="form-group full">
+                <label>Description</label>
+                <textarea readonly style="background:var(--color-neutral-50);cursor:default;">For a sample of 25 new users provisioned during the audit period, reperform the provisioning process by verifying: (a) a documented access request exists, (b) the request was approved by an authorized manager, (c) the access granted matches the approved request, and (d) the access level is appropriate for the user's role.</textarea>
+              </div>
+              <div class="form-group full">
+                <label>Expected Result</label>
+                <textarea readonly style="background:var(--color-neutral-50);min-height:60px;cursor:default;">All 25 sampled user provisioning events have documented, approved access requests with access granted matching the approved request and appropriate to the user's role.</textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Population & Sample -->
+          <div class="card">
+            <div class="card-title">Population &amp; Sample</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Population</label>
+                <div class="readonly-field" style="font-variant-numeric:tabular-nums;">847 user provisioning events</div>
+              </div>
+              <div class="form-group">
+                <label>Sample Size</label>
+                <div class="readonly-field" style="font-variant-numeric:tabular-nums;">25 users</div>
+              </div>
+              <div class="form-group full">
+                <label>Sampling Method</label>
+                <div class="readonly-field">Systematic random sampling from population sorted by provisioning date</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div class="card">
+            <div class="card-title">Results</div>
+            <div class="form-grid">
+              <div class="form-group full">
+                <label>Observations &amp; Findings</label>
+                <textarea placeholder="Document what was observed during the reperformance..." style="min-height:160px;">Of the 25 sampled user provisioning events, 23 met all four criteria (documented request, authorized approval, matching access, role-appropriate level).
+
+Two exceptions were identified:
+
+User #847-0312 (Marketing Analyst): Access request form was present but lacked manager approval signature. IT ticket shows access was provisioned on 3/15/2025 with only verbal approval referenced.
+
+User #847-0589 (Sales Engineer): Access granted included admin-level CRM permissions beyond the standard Sales Engineer role template. No documented justification for elevated access.</textarea>
+              </div>
+              <div class="form-group full">
+                <label>Conclusion</label>
+                <textarea placeholder="Document your professional conclusion..." style="min-height:80px;">Two exceptions noted out of 25 sampled provisioning events. Exceptions documented below. Recommend manager review to assess severity and determine if additional testing is warranted.</textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="form-actions" style="border-top:none;margin-top:0;">
+            <button class="btn-primary">Save Progress</button>
+            <button class="btn-primary" style="background:var(--color-success);">Mark Complete</button>
+            <button class="btn-ghost">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Right sidebar: Exceptions -->
+        <div>
+          <div class="exception-panel">
+            <div class="exception-panel-header">
+              <div class="exception-panel-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Exceptions
+              </div>
+              <span class="exception-count">2</span>
+            </div>
+
+            <div class="exception-item">
+              <div class="exception-item-title">Missing Manager Approval</div>
+              <div class="exception-item-desc">User #847-0312 (Marketing Analyst) &mdash; provisioned 3/15/2025 with verbal-only approval. No documented authorization on access request form.</div>
+              <div class="exception-item-meta">
+                <span>Severity: Moderate</span>
+                <span>&middot;</span>
+                <span>Logged by EP</span>
+              </div>
+            </div>
+
+            <div class="exception-item">
+              <div class="exception-item-title">Excessive Access Privileges</div>
+              <div class="exception-item-desc">User #847-0589 (Sales Engineer) &mdash; granted admin-level CRM permissions beyond standard role template. No documented justification.</div>
+              <div class="exception-item-meta">
+                <span>Severity: High</span>
+                <span>&middot;</span>
+                <span>Logged by EP</span>
+              </div>
+            </div>
+
+            <button class="btn-error" style="margin-top:var(--space-3);width:100%;justify-content:center;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Exception
+            </button>
+          </div>
+
+          <!-- Linked Evidence summary -->
+          <div class="card" style="margin-top:var(--space-4);">
+            <div class="card-title" style="font-size:var(--text-sm);">Linked Evidence</div>
+            <div style="font-size:var(--text-sm);color:var(--color-neutral-600);margin-bottom:var(--space-3);">1 item linked &middot; 2 AI-suggested</div>
+            <div style="display:flex;flex-direction:column;gap:var(--space-2);">
+              <div style="display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--color-neutral-50);border-radius:var(--radius-sm);font-size:var(--text-xs);color:var(--color-neutral-700);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;flex-shrink:0;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                User_Access_Matrix_2025.xlsx
+              </div>
+            </div>
+            <button class="btn-secondary" style="margin-top:var(--space-3);width:100%;justify-content:center;height:32px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Link Evidence
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

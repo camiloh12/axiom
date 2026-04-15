@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — Client Draft Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-300: oklch(72% 0.10 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25);
+      --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --color-info: oklch(55% 0.12 250);
+      --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5;
+      color: var(--color-neutral-800); background: var(--color-neutral-50);
+      min-height: 100vh; display: flex; -webkit-font-smoothing: antialiased;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px; min-height: 100vh; background: var(--color-neutral-100);
+      border-right: 1px solid var(--color-neutral-200);
+      display: flex; flex-direction: column; flex-shrink: 0; padding: var(--space-5) 0;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: 0 var(--space-5); margin-bottom: var(--space-6);
+    }
+    .sidebar-logo .logo-mark {
+      width: 28px; height: 28px; background: var(--color-primary-500);
+      border-radius: var(--radius-sm); display: flex; align-items: center;
+      justify-content: center; color: white; font-weight: 800; font-size: var(--text-sm);
+    }
+    .sidebar-logo .logo-text {
+      font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900);
+      letter-spacing: -0.03em;
+    }
+    .nav-section { margin-bottom: var(--space-6); }
+    .nav-section-label {
+      font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 0 var(--space-5); margin-bottom: var(--space-2);
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-2) var(--space-5); font-size: var(--text-sm);
+      font-weight: 500; color: var(--color-neutral-600); text-decoration: none;
+      border-left: 2px solid transparent; cursor: pointer;
+    }
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+    .nav-item.active {
+      color: var(--color-primary-500); background: var(--color-primary-50);
+      border-left-color: var(--color-primary-500); font-weight: 600;
+    }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-sub { padding-left: var(--space-10); }
+    .nav-sub .nav-item { font-size: var(--text-sm); padding: 6px var(--space-5); }
+
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* Header */
+    .header {
+      height: 56px; background: var(--color-neutral-0);
+      border-bottom: 1px solid var(--color-neutral-200);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 var(--space-6); flex-shrink: 0;
+    }
+    .header-breadcrumb {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-sm); color: var(--color-neutral-400);
+    }
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+    .header-icon-btn {
+      width: 36px; height: 36px; display: flex; align-items: center;
+      justify-content: center; border-radius: var(--radius-sm);
+      color: var(--color-neutral-500); cursor: pointer; border: none; background: none;
+    }
+    .header-icon-btn:hover { color: var(--color-neutral-700); background: var(--color-neutral-100); }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--color-primary-100); color: var(--color-primary-600);
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+    }
+
+    /* Content */
+    .content { flex: 1; padding: var(--space-8); overflow-y: auto; }
+
+    /* Shared status banner */
+    .shared-banner {
+      display: flex; align-items: center; gap: var(--space-3);
+      background: var(--color-info-light); border: 1px solid oklch(80% 0.06 250);
+      border-radius: var(--radius-md); padding: var(--space-3) var(--space-5);
+      margin-bottom: var(--space-6); font-size: var(--text-sm);
+    }
+    .shared-banner svg { width: 18px; height: 18px; color: var(--color-info); flex-shrink: 0; }
+    .shared-banner strong { color: var(--color-info-text); font-weight: 600; }
+    .shared-banner span { color: var(--color-neutral-600); }
+    .shared-banner .banner-actions { margin-left: auto; display: flex; gap: var(--space-2); }
+    .btn-sm {
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+      height: 32px; padding: 0 var(--space-3); border-radius: var(--radius-sm);
+      font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600;
+      cursor: pointer; transition: all 0.12s; border: none;
+    }
+    .btn-sm-outline {
+      background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200);
+      color: var(--color-neutral-600);
+    }
+    .btn-sm-outline:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
+    .btn-sm-danger {
+      background: none; border: 1px solid var(--color-error); color: var(--color-error-text);
+    }
+    .btn-sm-danger:hover { background: var(--color-error-light); }
+
+    /* Selective sharing indicator */
+    .selective-sharing {
+      display: flex; align-items: center; gap: var(--space-3);
+      background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md); padding: var(--space-4) var(--space-5);
+      margin-bottom: var(--space-6); font-size: var(--text-sm);
+    }
+    .selective-tag {
+      font-size: var(--text-xs); font-weight: 600; padding: 2px 8px;
+      border-radius: 100px;
+    }
+    .tag-shared { background: var(--color-success-light); color: var(--color-success-text); }
+    .tag-hidden { background: var(--color-neutral-100); color: var(--color-neutral-400); }
+    .selective-sections { display: flex; gap: var(--space-2); flex-wrap: wrap; flex: 1; }
+    .selective-label {
+      font-weight: 600; color: var(--color-neutral-700); margin-right: var(--space-2);
+      flex-shrink: 0;
+    }
+
+    /* Report + Comments Layout */
+    .review-layout {
+      display: grid; grid-template-columns: 1fr 360px; gap: var(--space-6);
+      align-items: start;
+    }
+
+    /* Report container */
+    .report-container {
+      background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md); padding: var(--space-8);
+    }
+    .report-title {
+      font-size: var(--text-xl); font-weight: 700; color: var(--color-neutral-900);
+      letter-spacing: -0.02em; margin-bottom: var(--space-1); line-height: 1.2;
+    }
+    .report-subtitle {
+      font-size: var(--text-sm); color: var(--color-neutral-400);
+      margin-bottom: var(--space-6);
+    }
+    .section-heading {
+      font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900);
+      letter-spacing: -0.02em; margin: var(--space-6) 0 var(--space-3);
+      padding-bottom: var(--space-2); border-bottom: 1px solid var(--color-neutral-200);
+    }
+    .report-paragraph {
+      font-size: var(--text-base); color: var(--color-neutral-700);
+      line-height: 1.7; margin-bottom: var(--space-4); max-width: 65ch;
+    }
+
+    /* Inline comment highlight */
+    .comment-highlight {
+      background: oklch(90% 0.05 85); border-bottom: 2px solid var(--color-warning);
+      padding: 0 2px; cursor: pointer; position: relative;
+    }
+    .comment-highlight.resolved {
+      background: oklch(93% 0.03 145); border-bottom-color: var(--color-success);
+    }
+    .comment-marker {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 50%; font-size: 10px;
+      font-weight: 700; color: white; vertical-align: super; margin-left: 2px;
+      cursor: pointer;
+    }
+    .comment-marker.client { background: var(--color-warning); }
+    .comment-marker.resolved-marker { background: var(--color-success); }
+
+    /* Comments Panel */
+    .comments-panel {
+      background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md); position: sticky; top: var(--space-8);
+    }
+    .comments-header {
+      padding: var(--space-5); border-bottom: 1px solid var(--color-neutral-200);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .comments-header h3 {
+      font-size: var(--text-base); font-weight: 600; color: var(--color-neutral-800);
+    }
+    .comment-count {
+      font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400);
+      background: var(--color-neutral-100); padding: 2px 8px; border-radius: 100px;
+    }
+
+    /* Comment Filter Tabs */
+    .comment-tabs {
+      display: flex; border-bottom: 1px solid var(--color-neutral-200);
+    }
+    .comment-tab {
+      flex: 1; padding: var(--space-2) var(--space-3); font-size: var(--text-xs);
+      font-weight: 600; text-align: center; color: var(--color-neutral-400);
+      border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.12s;
+      background: none; border-left: none; border-right: none; border-top: none;
+    }
+    .comment-tab:hover { color: var(--color-neutral-600); }
+    .comment-tab.active {
+      color: var(--color-primary-500); border-bottom-color: var(--color-primary-500);
+    }
+    .tab-count {
+      font-size: var(--text-xs); color: var(--color-neutral-400);
+      margin-left: var(--space-1);
+    }
+
+    /* Comment Thread */
+    .comments-list { max-height: 520px; overflow-y: auto; }
+    .comment-thread {
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+    .comment-thread:last-child { border-bottom: none; }
+    .comment-thread-header {
+      display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);
+    }
+    .comment-avatar {
+      width: 24px; height: 24px; border-radius: 50%; display: flex;
+      align-items: center; justify-content: center; font-size: 9px;
+      font-weight: 700; flex-shrink: 0;
+    }
+    .comment-avatar.client-avatar { background: oklch(90% 0.06 85); color: var(--color-warning-text); }
+    .comment-avatar.auditor-avatar { background: var(--color-primary-100); color: var(--color-primary-600); }
+    .comment-author {
+      font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-700);
+    }
+    .comment-role {
+      font-size: var(--text-xs); font-weight: 500; padding: 1px 6px;
+      border-radius: 100px;
+    }
+    .role-client { background: oklch(93% 0.04 85); color: var(--color-warning-text); }
+    .role-auditor { background: var(--color-primary-50); color: var(--color-primary-600); }
+    .comment-time {
+      font-size: var(--text-xs); color: var(--color-neutral-400); margin-left: auto;
+    }
+    .comment-body {
+      font-size: var(--text-sm); color: var(--color-neutral-600);
+      line-height: 1.5; margin-bottom: var(--space-2);
+    }
+    .comment-section-ref {
+      font-size: var(--text-xs); color: var(--color-neutral-400);
+      margin-bottom: var(--space-2);
+    }
+    .comment-section-ref strong { color: var(--color-neutral-500); }
+
+    /* Comment Status */
+    .comment-status {
+      display: inline-flex; align-items: center; gap: var(--space-1);
+      font-size: var(--text-xs); font-weight: 600; padding: 2px 8px;
+      border-radius: 100px;
+    }
+    .status-resolved { background: var(--color-success-light); color: var(--color-success-text); }
+    .status-acknowledged { background: var(--color-info-light); color: var(--color-info-text); }
+    .status-will-not-change { background: var(--color-neutral-100); color: var(--color-neutral-500); }
+    .status-open { background: var(--color-warning-light); color: var(--color-warning-text); }
+
+    .comment-status svg { width: 10px; height: 10px; }
+
+    /* Comment reply */
+    .comment-reply {
+      margin-top: var(--space-3); padding-top: var(--space-3);
+      border-top: 1px solid var(--color-neutral-100);
+    }
+
+    /* Status action dropdown */
+    .status-actions {
+      display: flex; gap: var(--space-2); margin-top: var(--space-2);
+    }
+    .status-btn {
+      font-size: var(--text-xs); font-weight: 500; padding: 2px 8px;
+      border-radius: var(--radius-sm); border: 1px solid var(--color-neutral-200);
+      background: var(--color-neutral-0); color: var(--color-neutral-500);
+      cursor: pointer; transition: all 0.12s;
+    }
+    .status-btn:hover { border-color: var(--color-neutral-300); color: var(--color-neutral-700); }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+    <nav>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a class="nav-item active" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Engagements
+        </a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Cloudvault Technologies</div>
+        <div class="nav-sub">
+          <a class="nav-item" href="#">Overview</a>
+          <a class="nav-item" href="#">Controls</a>
+          <a class="nav-item" href="#">Trial Balance</a>
+          <a class="nav-item" href="#">Workpapers</a>
+          <a class="nav-item" href="#">Evidence</a>
+          <a class="nav-item" href="#">Document Requests</a>
+          <a class="nav-item active" href="#">Reports</a>
+          <a class="nav-item" href="#">Settings</a>
+        </div>
+      </div>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Staff Management
+        </a>
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Firm Settings
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a>
+        <span>/</span>
+        <a href="#">Cloudvault Technologies</a>
+        <span>/</span>
+        <a href="#">Reports</a>
+        <span>/</span>
+        <span class="current">Client Draft Review</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <button class="header-icon-btn" title="Help">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+        <div class="avatar">SC</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- Shared with Client Banner -->
+      <div class="shared-banner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        <span><strong>Shared with Client</strong> &mdash; Cloudvault Technologies has read-only access. Shared Feb 23, 2026 by Sarah Chen.</span>
+        <div class="banner-actions">
+          <button class="btn-sm btn-sm-outline">Manage Access</button>
+          <button class="btn-sm btn-sm-danger">Revoke Access</button>
+        </div>
+      </div>
+
+      <!-- Selective Sharing Indicator -->
+      <div class="selective-sharing">
+        <span class="selective-label">Sections shared:</span>
+        <div class="selective-sections">
+          <span class="selective-tag tag-shared">I. Auditor's Report</span>
+          <span class="selective-tag tag-shared">II. Management's Assertion</span>
+          <span class="selective-tag tag-shared">III. System Description</span>
+          <span class="selective-tag tag-shared">V. Results of Tests</span>
+          <span class="selective-tag tag-hidden">IV. Tests of Controls</span>
+          <span class="selective-tag tag-hidden">VI. Other Information</span>
+          <span class="selective-tag tag-hidden">VII. Opinion</span>
+        </div>
+      </div>
+
+      <div class="review-layout">
+        <!-- Report Content with Inline Comments -->
+        <div class="report-container">
+          <div class="report-title">SOC 2 Type II Report &mdash; Draft</div>
+          <div class="report-subtitle">Cloudvault Technologies Inc. &middot; Jan 1 &ndash; Dec 31, 2025 &middot; Version 3</div>
+
+          <h2 class="section-heading">I. Independent Service Auditor's Report</h2>
+          <p class="report-paragraph">We have examined Cloudvault Technologies Inc.'s description of its cloud infrastructure management system throughout the period January 1, 2025 to December 31, 2025 and the suitability of the design and operating effectiveness of controls described therein, based on the criteria for a description of a service organization's system in DC section 200 and the applicable trust services criteria.</p>
+
+          <h2 class="section-heading">II. Management's Assertion</h2>
+          <p class="report-paragraph">Cloudvault Technologies Inc.'s management has provided its assertion that the accompanying description fairly presents the system that was designed and implemented throughout the period January 1, 2025 to December 31, 2025. <span class="comment-highlight">Management further asserts that the controls within the system were suitably designed and operated effectively<span class="comment-marker client">1</span></span> throughout the specified period to meet the applicable trust services criteria.</p>
+
+          <h2 class="section-heading">V. Results of Tests</h2>
+          <p class="report-paragraph">Our testing of 14 controls across the trust services criteria categories identified 12 controls operating effectively throughout the examination period. Two exceptions were noted:</p>
+          <p class="report-paragraph"><strong>Exception 1 (CC6.2 &mdash; Logical Access):</strong> In 3 of 25 sampled user access reviews, the <span class="comment-highlight">quarterly review was completed 5&ndash;8 days past the defined policy window<span class="comment-marker client">2</span></span>. Management implemented an automated reminder system in July 2025, and no late reviews occurred in Q3 or Q4 2025.</p>
+          <p class="report-paragraph"><strong>Exception 2 (CC7.1 &mdash; System Operations Monitoring):</strong> <span class="comment-highlight resolved">One critical monitoring alert rule was inadvertently disabled for 11 days during a platform migration in March 2025<span class="comment-marker resolved-marker">3</span></span>. The gap was detected during an internal security review and remediated with additional change management controls for monitoring configurations.</p>
+        </div>
+
+        <!-- Comments Panel -->
+        <div class="comments-panel">
+          <div class="comments-header">
+            <h3>Comments</h3>
+            <span class="comment-count">4 comments</span>
+          </div>
+
+          <div class="comment-tabs">
+            <button class="comment-tab active">All<span class="tab-count">4</span></button>
+            <button class="comment-tab">Open<span class="tab-count">2</span></button>
+            <button class="comment-tab">Resolved<span class="tab-count">1</span></button>
+            <button class="comment-tab">Declined<span class="tab-count">1</span></button>
+          </div>
+
+          <div class="comments-list">
+            <!-- Comment 1: Open -->
+            <div class="comment-thread">
+              <div class="comment-thread-header">
+                <div class="comment-avatar client-avatar">MR</div>
+                <span class="comment-author">Michael Reeves</span>
+                <span class="comment-role role-client">Client</span>
+                <span class="comment-time">Feb 24</span>
+              </div>
+              <div class="comment-section-ref"><strong>Section II</strong> &mdash; Management's Assertion</div>
+              <div class="comment-body">Could we add language clarifying that the assertion covers the full 12-month period, including the Q1 remediation of the access review finding? We want to highlight the corrective action timeline.</div>
+              <span class="comment-status status-open">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>
+                Open
+              </span>
+              <div class="status-actions">
+                <button class="status-btn">Resolve</button>
+                <button class="status-btn">Acknowledge</button>
+                <button class="status-btn">Will Not Change</button>
+              </div>
+            </div>
+
+            <!-- Comment 2: Acknowledged -->
+            <div class="comment-thread">
+              <div class="comment-thread-header">
+                <div class="comment-avatar client-avatar">MR</div>
+                <span class="comment-author">Michael Reeves</span>
+                <span class="comment-role role-client">Client</span>
+                <span class="comment-time">Feb 24</span>
+              </div>
+              <div class="comment-section-ref"><strong>Section V</strong> &mdash; Exception 1</div>
+              <div class="comment-body">The "5-8 days" characterization feels imprecise. Our records show the delays were 5, 6, and 7 business days respectively. Would more precise language be appropriate?</div>
+              <span class="comment-status status-acknowledged">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Acknowledged
+              </span>
+              <div class="comment-reply">
+                <div class="comment-thread-header">
+                  <div class="comment-avatar auditor-avatar">SC</div>
+                  <span class="comment-author">Sarah Chen</span>
+                  <span class="comment-role role-auditor">Auditor</span>
+                  <span class="comment-time">Feb 24</span>
+                </div>
+                <div class="comment-body">Noted. We'll update the language to reflect the specific calendar day delays from our testing workpapers. Thank you for flagging.</div>
+              </div>
+            </div>
+
+            <!-- Comment 3: Resolved -->
+            <div class="comment-thread">
+              <div class="comment-thread-header">
+                <div class="comment-avatar client-avatar">JT</div>
+                <span class="comment-author">Jessica Torres</span>
+                <span class="comment-role role-client">Client</span>
+                <span class="comment-time">Feb 23</span>
+              </div>
+              <div class="comment-section-ref"><strong>Section V</strong> &mdash; Exception 2</div>
+              <div class="comment-body">Can we add that the disabled alert was for a non-production monitoring rule? The production monitoring remained active throughout the period.</div>
+              <span class="comment-status status-resolved">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Resolved
+              </span>
+              <div class="comment-reply">
+                <div class="comment-thread-header">
+                  <div class="comment-avatar auditor-avatar">SC</div>
+                  <span class="comment-author">Sarah Chen</span>
+                  <span class="comment-role role-auditor">Auditor</span>
+                  <span class="comment-time">Feb 24</span>
+                </div>
+                <div class="comment-body">Our testing confirmed the alert covered a staging environment health check, not production. Report updated to clarify scope. Thank you.</div>
+              </div>
+            </div>
+
+            <!-- Comment 4: Will Not Change -->
+            <div class="comment-thread">
+              <div class="comment-thread-header">
+                <div class="comment-avatar client-avatar">MR</div>
+                <span class="comment-author">Michael Reeves</span>
+                <span class="comment-role role-client">Client</span>
+                <span class="comment-time">Feb 24</span>
+              </div>
+              <div class="comment-section-ref"><strong>Section I</strong> &mdash; Scope</div>
+              <div class="comment-body">Could "cloud infrastructure management system" be changed to "cloud platform services"? That's how we refer to the product externally.</div>
+              <span class="comment-status status-will-not-change">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Will Not Change
+              </span>
+              <div class="comment-reply">
+                <div class="comment-thread-header">
+                  <div class="comment-avatar auditor-avatar">SC</div>
+                  <span class="comment-author">Sarah Chen</span>
+                  <span class="comment-role role-auditor">Auditor</span>
+                  <span class="comment-time">Feb 24</span>
+                </div>
+                <div class="comment-body">The system description in the report must match the description provided in management's assertion document (Exhibit A). Per AICPA guidance, we must use the terminology from the formal system description. No change applied.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

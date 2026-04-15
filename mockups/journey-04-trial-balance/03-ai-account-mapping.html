@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — AI Account Mapping</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25);
+      --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --color-info: oklch(55% 0.12 250);
+      --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --color-ai: oklch(55% 0.14 290);
+      --color-ai-light: oklch(95% 0.03 290);
+      --color-ai-text: oklch(38% 0.12 290);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px; --space-16: 64px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      display: flex;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar { width: 240px; min-height: 100vh; background: var(--color-neutral-100); border-right: 1px solid var(--color-neutral-200); display: flex; flex-direction: column; flex-shrink: 0; padding: var(--space-5) 0; }
+    .sidebar-logo { display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-5); margin-bottom: var(--space-6); }
+    .sidebar-logo .logo-mark { width: 28px; height: 28px; background: var(--color-primary-500); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: var(--text-sm); }
+    .sidebar-logo .logo-text { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); letter-spacing: -0.03em; }
+    .nav-section { margin-bottom: var(--space-6); }
+    .nav-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-5); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-600); text-decoration: none; border-left: 2px solid transparent; cursor: pointer; transition: color 0.12s ease, background 0.12s ease; }
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+    .nav-item.active { color: var(--color-primary-500); background: var(--color-primary-50); border-left-color: var(--color-primary-500); font-weight: 600; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-sub { padding-left: var(--space-10); }
+    .nav-sub .nav-item { font-size: var(--text-sm); padding: var(--space-1) var(--space-4); border-left: none; }
+    .nav-sub .nav-item.active { border-left: none; background: var(--color-primary-50); }
+    .nav-engagement-label { font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-500); padding: var(--space-2) var(--space-5) var(--space-1) calc(var(--space-10) + 2px); }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .header { height: 56px; background: var(--color-neutral-0); border-bottom: 1px solid var(--color-neutral-200); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--space-6); flex-shrink: 0; }
+    .header-breadcrumb { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--color-neutral-400); }
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+    .header-icon-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); color: var(--color-neutral-500); cursor: pointer; border: none; background: none; }
+    .header-icon-btn:hover { color: var(--color-neutral-700); background: var(--color-neutral-100); }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary-100); color: var(--color-primary-600); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 700; cursor: pointer; }
+
+    /* ── Content ── */
+    .content { flex: 1; padding: var(--space-6); overflow-y: auto; display: flex; flex-direction: column; }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) 0;
+      margin-bottom: var(--space-4);
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .toolbar-left h1 {
+      font-size: var(--text-lg);
+      font-weight: 700;
+      color: var(--color-neutral-900);
+      letter-spacing: -0.02em;
+    }
+
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    /* ── Mapping Stats ── */
+    .mapping-stats {
+      display: flex;
+      gap: var(--space-4);
+      align-items: center;
+    }
+
+    .stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      padding: var(--space-1) var(--space-3);
+      border-radius: 100px;
+    }
+
+    .stat-pill .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .stat-pill.ai-suggested { background: var(--color-info-light); color: var(--color-info-text); }
+    .stat-pill.ai-suggested .dot { background: var(--color-info); }
+    .stat-pill.confirmed { background: var(--color-success-light); color: var(--color-success-text); }
+    .stat-pill.confirmed .dot { background: var(--color-success); }
+    .stat-pill.overridden { background: var(--color-warning-light); color: var(--color-warning-text); }
+    .stat-pill.overridden .dot { background: var(--color-warning); }
+
+    /* ── Buttons ── */
+    .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 36px; padding: 0 var(--space-4); background: var(--color-primary-500); color: white; border: none; border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: var(--color-primary-600); }
+    .btn-primary svg { width: 14px; height: 14px; }
+
+    .btn-secondary { display: inline-flex; align-items: center; gap: var(--space-2); height: 36px; padding: 0 var(--space-4); background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-700); cursor: pointer; }
+    .btn-secondary:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
+
+    /* ── Spreadsheet Grid ── */
+    .sheet-wrapper {
+      flex: 1;
+      background: var(--color-neutral-0);
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md);
+      overflow: auto;
+    }
+
+    .sheet {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      table-layout: fixed;
+    }
+
+    .sheet col.col-row { width: 44px; }
+    .sheet col.col-checkbox { width: 40px; }
+    .sheet col.col-acct-num { width: 100px; }
+    .sheet col.col-acct-name { width: 220px; }
+    .sheet col.col-debit { width: 140px; }
+    .sheet col.col-credit { width: 140px; }
+    .sheet col.col-mapping { width: 200px; }
+    .sheet col.col-confidence { width: 100px; }
+    .sheet col.col-status { width: 120px; }
+
+    .sheet thead th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      font-family: var(--font-sans);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-neutral-400);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: left;
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-neutral-50);
+      border-bottom: 2px solid var(--color-neutral-200);
+      white-space: nowrap;
+    }
+
+    .sheet thead th.num { text-align: right; }
+
+    .sheet tbody td {
+      padding: var(--space-2) var(--space-3);
+      border-bottom: 1px solid var(--color-neutral-200);
+      color: var(--color-neutral-700);
+      font-variant-numeric: tabular-nums;
+      vertical-align: middle;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sheet tbody tr:hover { background: oklch(98% 0.003 250); }
+
+    .sheet .row-num {
+      color: var(--color-neutral-300);
+      text-align: center;
+      font-size: var(--text-xs);
+      background: var(--color-neutral-50);
+      border-right: 1px solid var(--color-neutral-200);
+    }
+
+    .sheet .cb-cell {
+      text-align: center;
+      border-right: 1px solid var(--color-neutral-200);
+    }
+
+    .sheet .cb-cell input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--color-primary-500);
+      cursor: pointer;
+    }
+
+    .sheet .num-cell { text-align: right; }
+
+    /* ── Row status coloring ── */
+    .sheet tr.status-ai-suggested td:nth-child(n+3) { }
+    .sheet tr.status-confirmed td:nth-child(n+3) { }
+    .sheet tr.status-overridden td:nth-child(n+3) { }
+
+    /* ── Mapping Cell ── */
+    .mapping-cell {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .mapping-cell select {
+      width: 100%;
+      height: 28px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 0 var(--space-2);
+      font-family: var(--font-sans);
+      font-size: var(--text-xs);
+      color: var(--color-neutral-800);
+      background: transparent;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 6px center;
+      padding-right: 22px;
+    }
+
+    .mapping-cell select:hover { border-color: var(--color-neutral-200); background-color: var(--color-neutral-50); }
+    .mapping-cell select:focus { border-color: var(--color-primary-500); box-shadow: 0 0 0 2px oklch(50% 0.15 250 / 0.12); }
+
+    /* ── Confidence ── */
+    .confidence {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-family: var(--font-sans);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .confidence-bar {
+      width: 40px; height: 6px;
+      background: var(--color-neutral-200);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .confidence-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+    }
+
+    .confidence-high .confidence-bar-fill { background: var(--color-success); }
+    .confidence-high { color: var(--color-success-text); }
+    .confidence-mid .confidence-bar-fill { background: var(--color-warning); }
+    .confidence-mid { color: var(--color-warning-text); }
+
+    /* ── Status Badges ── */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--font-sans);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      padding: 2px var(--space-2);
+      border-radius: 100px;
+    }
+
+    .status-badge.ai-suggested { background: var(--color-info-light); color: var(--color-info-text); }
+    .status-badge.confirmed { background: var(--color-success-light); color: var(--color-success-text); }
+    .status-badge.overridden { background: var(--color-warning-light); color: var(--color-warning-text); }
+
+    .status-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+    }
+
+    .status-badge.ai-suggested .dot { background: var(--color-info); }
+    .status-badge.confirmed .dot { background: var(--color-success); }
+    .status-badge.overridden .dot { background: var(--color-warning); }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+    <nav>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a class="nav-item active" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Engagements
+        </a>
+        <div class="nav-engagement-label">Cloudvault Technologies</div>
+        <div class="nav-sub">
+          <a class="nav-item" href="#">Overview</a>
+          <a class="nav-item" href="#">Controls</a>
+          <a class="nav-item active" href="#">Trial Balance</a>
+          <a class="nav-item" href="#">Workpapers</a>
+          <a class="nav-item" href="#">Evidence</a>
+          <a class="nav-item" href="#">Document Requests</a>
+          <a class="nav-item" href="#">Reports</a>
+          <a class="nav-item" href="#">Settings</a>
+        </div>
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Staff Management
+        </a>
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Firm Settings
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a>
+        <span>/</span>
+        <a href="#">Cloudvault Technologies</a>
+        <span>/</span>
+        <a href="#">Trial Balance</a>
+        <span>/</span>
+        <span class="current">Account Mapping</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <button class="header-icon-btn" title="Help">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+        <div class="avatar">EP</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <h1>Account Mapping</h1>
+          <div class="mapping-stats">
+            <span class="stat-pill ai-suggested"><span class="dot"></span> 10 AI Suggested</span>
+            <span class="stat-pill confirmed"><span class="dot"></span> 3 Confirmed</span>
+            <span class="stat-pill overridden"><span class="dot"></span> 1 Overridden</span>
+          </div>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+            Reset All
+          </button>
+          <button class="btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            Confirm All High-Confidence (128 of 142)
+          </button>
+        </div>
+      </div>
+
+      <!-- Spreadsheet -->
+      <div class="sheet-wrapper">
+        <table class="sheet">
+          <colgroup>
+            <col class="col-row">
+            <col class="col-checkbox">
+            <col class="col-acct-num">
+            <col class="col-acct-name">
+            <col class="col-debit">
+            <col class="col-credit">
+            <col class="col-mapping">
+            <col class="col-confidence">
+            <col class="col-status">
+          </colgroup>
+          <thead>
+            <tr>
+              <th></th>
+              <th></th>
+              <th>Acct #</th>
+              <th>Account Name</th>
+              <th class="num">Debit</th>
+              <th class="num">Credit</th>
+              <th>FS Line Item</th>
+              <th>Confidence</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Row 1 - Confirmed -->
+            <tr class="status-confirmed">
+              <td class="row-num">1</td>
+              <td class="cb-cell"><input type="checkbox" checked></td>
+              <td>1000</td>
+              <td>Cash - Operating</td>
+              <td class="num-cell">4,215,800.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Cash &amp; Cash Equivalents</option>
+                    <option>Short-Term Investments</option>
+                    <option>Accounts Receivable</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:98%"></div></div>
+                  98%
+                </div>
+              </td>
+              <td><span class="status-badge confirmed"><span class="dot"></span> Confirmed</span></td>
+            </tr>
+            <!-- Row 2 - Confirmed -->
+            <tr class="status-confirmed">
+              <td class="row-num">2</td>
+              <td class="cb-cell"><input type="checkbox" checked></td>
+              <td>1010</td>
+              <td>Cash - Payroll</td>
+              <td class="num-cell">312,450.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Cash &amp; Cash Equivalents</option>
+                    <option>Short-Term Investments</option>
+                    <option>Accounts Receivable</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:97%"></div></div>
+                  97%
+                </div>
+              </td>
+              <td><span class="status-badge confirmed"><span class="dot"></span> Confirmed</span></td>
+            </tr>
+            <!-- Row 3 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">3</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>1100</td>
+              <td>Short-Term Investments</td>
+              <td class="num-cell">1,500,000.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option>Cash &amp; Cash Equivalents</option>
+                    <option selected>Short-Term Investments</option>
+                    <option>Accounts Receivable</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:95%"></div></div>
+                  95%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 4 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">4</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>1200</td>
+              <td>Accounts Receivable</td>
+              <td class="num-cell">8,742,300.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option>Cash &amp; Cash Equivalents</option>
+                    <option>Short-Term Investments</option>
+                    <option selected>Accounts Receivable</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:99%"></div></div>
+                  99%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 5 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">5</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>1210</td>
+              <td>Allowance for Doubtful Accounts</td>
+              <td class="num-cell"></td>
+              <td class="num-cell">218,500.00</td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Accounts Receivable</option>
+                    <option>Other Current Assets</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:94%"></div></div>
+                  94%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 6 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">6</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>1300</td>
+              <td>Prepaid Expenses</td>
+              <td class="num-cell">425,600.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Other Current Assets</option>
+                    <option>Prepaid &amp; Deposits</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:92%"></div></div>
+                  92%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 7 - Confirmed -->
+            <tr class="status-confirmed">
+              <td class="row-num">7</td>
+              <td class="cb-cell"><input type="checkbox" checked></td>
+              <td>1400</td>
+              <td>Inventory</td>
+              <td class="num-cell">2,180,900.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Inventory</option>
+                    <option>Other Current Assets</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:99%"></div></div>
+                  99%
+                </div>
+              </td>
+              <td><span class="status-badge confirmed"><span class="dot"></span> Confirmed</span></td>
+            </tr>
+            <!-- Row 8 - Overridden -->
+            <tr class="status-overridden">
+              <td class="row-num">8</td>
+              <td class="cb-cell"><input type="checkbox" checked></td>
+              <td>1500</td>
+              <td>Security Deposits</td>
+              <td class="num-cell">185,000.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option>Other Current Assets</option>
+                    <option selected>Other Non-Current Assets</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-mid">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:67%"></div></div>
+                  67%
+                </div>
+              </td>
+              <td><span class="status-badge overridden"><span class="dot"></span> Overridden</span></td>
+            </tr>
+            <!-- Row 9 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">9</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>2000</td>
+              <td>Accounts Payable</td>
+              <td class="num-cell"></td>
+              <td class="num-cell">3,842,100.00</td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Accounts Payable</option>
+                    <option>Accrued Liabilities</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:99%"></div></div>
+                  99%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 10 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">10</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>2100</td>
+              <td>Accrued Liabilities</td>
+              <td class="num-cell"></td>
+              <td class="num-cell">1,256,400.00</td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option>Accounts Payable</option>
+                    <option selected>Accrued Liabilities</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:96%"></div></div>
+                  96%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 11 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">11</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>2200</td>
+              <td>Deferred Revenue</td>
+              <td class="num-cell"></td>
+              <td class="num-cell">2,840,000.00</td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Deferred Revenue</option>
+                    <option>Other Current Liabilities</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:97%"></div></div>
+                  97%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 12 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">12</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>4000</td>
+              <td>Revenue - SaaS Subscriptions</td>
+              <td class="num-cell"></td>
+              <td class="num-cell">32,450,000.00</td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Revenue</option>
+                    <option>Other Income</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:99%"></div></div>
+                  99%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 13 - AI Suggested -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">13</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>5000</td>
+              <td>Cost of Goods Sold</td>
+              <td class="num-cell">14,820,000.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Cost of Revenue</option>
+                    <option>Operating Expenses</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-high">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:98%"></div></div>
+                  98%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+            <!-- Row 14 - AI Suggested, lower confidence -->
+            <tr class="status-ai-suggested">
+              <td class="row-num">14</td>
+              <td class="cb-cell"><input type="checkbox"></td>
+              <td>5100</td>
+              <td>Hosting &amp; Infrastructure</td>
+              <td class="num-cell">4,280,000.00</td>
+              <td class="num-cell"></td>
+              <td>
+                <div class="mapping-cell">
+                  <select>
+                    <option selected>Cost of Revenue</option>
+                    <option>Operating Expenses</option>
+                    <option>Technology Expenses</option>
+                  </select>
+                </div>
+              </td>
+              <td>
+                <div class="confidence confidence-mid">
+                  <div class="confidence-bar"><div class="confidence-bar-fill" style="width:74%"></div></div>
+                  74%
+                </div>
+              </td>
+              <td><span class="status-badge ai-suggested"><span class="dot"></span> AI Suggested</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
