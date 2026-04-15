@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axiom — EQR Testing Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --text-xs: 0.64rem; --text-sm: 0.8rem; --text-base: 1rem; --text-lg: 1.25rem;
+      --text-xl: 1.563rem; --text-2xl: 1.953rem;
+      --color-primary-50: oklch(97% 0.01 250);
+      --color-primary-100: oklch(93% 0.03 250);
+      --color-primary-200: oklch(85% 0.06 250);
+      --color-primary-500: oklch(50% 0.15 250);
+      --color-primary-600: oklch(43% 0.14 250);
+      --color-primary-700: oklch(36% 0.12 250);
+      --color-primary-900: oklch(20% 0.05 250);
+      --color-neutral-0: #fff;
+      --color-neutral-50: oklch(98% 0.003 250);
+      --color-neutral-100: oklch(95% 0.005 250);
+      --color-neutral-200: oklch(90% 0.006 250);
+      --color-neutral-300: oklch(82% 0.006 250);
+      --color-neutral-400: oklch(70% 0.006 250);
+      --color-neutral-500: oklch(55% 0.006 250);
+      --color-neutral-600: oklch(45% 0.006 250);
+      --color-neutral-700: oklch(35% 0.006 250);
+      --color-neutral-800: oklch(25% 0.008 250);
+      --color-neutral-900: oklch(15% 0.01 250);
+      --color-success: oklch(55% 0.16 145);
+      --color-success-light: oklch(95% 0.03 145);
+      --color-success-text: oklch(35% 0.10 145);
+      --color-warning: oklch(70% 0.16 85);
+      --color-warning-light: oklch(95% 0.04 85);
+      --color-warning-text: oklch(40% 0.10 85);
+      --color-error: oklch(55% 0.20 25);
+      --color-error-light: oklch(95% 0.03 25);
+      --color-error-text: oklch(40% 0.14 25);
+      --color-info: oklch(55% 0.12 250);
+      --color-info-light: oklch(95% 0.02 250);
+      --color-info-text: oklch(35% 0.10 250);
+      --color-ai: oklch(55% 0.14 290);
+      --color-ai-light: oklch(95% 0.03 290);
+      --color-ai-text: oklch(38% 0.12 290);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+      --space-12: 48px; --space-16: 64px;
+      --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--text-base);
+      line-height: 1.5;
+      color: var(--color-neutral-800);
+      background: var(--color-neutral-50);
+      min-height: 100vh;
+      display: flex;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 240px; min-height: 100vh; background: var(--color-neutral-100);
+      border-right: 1px solid var(--color-neutral-200);
+      display: flex; flex-direction: column; flex-shrink: 0; padding: var(--space-5) 0;
+    }
+
+    .sidebar-logo {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: 0 var(--space-5); margin-bottom: var(--space-6);
+    }
+
+    .sidebar-logo .logo-mark {
+      width: 28px; height: 28px; background: var(--color-primary-500);
+      border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 800; font-size: var(--text-sm);
+    }
+
+    .sidebar-logo .logo-text {
+      font-size: var(--text-lg); font-weight: 700;
+      color: var(--color-neutral-900); letter-spacing: -0.03em;
+    }
+
+    .sidebar-eqr-badge {
+      margin: 0 var(--space-5) var(--space-4);
+      padding: var(--space-2) var(--space-3);
+      background: oklch(95% 0.04 85); border: 1px solid oklch(85% 0.06 85);
+      border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 600;
+      color: oklch(40% 0.10 85); display: flex; align-items: center; gap: var(--space-2);
+    }
+
+    .sidebar-eqr-badge svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    .nav-section { margin-bottom: var(--space-6); }
+
+    .nav-section-label {
+      font-size: var(--text-xs); font-weight: 600; color: var(--color-neutral-400);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 0 var(--space-5); margin-bottom: var(--space-2);
+    }
+
+    .nav-item {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-2) var(--space-5);
+      font-size: var(--text-sm); font-weight: 500; color: var(--color-neutral-600);
+      text-decoration: none; border-left: 2px solid transparent; cursor: pointer;
+      transition: color 0.12s ease, background 0.12s ease;
+    }
+
+    .nav-item:hover { color: var(--color-neutral-800); background: oklch(92% 0.005 250); }
+
+    .nav-item.active {
+      color: var(--color-primary-500); background: var(--color-primary-50);
+      border-left-color: var(--color-primary-500); font-weight: 600;
+    }
+
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    .nav-sub { margin-top: var(--space-1); }
+
+    .nav-sub .nav-item {
+      padding-left: var(--space-10); font-size: var(--text-sm); border-left: none;
+    }
+
+    .nav-sub .nav-item.active { border-left: none; background: var(--color-primary-50); }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    .header {
+      height: 56px; background: oklch(99% 0.008 85); border-bottom: 1px solid oklch(90% 0.02 85);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 var(--space-6); flex-shrink: 0;
+    }
+
+    .header-breadcrumb {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-sm); color: var(--color-neutral-400);
+    }
+
+    .header-breadcrumb a { color: var(--color-neutral-400); text-decoration: none; }
+    .header-breadcrumb a:hover { color: var(--color-neutral-600); }
+    .header-breadcrumb .current { color: var(--color-neutral-700); font-weight: 500; }
+
+    .header-right { display: flex; align-items: center; gap: var(--space-4); }
+
+    .header-icon-btn {
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-sm); color: var(--color-neutral-500);
+      cursor: pointer; border: none; background: none;
+    }
+
+    .header-icon-btn:hover { color: var(--color-neutral-700); background: var(--color-neutral-100); }
+    .header-icon-btn svg { width: 20px; height: 20px; }
+
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--color-primary-100); color: var(--color-primary-600);
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--text-xs); font-weight: 700; cursor: pointer;
+    }
+
+    .eqr-banner {
+      background: oklch(95% 0.04 85); border-bottom: 1px solid oklch(85% 0.06 85);
+      color: oklch(40% 0.10 85); padding: 8px 24px; font-size: 0.8rem; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .eqr-banner svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+    .content { flex: 1; padding: var(--space-8); overflow-y: auto; }
+
+    .page-header { margin-bottom: var(--space-6); }
+
+    .page-header h1 {
+      font-size: var(--text-xl); font-weight: 700; color: var(--color-neutral-900);
+      letter-spacing: -0.02em; line-height: 1.2;
+    }
+
+    .page-header p {
+      font-size: var(--text-sm); color: var(--color-neutral-500); margin-top: var(--space-1);
+    }
+
+    .eqr-tabs {
+      display: flex; gap: var(--space-1); margin-bottom: var(--space-6);
+      border-bottom: 1px solid var(--color-neutral-200);
+    }
+
+    .eqr-tab {
+      padding: var(--space-3) var(--space-5); font-size: var(--text-sm); font-weight: 500;
+      color: var(--color-neutral-500); border-bottom: 2px solid transparent; cursor: pointer;
+    }
+
+    .eqr-tab:hover { color: var(--color-neutral-700); }
+
+    .eqr-tab.active {
+      color: var(--color-primary-500); border-bottom-color: var(--color-primary-500); font-weight: 600;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md); padding: var(--space-6); margin-bottom: var(--space-6);
+    }
+
+    .card h3 {
+      font-size: var(--text-lg); font-weight: 600; color: var(--color-neutral-800);
+      margin-bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2);
+    }
+
+    .card h3 svg { width: 20px; height: 20px; color: var(--color-neutral-400); }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: var(--space-1);
+      font-size: var(--text-xs); font-weight: 600; padding: 2px 8px; border-radius: 100px;
+    }
+
+    .status-badge.complete { background: var(--color-success-light); color: var(--color-success-text); }
+    .status-badge.warning { background: var(--color-warning-light); color: var(--color-warning-text); }
+    .status-badge.error { background: var(--color-error-light); color: var(--color-error-text); }
+    .status-badge.info { background: var(--color-info-light); color: var(--color-info-text); }
+
+    /* ── Sampling Guide ── */
+    .sampling-guide {
+      background: var(--color-info-light);
+      border: 1px solid oklch(85% 0.04 250);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      margin-bottom: var(--space-6);
+      font-size: var(--text-sm);
+      color: var(--color-info-text);
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-3);
+    }
+
+    .sampling-guide svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
+
+    .sampling-guide strong { font-weight: 600; }
+
+    /* ── Data Table ── */
+    .data-table {
+      width: 100%; border-collapse: collapse; font-size: var(--text-sm);
+    }
+
+    .data-table th {
+      text-align: left; font-size: var(--text-xs); font-weight: 600;
+      color: var(--color-neutral-400); text-transform: uppercase; letter-spacing: 0.05em;
+      padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-neutral-200);
+      background: var(--color-neutral-50);
+    }
+
+    .data-table td {
+      padding: var(--space-3); border-bottom: 1px solid var(--color-neutral-200);
+      color: var(--color-neutral-700);
+    }
+
+    .data-table td:first-child { font-weight: 500; color: var(--color-neutral-800); }
+
+    .data-table tr:hover td { background: var(--color-neutral-50); }
+
+    /* ── AI Edit Indicator ── */
+    .ai-edit-indicator {
+      border-left: 3px solid var(--color-ai);
+      background: var(--color-ai-light);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      padding: var(--space-4) var(--space-5);
+      margin-bottom: var(--space-6);
+    }
+
+    .ai-edit-header {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-size: var(--text-sm); font-weight: 600; color: var(--color-ai-text);
+      margin-bottom: var(--space-2);
+    }
+
+    .ai-badge {
+      font-size: var(--text-xs); font-weight: 600;
+      background: var(--color-ai); color: white;
+      padding: 2px 8px; border-radius: 100px;
+    }
+
+    .ai-edit-body {
+      font-size: var(--text-sm); color: var(--color-neutral-600); line-height: 1.5;
+    }
+
+    .ai-edit-body strong { color: var(--color-neutral-800); }
+
+    .ai-progress-row {
+      display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3);
+    }
+
+    .ai-progress-bar {
+      flex: 1; height: 8px; background: var(--color-neutral-200); border-radius: 4px; overflow: hidden;
+    }
+
+    .ai-progress-fill {
+      height: 100%; border-radius: 4px;
+      background: var(--color-ai);
+    }
+
+    .ai-progress-label {
+      font-size: var(--text-xs); font-weight: 600; color: var(--color-ai-text);
+      font-variant-numeric: tabular-nums; min-width: 40px;
+    }
+
+    /* ── Workpaper Detail Card ── */
+    .workpaper-detail {
+      background: var(--color-neutral-0); border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-md); margin-bottom: var(--space-6); overflow: hidden;
+    }
+
+    .workpaper-detail-header {
+      padding: var(--space-5) var(--space-6);
+      border-bottom: 1px solid var(--color-neutral-200);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .workpaper-detail-header h3 {
+      font-size: var(--text-base); font-weight: 600; color: var(--color-neutral-800);
+      margin: 0;
+    }
+
+    .workpaper-detail-body { padding: var(--space-6); }
+
+    .evidence-list {
+      display: flex; flex-direction: column; gap: var(--space-2);
+    }
+
+    .evidence-item {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-neutral-50); border-radius: var(--radius-sm);
+      font-size: var(--text-sm); color: var(--color-neutral-700);
+    }
+
+    .evidence-item svg {
+      width: 16px; height: 16px; color: var(--color-neutral-400); flex-shrink: 0;
+    }
+
+    .evidence-item .evidence-type {
+      font-size: var(--text-xs); color: var(--color-neutral-400); margin-left: auto;
+    }
+
+    /* ── Exception Summary ── */
+    .exception-card {
+      background: var(--color-error-light);
+      border: 1px solid oklch(88% 0.05 25);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+    }
+
+    .exception-card h4 {
+      font-size: var(--text-sm); font-weight: 600; color: var(--color-error-text);
+      margin-bottom: var(--space-3); display: flex; align-items: center; gap: var(--space-2);
+    }
+
+    .exception-card h4 svg { width: 16px; height: 16px; }
+
+    .exception-item {
+      display: flex; align-items: flex-start; gap: var(--space-3);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid oklch(90% 0.03 25);
+      font-size: var(--text-sm);
+    }
+
+    .exception-item:last-child { border-bottom: none; }
+
+    .exception-control {
+      font-weight: 600; color: var(--color-error-text); min-width: 60px;
+      font-family: var(--font-mono); font-size: var(--text-xs);
+    }
+
+    .exception-desc { color: var(--color-neutral-700); }
+
+    .exception-status { margin-left: auto; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">A</div>
+      <span class="logo-text">Axiom</span>
+    </div>
+
+    <div class="sidebar-eqr-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      EQR Reviewer Mode
+    </div>
+
+    <nav>
+      <div class="nav-section">
+        <a class="nav-item" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+        <a class="nav-item active" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Engagements
+        </a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Cloudvault Technologies</div>
+        <div class="nav-sub">
+          <a class="nav-item" href="#">Overview</a>
+          <a class="nav-item" href="#">Controls</a>
+          <a class="nav-item" href="#">Trial Balance</a>
+          <a class="nav-item active" href="#">Workpapers</a>
+          <a class="nav-item" href="#">Evidence</a>
+          <a class="nav-item" href="#">Document Requests</a>
+          <a class="nav-item" href="#">Reports</a>
+          <a class="nav-item" href="#">Audit Log</a>
+          <a class="nav-item" href="#">EQR Findings</a>
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="header">
+      <div class="header-breadcrumb">
+        <a href="#">Engagements</a>
+        <span>/</span>
+        <a href="#">Cloudvault Technologies</a>
+        <span>/</span>
+        <span class="current">Testing Review</span>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </button>
+        <button class="header-icon-btn" title="Help">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+        <div class="avatar">LN</div>
+      </div>
+    </header>
+
+    <div class="eqr-banner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      EQR &mdash; Read Only &nbsp;&middot;&nbsp; You are viewing this engagement as the designated quality reviewer. Editing is disabled.
+    </div>
+
+    <div class="content">
+      <div class="page-header">
+        <h1>Testing Sufficiency Review</h1>
+        <p>Review workpaper quality, evidence sufficiency, exception handling, and AI-assisted content.</p>
+      </div>
+
+      <div class="eqr-tabs">
+        <div class="eqr-tab">Overview</div>
+        <div class="eqr-tab">Planning</div>
+        <div class="eqr-tab active">Testing</div>
+        <div class="eqr-tab">Evidence</div>
+        <div class="eqr-tab">AI Decisions</div>
+        <div class="eqr-tab">Audit Log</div>
+        <div class="eqr-tab">EQR Findings</div>
+      </div>
+
+      <!-- Sampling Guide -->
+      <div class="sampling-guide">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <div>
+          <strong>EQR Sampling Recommendation:</strong> Based on engagement risk (moderate) and size (42 controls, 89 workpapers), we suggest reviewing at least 14 workpapers (15%) across all control categories. Prioritize controls with exceptions and AI-drafted content with low edit percentages.
+        </div>
+      </div>
+
+      <!-- Workpaper Summary Table -->
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Workpaper Summary by Control Category
+        </h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Controls</th>
+              <th>Workpapers</th>
+              <th>Exceptions</th>
+              <th>AI-Drafted</th>
+              <th>Avg Edit %</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>CC6 — Logical &amp; Physical Access</td>
+              <td style="font-variant-numeric:tabular-nums">12</td>
+              <td style="font-variant-numeric:tabular-nums">28</td>
+              <td style="font-variant-numeric:tabular-nums">1</td>
+              <td style="font-variant-numeric:tabular-nums">22</td>
+              <td style="font-variant-numeric:tabular-nums">52.1%</td>
+              <td><span class="status-badge complete">Complete</span></td>
+            </tr>
+            <tr>
+              <td>CC7 — System Operations</td>
+              <td style="font-variant-numeric:tabular-nums">10</td>
+              <td style="font-variant-numeric:tabular-nums">24</td>
+              <td style="font-variant-numeric:tabular-nums">2</td>
+              <td style="font-variant-numeric:tabular-nums">18</td>
+              <td style="font-variant-numeric:tabular-nums">44.8%</td>
+              <td><span class="status-badge complete">Complete</span></td>
+            </tr>
+            <tr>
+              <td>CC8 — Change Management</td>
+              <td style="font-variant-numeric:tabular-nums">8</td>
+              <td style="font-variant-numeric:tabular-nums">16</td>
+              <td style="font-variant-numeric:tabular-nums">0</td>
+              <td style="font-variant-numeric:tabular-nums">12</td>
+              <td style="font-variant-numeric:tabular-nums">55.3%</td>
+              <td><span class="status-badge complete">Complete</span></td>
+            </tr>
+            <tr>
+              <td>CC1 — Control Environment</td>
+              <td style="font-variant-numeric:tabular-nums">5</td>
+              <td style="font-variant-numeric:tabular-nums">8</td>
+              <td style="font-variant-numeric:tabular-nums">0</td>
+              <td style="font-variant-numeric:tabular-nums">6</td>
+              <td style="font-variant-numeric:tabular-nums">38.7%</td>
+              <td><span class="status-badge complete">Complete</span></td>
+            </tr>
+            <tr>
+              <td>CC2 — Communication</td>
+              <td style="font-variant-numeric:tabular-nums">3</td>
+              <td style="font-variant-numeric:tabular-nums">5</td>
+              <td style="font-variant-numeric:tabular-nums">0</td>
+              <td style="font-variant-numeric:tabular-nums">4</td>
+              <td style="font-variant-numeric:tabular-nums">47.2%</td>
+              <td><span class="status-badge complete">Complete</span></td>
+            </tr>
+            <tr>
+              <td>CC3 — Risk Assessment</td>
+              <td style="font-variant-numeric:tabular-nums">2</td>
+              <td style="font-variant-numeric:tabular-nums">4</td>
+              <td style="font-variant-numeric:tabular-nums">0</td>
+              <td style="font-variant-numeric:tabular-nums">3</td>
+              <td style="font-variant-numeric:tabular-nums">51.0%</td>
+              <td><span class="status-badge complete">Complete</span></td>
+            </tr>
+            <tr>
+              <td>CC5 — Monitoring</td>
+              <td style="font-variant-numeric:tabular-nums">2</td>
+              <td style="font-variant-numeric:tabular-nums">4</td>
+              <td style="font-variant-numeric:tabular-nums">0</td>
+              <td style="font-variant-numeric:tabular-nums">2</td>
+              <td style="font-variant-numeric:tabular-nums">60.5%</td>
+              <td><span class="status-badge complete">Complete</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Sample Workpaper with AI Edit Indicator -->
+      <div class="workpaper-detail">
+        <div class="workpaper-detail-header">
+          <h3>WP-CC7.1-001: Incident Response Procedures</h3>
+          <span class="status-badge complete">Signed Off</span>
+        </div>
+        <div class="workpaper-detail-body">
+          <!-- AI Edit Indicator -->
+          <div class="ai-edit-indicator">
+            <div class="ai-edit-header">
+              <span class="ai-badge">AI</span>
+              AI Draft Edit Assessment
+            </div>
+            <div class="ai-edit-body">
+              This workpaper's AI draft was edited by <strong>Emily Park</strong>. <strong>5 of 8 sections modified (62.5%)</strong>. Modified sections: Objective, Test Procedures, Sample Selection, Results Analysis, Conclusion. Unmodified: Background, Scope, References.
+            </div>
+            <div class="ai-progress-row">
+              <span class="ai-progress-label">62.5%</span>
+              <div class="ai-progress-bar">
+                <div class="ai-progress-fill" style="width: 62.5%"></div>
+              </div>
+              <span style="font-size: var(--text-xs); color: var(--color-neutral-400);">5 / 8 sections</span>
+            </div>
+          </div>
+
+          <!-- Evidence Links -->
+          <h4 style="font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-700); margin-bottom: var(--space-3);">Linked Evidence (4 items)</h4>
+          <div class="evidence-list">
+            <div class="evidence-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Incident Response Policy v3.2.pdf
+              <span class="evidence-type">Document</span>
+            </div>
+            <div class="evidence-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              PagerDuty Incident Log &mdash; Jan&ndash;Dec 2025
+              <span class="evidence-type">Screenshot</span>
+            </div>
+            <div class="evidence-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Post-Incident Review &mdash; Q3 Security Event
+              <span class="evidence-type">Document</span>
+            </div>
+            <div class="evidence-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+              Client Interview Notes &mdash; VP Engineering
+              <span class="evidence-type">Inquiry</span>
+            </div>
+          </div>
+
+          <!-- Sign-off trail -->
+          <div style="margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--color-neutral-200);">
+            <h4 style="font-size: var(--text-sm); font-weight: 600; color: var(--color-neutral-700); margin-bottom: var(--space-3);">Sign-Off Trail</h4>
+            <div style="font-size: var(--text-sm); color: var(--color-neutral-600); display: flex; flex-direction: column; gap: var(--space-2);">
+              <div>Prepared by Emily Park &mdash; Feb 12, 2026</div>
+              <div>Reviewed by James Rodriguez &mdash; Mar 8, 2026</div>
+              <div>Approved by Sarah Chen &mdash; Apr 2, 2026</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Exception Summary -->
+      <div class="exception-card">
+        <h4>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Exception Summary &mdash; 3 Controls with Exceptions
+        </h4>
+        <div class="exception-item">
+          <span class="exception-control">CC6.3</span>
+          <span class="exception-desc">Access review for terminated employees delayed by 5 business days in Q2. Root cause: manual process dependency. Remediated by implementing automated deprovisioning in Aug 2025.</span>
+          <span class="exception-status"><span class="status-badge complete">Remediated</span></span>
+        </div>
+        <div class="exception-item">
+          <span class="exception-control">CC7.1</span>
+          <span class="exception-desc">One critical incident in Q3 had incomplete post-incident review documentation. Supplementary documentation obtained from client during fieldwork.</span>
+          <span class="exception-status"><span class="status-badge warning">Documented</span></span>
+        </div>
+        <div class="exception-item">
+          <span class="exception-control">CC7.2</span>
+          <span class="exception-desc">Vulnerability scan for 2 servers missed December cycle due to infrastructure migration. Compensating scan performed Jan 3, 2026. No critical findings.</span>
+          <span class="exception-status"><span class="status-badge complete">Remediated</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
