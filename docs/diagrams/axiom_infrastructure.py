@@ -189,6 +189,7 @@ with Diagram(
     audit     >> bedrock
     tb        >> bedrock
     workpaper >> bedrock
+    reporting >> bedrock
 
     # Workflow orchestration
     audit >> sfn

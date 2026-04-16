@@ -121,9 +121,16 @@ tags:
 
   - name: AIDecisions
     description: |
-      Append-only log of every AI-generated decision made within an engagement (e.g. control
-      risk assessments, evidence sufficiency recommendations). Supports human-in-the-loop
-      review and override, as required by ISO 42001 and SOC 2.
+      Append-only log of every AI-generated decision made within an engagement (e.g. document
+      completeness review, control mapping, evidence link suggestion). Supports human-in-the-loop
+      review, as required by ISO 42001 and SOC 2.
+
+  - name: Internal
+    description: |
+      **Service-to-service endpoints — not exposed through the API Gateway.** Used by other
+      Axiom services (Trial Balance, Workpaper, Reporting) to create resources in `core_db`
+      that they cannot write to directly. Authenticated via internal service headers over
+      ECS Service Connect DNS, not JWT.
 
   - name: AuditLog
     description: |
@@ -2937,9 +2944,10 @@ paths:
       summary: List AI decisions for an engagement
       description: |
         Returns a paginated list of AI decisions made within this engagement. Decisions
-        are recorded for every AI inference (control risk assessment, evidence sufficiency
-        recommendation, sampling selection, etc.) to satisfy ISO 42001 human-in-the-loop
-        and explainability requirements.
+        are recorded for every AI inference (document completeness review, control mapping,
+        trial balance account mapping, evidence link suggestion, risk category suggestion,
+        workpaper narrative draft, anomaly detection, report section draft) to satisfy
+        ISO 42001 human-in-the-loop and explainability requirements.
 
         **Access:** All firm users with RLS access to this engagement.
       tags:
@@ -2968,13 +2976,9 @@ paths:
         - name: review_action
           in: query
           required: false
-          description: Filter by whether the decision has been reviewed (`Accepted`, `Overridden`, `Pending`).
+          description: Filter by the human reviewer's disposition (`Pending`, `Accepted`, `Modified`, `Rejected`).
           schema:
-            type: string
-            enum:
-              - Accepted
-              - Overridden
-              - Pending
+            $ref: '#/components/schemas/AIReviewAction'
       responses:
         '200':
           description: Paginated list of AI decisions.
@@ -3031,9 +3035,9 @@ paths:
       operationId: reviewAIDecision
       summary: Review an AI decision
       description: |
-        Records a human reviewer's acceptance or override of an AI decision. If
-        `review_action = Overridden`, `override_rationale` is required. The review is
-        appended to the decision record; the original AI output is never modified.
+        Records a human reviewer's disposition of an AI decision (`Accepted`, `Modified`,
+        or `Rejected`). When `review_action = Modified`, `accepted_value` is required. The
+        review is appended to the decision record; the original AI output is never modified.
         This fulfills ISO 42001 §6.4 human oversight requirements.
 
         **Access:** `Partner`, `Manager`, `EQReviewer`.
@@ -3073,6 +3077,59 @@ paths:
           $ref: './common.yaml#/components/responses/NotFound'
         '409':
           $ref: './common.yaml#/components/responses/Conflict'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Internal: Cross-Service AI Decision Creation
+  # ---------------------------------------------------------------------------
+
+  /internal/ai-decisions:
+    post:
+      operationId: createAIDecisionInternal
+      summary: Create an AI decision record (internal service-to-service)
+      description: |
+        **Internal endpoint — not exposed through the API Gateway.** Used by Trial Balance,
+        Workpaper, and Reporting services to create `AIDecision` records in `core_db` after
+        executing AI features (Features 3, 4, 7, 8). Called via ECS Service Connect DNS
+        (`http://audit-core/internal/ai-decisions`).
+
+        Authentication: internal service header (`X-Internal-Service`), not JWT. Requests
+        without a valid internal service header are rejected with 403.
+
+        The calling service provides the full AIDecision payload. Audit Core persists the
+        record and returns the generated `id` so the caller can reference it (e.g.,
+        `trial_balance_accounts.ai_decision_id`).
+      tags:
+        - Internal
+      parameters:
+        - name: X-Internal-Service
+          in: header
+          required: true
+          description: Identifier of the calling service (e.g., `trial-balance`, `workpaper`, `reporting`).
+          schema:
+            type: string
+            enum:
+              - trial-balance
+              - workpaper
+              - reporting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAIDecisionInternalRequest'
+      responses:
+        '201':
+          description: AI decision record created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIDecisionDetailResponse'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
         '500':
           $ref: './common.yaml#/components/responses/InternalServerError'
 
@@ -3492,16 +3549,17 @@ components:
 
     AIContextType:
       type: string
-      description: The type of AI-assisted analysis or generation that produced this decision.
+      description: |
+        The type of AI-assisted analysis or generation that produced this decision.
+        Maps to the eight AI features defined in the AI Architecture Design spec.
       enum:
         - ControlMapping
-        - RiskAssessment
+        - RiskCategorySuggestion
         - TrialBalanceMapping
         - DocumentCompleteness
         - EvidenceLinkSuggestion
         - WorkpaperDraft
-        - ReportDraft
-        - SamplingRecommendation
+        - ReportSectionDraft
         - AnomalyDetection
       examples:
         - EvidenceLinkSuggestion
@@ -5733,6 +5791,79 @@ components:
           description: The value to apply. Required when review_action is Modified; optional for Accepted (defaults to suggested_value if omitted).
           examples:
             - "CC6.1"
+
+    CreateAIDecisionInternalRequest:
+      type: object
+      description: |
+        Request body for cross-service AI decision creation. Used by Trial Balance,
+        Workpaper, and Reporting services to persist AI decision records in core_db
+        after executing AI features.
+      required:
+        - firm_id
+        - context_type
+        - context_id
+        - context_table
+        - model_id
+        - raw_output
+      properties:
+        firm_id:
+          type: string
+          format: uuid
+          description: UUID of the firm this decision belongs to.
+        engagement_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: UUID of the engagement. Null for firm-level decisions.
+        context_type:
+          $ref: '#/components/schemas/AIContextType'
+        context_id:
+          type: string
+          format: uuid
+          description: UUID of the entity being analyzed (e.g., trial_balance_account, workpaper, report).
+        context_table:
+          type: string
+          description: Database table name of the entity identified by context_id.
+          examples:
+            - trial_balance_accounts
+            - workpapers
+            - reports
+        model_id:
+          type: string
+          description: Bedrock model identifier used for inference.
+          examples:
+            - "anthropic.claude-haiku-4-5"
+        input_token_count:
+          type:
+            - integer
+            - "null"
+          description: Token count for the input prompt.
+        output_token_count:
+          type:
+            - integer
+            - "null"
+          description: Token count for the model output.
+        raw_output:
+          type: object
+          description: Complete structured model output for audit trail.
+        suggested_value:
+          type:
+            - string
+            - "null"
+          description: Primary suggested value extracted from model output.
+        confidence:
+          type:
+            - number
+            - "null"
+          minimum: 0
+          maximum: 1
+          description: Model confidence score (0.0–1.0).
+        explanation:
+          type:
+            - string
+            - "null"
+          description: Human-readable explanation of the suggestion.
 
     # -------------------------------------------------------------------------
     # List Response Wrappers

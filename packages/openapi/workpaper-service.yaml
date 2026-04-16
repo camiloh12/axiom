@@ -25,7 +25,7 @@ info:
     ```
     Draft
       → PreparedPendingReview   POST /submit           (Staff)
-                                  Guard: latest version must not be an AI draft (PCAOB AS 1105)
+                                  Guard: all AI-generated sections must be human-edited (PCAOB AS 1105)
       → InReview                POST /start-review     (Manager)
       → ReviewNotesOpen         POST /return           (Manager)
       → InReview                POST /resubmit         (Staff)
@@ -45,9 +45,10 @@ info:
       is exposed for review notes. Notes transition through Open → Responded → Resolved only.
     - **Locked workpapers reject content updates.** `PATCH /workpapers/{workpaperId}` returns
       422 when `is_locked = true`. Use `POST /addendum` instead.
-    - **AI-draft guard.** `POST /submit` returns 422 when the latest `WorkpaperVersion` has
-      `is_ai_draft = true`, preventing submission of unreviewed AI-generated content per
-      PCAOB AS 1105.
+    - **AI content gate.** `POST /submit` returns 422 when the latest `WorkpaperVersion` has
+      any AI-generated section with `human_edited = false` in `ai_content_metadata`. Sections
+      with `modification_ratio < 0.05` trigger a confirmable warning (soft gate). This
+      section-level tracking replaces the prior binary `is_ai_draft` check per PCAOB AS 1105.
 
 servers:
   - url: https://api.axiom.internal/workpaper
@@ -239,9 +240,11 @@ paths:
       summary: Update workpaper content or title
       description: |
         Applies a partial update to the workpaper's `content` and/or `title`. On every
-        successful PATCH a new `WorkpaperVersion` row is written automatically. If the
-        previous latest version had `is_ai_draft = true`, that flag is cleared on the
-        new version (the human edit supersedes the AI draft).
+        successful PATCH a new `WorkpaperVersion` row is written automatically. The
+        `ai_content_metadata` is updated on the new version: any AI-generated section that
+        the human edited has `human_edited` set to `true`, and `modification_ratio` is
+        recomputed (Levenshtein distance / AI character count). The derived `is_ai_draft`
+        flag is updated accordingly.
 
         **Immutability guard:** Returns 422 when `is_locked = true`. Use `POST /addendum`
         for post-finalization content additions.
@@ -310,10 +313,12 @@ paths:
 
         **Guards:**
         - Caller must be the `prepared_by_id` user or a Manager/Partner.
-        - The latest `WorkpaperVersion` must have `is_ai_draft = false`. If the latest version
-          is an AI draft, the submission is blocked with 422 (`AI_DRAFT_SUBMISSION_BLOCKED`) to
-          enforce PCAOB AS 1105 — staff must review and edit AI-generated content before it
-          enters the review pipeline.
+        - All AI-generated sections in the latest `WorkpaperVersion.ai_content_metadata` must
+          have `human_edited = true`. If any AI section has not been edited, submission is blocked
+          with 422 (`AI_CONTENT_NOT_REVIEWED`) to enforce PCAOB AS 1105.
+        - AI sections with `modification_ratio < 0.05` trigger a soft gate: the response
+          includes a `warnings` array listing minimally-edited sections. The caller must
+          re-submit with `confirm_minimal_edits: true` to proceed.
 
         **Allowed roles:** Staff, Manager, Partner
       tags:
@@ -699,6 +704,74 @@ paths:
           $ref: './common.yaml#/components/responses/InternalServerError'
 
   # ---------------------------------------------------------------------------
+  # AI Draft Generation
+  # ---------------------------------------------------------------------------
+
+  /api/v1/workpapers/{workpaperId}/generate-draft:
+    post:
+      operationId: generateWorkpaperDraft
+      summary: Request AI narrative draft for a workpaper
+      description: |
+        Triggers an asynchronous AI draft generation job (River worker `ai.workpaper-draft`).
+        The AI generates a first-draft workpaper narrative using Claude Sonnet, based on:
+        the control description and test procedure, linked evidence text, exceptions noted,
+        prior year workpaper (if rollforward), and the firm workpaper template.
+
+        The generated draft is inserted into the workpaper content with full `ai_content_metadata`
+        section-level tracking. An `AIDecision` record with `context_type = WorkpaperDraft` is
+        created in Audit Core via internal REST call.
+
+        Returns **202 Accepted** immediately. The draft appears in the workpaper content
+        when the background job completes (typically 5–15 seconds). The client should poll
+        `GET /workpapers/{workpaperId}` or listen for a WebSocket update.
+
+        **Guards:**
+        - Workpaper must be in `Draft` status.
+        - The associated test procedure should be marked as Complete (warning if not, not blocking).
+
+        **Allowed roles:** Staff, Manager, Partner
+      tags:
+        - Workpapers
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Draft generation job accepted. Poll workpaper for completion.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                properties:
+                  message:
+                    type: string
+                    examples:
+                      - "AI draft generation started. Poll the workpaper resource for updates."
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Workpaper is not in Draft status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
   # Workpaper Versions
   # ---------------------------------------------------------------------------
 
@@ -711,8 +784,9 @@ paths:
         `version_number` ascending. Not paginated — version counts are bounded by the
         workpaper's lifetime and are not expected to reach pagination thresholds.
 
-        Each entry indicates whether the version was an AI draft (`is_ai_draft`) and
-        whether it is a post-finalization addendum (`is_addendum`).
+        Each entry includes `ai_content_metadata` (section-level AI tracking), the derived
+        `is_ai_draft` convenience flag, and whether it is a post-finalization addendum
+        (`is_addendum`).
 
         **Allowed roles:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly
       tags:
@@ -1391,8 +1465,67 @@ components:
         is_ai_draft:
           type: boolean
           description: |
-            True when this version was generated by the AI assistant without subsequent human
-            edits. Submission is blocked while the latest version has this flag set (PCAOB AS 1105).
+            Derived convenience field. True when `ai_content_metadata` contains any section
+            with `ai_generated = true` AND `human_edited = false`. Retained for backward
+            compatibility. The section-level `ai_content_metadata` provides the authoritative
+            gate logic (PCAOB AS 1105).
+        ai_content_metadata:
+          type:
+            - object
+            - "null"
+          description: |
+            Section-level AI content tracking. Null when no AI drafting was used on this version.
+            Contains per-section tracking (`ai_generated`, `human_edited`, `modification_ratio`,
+            character counts, editor identity/timestamps) and a summary with counts and overall
+            modification ratio. `modification_ratio` is the Levenshtein distance between
+            AI-generated text and current text, divided by AI character count (0.0 = no changes,
+            1.0 = completely rewritten). Computed on save, not in real-time.
+          properties:
+            sections:
+              type: array
+              items:
+                type: object
+                properties:
+                  section_id:
+                    type: string
+                  ai_generated:
+                    type: boolean
+                  ai_generated_at:
+                    type: string
+                    format: date-time
+                  human_edited:
+                    type: boolean
+                  human_edited_by:
+                    type: string
+                    format: uuid
+                  human_edited_at:
+                    type:
+                      - string
+                      - "null"
+                    format: date-time
+                  ai_character_count:
+                    type: integer
+                  current_character_count:
+                    type: integer
+                  modification_ratio:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+            summary:
+              type: object
+              properties:
+                total_sections:
+                  type: integer
+                ai_generated_sections:
+                  type: integer
+                ai_sections_edited:
+                  type: integer
+                ai_sections_unedited:
+                  type: integer
+                overall_modification_ratio:
+                  type: number
+                  minimum: 0
+                  maximum: 1
         is_addendum:
           type: boolean
           description: True when this version was created via the POST /addendum endpoint after finalization.

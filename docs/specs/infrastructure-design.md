@@ -169,7 +169,7 @@ One RDS instance per environment hosting five logical databases as specified in 
 | Deletion protection | No | Yes | Yes |
 | Performance Insights | Off | On (7-day free tier) | On (7-day, extend to paid before SOC 2 audit) |
 
-**Extensions enabled:** `pgvector` on `core_db`, `pg_stat_statements` on all databases.
+**Extensions enabled:** `pgvector` on `core_db` and `identity_db` (embeddings for evidence items, framework requirements, control objective library, and firm control objectives — see AI Architecture Design Section 2), `pg_stat_statements` on all databases.
 
 **Parameter group customizations:**
 - `rds.force_ssl = 1` — enforce TLS for all connections
@@ -309,7 +309,7 @@ Single target group pointing to the API Gateway ECS service. The gateway handles
 | `audit-core` | Secrets Manager read (own DB creds), S3 read/write to `evidence` and `archive` buckets, SQS publish/consume, SES `SendEmail`, Bedrock `InvokeModel`, Step Functions `StartExecution`, KMS `Decrypt`/`GenerateDataKey` (HIPAA key) |
 | `trial-balance` | Secrets Manager read (own DB creds), Bedrock `InvokeModel` |
 | `workpaper` | Secrets Manager read (own DB creds), Bedrock `InvokeModel` |
-| `reporting` | Secrets Manager read (own DB creds), S3 read from `evidence`, S3 write to `reports` |
+| `reporting` | Secrets Manager read (own DB creds), S3 read from `evidence`, S3 write to `reports`, Bedrock `InvokeModel` (Sonnet only — Feature 8 report section drafts) |
 | `doc-processing` | None (stateless — receives files via HTTP, returns extracted text) |
 
 ### ECS Deployment Configuration
@@ -336,10 +336,17 @@ Not provisioned at demo stage — engagement lifecycle transitions managed manua
 ### Bedrock
 
 Model access enabled in `us-east-1`:
-- `anthropic.claude-haiku-4-5` — control mapping, trial balance classification
-- `anthropic.claude-sonnet-4-6` — document completeness review, workpaper narrative drafts
+- `anthropic.claude-haiku-4-5` — control mapping (Feature 2), trial balance account mapping (Feature 3), evidence link suggestion (Feature 5), anomaly detection (Feature 7)
+- `anthropic.claude-sonnet-4-6` — document completeness review (Feature 1), workpaper narrative drafts (Feature 4), risk category suggestion (Feature 6), report section drafts (Feature 8)
 
-Traffic routes through the Bedrock VPC endpoint. IAM policies on task roles restrict which services can invoke which models (e.g., `trial-balance` task role can only invoke Haiku).
+Traffic routes through the Bedrock VPC endpoint. IAM policies on task roles restrict which services can invoke which models:
+
+| Service | Haiku | Sonnet |
+|---|---|---|
+| `audit-core` | Yes (Features 2, 5) | Yes (Features 1, 6) |
+| `trial-balance` | Yes (Features 3, 7) | No |
+| `workpaper` | No | Yes (Feature 4) |
+| `reporting` | No | Yes (Feature 8) |
 
 On-demand pricing at launch. Monitor `InvocationLatency` and `ThrottlingCount` CloudWatch metrics. If throttling exceeds 5% of requests, request a quota increase or evaluate provisioned throughput.
 
@@ -479,7 +486,7 @@ Provisioned via Terraform as JSON definitions:
 | Dashboard | Contents |
 |---|---|
 | `Axiom-{env}-Overview` | Per-service request rate, error rate, p50/p95/p99 latency. ECS task count. RDS connections and CPU. ALB healthy host count. |
-| `Axiom-{env}-AI` | Bedrock invocation latency, token consumption, throttle rate by model. River AI job queue depth and processing time. |
+| `Axiom-{env}-AI` | Bedrock invocation latency, token consumption, throttle rate by model and service. River AI job queue depth and processing time across all four services (audit-core, trial-balance, workpaper, reporting). AIDecision creation rate by context_type. |
 | `Axiom-{env}-Data` | RDS CPU, free storage, read/write IOPS, active connections. PgBouncer pool utilization. S3 bucket size and request count. |
 | `Axiom-{env}-Security` | WAF blocked requests by rule. Authentication failures. SES bounce/complaint rate. |
 
@@ -495,7 +502,7 @@ Dashboards are not provisioned at demo stage. Enabled when the full observabilit
 | `{env}-rds-storage-low` | Free storage < 20% of allocated | SNS → ops email |
 | `{env}-rds-connections-high` | Connections > 80% of max | SNS → ops email |
 | `{env}-ecs-cpu-high-{service}` | Service avg CPU > 80% for 10 min | SNS → ops email |
-| `{env}-river-dlq-not-empty` | River DLQ depth > 0 | SNS → ops email |
+| `{env}-river-dlq-not-empty-{service}` | River DLQ depth > 0 (per service: audit-core, trial-balance, workpaper, reporting) | SNS → ops email |
 | `{env}-sqs-dlq-not-empty` | SQS DLQ `ApproximateNumberOfMessagesVisible` > 0 | SNS → ops email |
 | `{env}-bedrock-throttle-high` | Bedrock throttle > 5% of invocations in 5 min | SNS → ops email |
 | `{env}-ses-bounce-high` | Bounce rate > 5% in 1 hour | SNS → ops email |

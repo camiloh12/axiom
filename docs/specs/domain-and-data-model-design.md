@@ -838,7 +838,7 @@ A document in the engagement file.
 
 ```
 Draft
-  → PreparedPendingReview  [Staff submits; system validates is_ai_draft = false]
+  → PreparedPendingReview  [Staff submits; system validates all AI sections human_edited = true; soft gate on modification_ratio < 0.05]
   → InReview               [Manager opens for review]
   → ReviewNotesOpen        [Manager raises notes; returns to Staff]
   → InReview               [Staff addresses notes; resubmits]
@@ -847,7 +847,7 @@ Draft
 ```
 
 **Invariants:**
-- Submit for review is blocked if any WorkpaperVersion has is_ai_draft = true (PCAOB AS 1105).
+- Submit for review is blocked if ai_content_metadata contains any section with ai_generated = true AND human_edited = false (PCAOB AS 1105). Sections with modification_ratio < 0.05 trigger a confirmable warning ("Section [name] has minimal edits to AI-generated content") — soft gate, not a hard block.
 - Once submitted, the workpaper is locked for the preparer — only the reviewer can modify or return it.
 - After engagement finalization, is_locked = true — modifications require an addendum.
 - Sign-off creates a timestamped, named AuditLog entry — cannot be backdated.
@@ -865,12 +865,13 @@ Immutable version history. Every save creates a new row.
 | content | jsonb | Structured rich text |
 | saved_by_id | uuid | |
 | saved_at | timestamptz | |
-| is_ai_draft | boolean | True until a human edits any content — per PCAOB AS 1105 |
+| is_ai_draft | boolean | Derived convenience field: true when ai_content_metadata contains any section with ai_generated = true AND human_edited = false. Retained for backward compatibility — per PCAOB AS 1105 |
+| ai_content_metadata | jsonb | Section-level AI content tracking: per-section ai_generated flag, human_edited flag, modification_ratio (Levenshtein distance / AI character count), character counts, editor identity and timestamps. See AI Architecture Design Section 5. |
 | is_addendum | boolean | True for post-finalization modifications — per AU-C 230 §.16 |
 | addendum_reason | text | Required when is_addendum = true |
 
 **Invariants:**
-- is_ai_draft is set to true when AI generates a draft; cleared to false on any human edit.
+- ai_content_metadata tracks AI origin per section. modification_ratio is computed on save (not real-time).
 - Addenda preserve the original content unchanged — they are appended records, not edits.
 - Addenda require partner sign-off and a documented reason.
 
@@ -928,7 +929,7 @@ The engagement's final deliverable.
 **Invariants:**
 - Issuance triggers automatic computation of assembly_deadline and retention_deadline on the Engagement.
 - Only a Partner can issue a report.
-- AI-drafted report sections (Tier 2) follow the same is_ai_draft rules as workpapers.
+- AI-drafted report sections (Tier 2) follow the same ai_content_metadata gate rules as workpapers: all AI-generated sections must have human_edited = true; sections with modification_ratio < 0.05 trigger a confirmable warning. Report issuance (Report.status = Issued) validates that all AI-drafted sections have been substantively edited.
 - After issuance, report transitions to read-only.
 - Archived reports use S3 Object Lock (COMPLIANCE mode) with retention_deadline for WORM storage.
 
@@ -944,7 +945,8 @@ Immutable version history per report.
 | content | jsonb | |
 | saved_by_id | uuid | |
 | saved_at | timestamptz | |
-| is_ai_draft | boolean | Same semantics as WorkpaperVersion |
+| is_ai_draft | boolean | Derived convenience field: true when ai_content_metadata contains any section with ai_generated = true AND human_edited = false |
+| ai_content_metadata | jsonb | Section-level AI content tracking — same schema as WorkpaperVersion. See AI Architecture Design Section 5. |
 
 ---
 
@@ -961,7 +963,7 @@ Every AI output that could affect audit content is recorded. Required for PCAOB 
 | id | uuid | |
 | firm_id | uuid | |
 | engagement_id | uuid | FK → Engagement, nullable — some AI operations are firm-level |
-| context_type | enum | ControlMapping, RiskAssessment, TrialBalanceMapping, DocumentCompleteness, EvidenceLinkSuggestion, WorkpaperDraft, ReportDraft, SamplingRecommendation, AnomalyDetection |
+| context_type | enum | ControlMapping, RiskCategorySuggestion, TrialBalanceMapping, DocumentCompleteness, EvidenceLinkSuggestion, WorkpaperDraft, ReportSectionDraft, AnomalyDetection |
 | context_id | uuid | UUID of the entity being analyzed |
 | context_table | text | Which table the context_id refers to |
 | model_id | text | e.g., "claude-sonnet-4-6", "claude-haiku-4-5" |
@@ -1092,9 +1094,9 @@ CREATE TYPE eqr_conclusion AS ENUM ('Satisfied','SatisfiedWithConcerns','NotSati
 CREATE TYPE finding_severity AS ENUM ('Observation','Recommendation','RequiredAction');
 CREATE TYPE finding_status AS ENUM ('Pending','Addressed','Confirmed');
 CREATE TYPE ai_context_type AS ENUM (
-  'ControlMapping','RiskAssessment','TrialBalanceMapping',
+  'ControlMapping','RiskCategorySuggestion','TrialBalanceMapping',
   'DocumentCompleteness','EvidenceLinkSuggestion','WorkpaperDraft',
-  'ReportDraft','SamplingRecommendation','AnomalyDetection');
+  'ReportSectionDraft','AnomalyDetection');
 CREATE TYPE ai_review_action AS ENUM ('Pending','Accepted','Modified','Rejected');
 CREATE TYPE actor_type AS ENUM ('User','System','AIAgent');
 CREATE TYPE notification_type AS ENUM (
@@ -1160,6 +1162,8 @@ All UUID primary keys use `DEFAULT gen_random_uuid()`. All timestamps use `times
 
 **firm_control_objective_mappings** — `id (uuid PK)`, `firm_control_objective_id (uuid FK → firm_control_objectives NOT NULL)`, `framework_requirement_id (uuid NOT NULL)`. **Unique:** `(firm_control_objective_id, framework_requirement_id)`. **Indexes:** `(firm_control_objective_id)`, `(framework_requirement_id)`.
 
+**firm_control_objective_embeddings** — `id (uuid PK)`, `firm_control_objective_id (uuid FK → firm_control_objectives NOT NULL UNIQUE)`, `embedding (vector(1024) NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `USING ivfflat (embedding vector_cosine_ops)`. Requires pgvector extension on `identity_db`. Used by Feature 2 (Control Mapping) for semantic similarity retrieval.
+
 #### core_db — System Reference Tables (no RLS, not tenant-scoped)
 
 **frameworks** — `id (uuid PK)`, `name (text NOT NULL)`, `version (text NOT NULL)`, `effective_date (date NOT NULL)`, `deprecated_at (date)`, `governing_body (text NOT NULL)`. **Unique:** `(name, version)`.
@@ -1194,6 +1198,10 @@ All tables below carry `firm_id uuid NOT NULL` with an index. RLS policy: `USING
 
 **evidence_embeddings** — `id (uuid PK)`, `evidence_item_id (uuid FK → evidence_items NOT NULL UNIQUE)`, `embedding (vector(1024) NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `USING ivfflat (embedding vector_cosine_ops)`.
 
+**framework_requirement_embeddings** — `id (uuid PK)`, `framework_requirement_id (uuid FK → framework_requirements NOT NULL UNIQUE)`, `embedding (vector(1024) NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `USING ivfflat (embedding vector_cosine_ops)`. Used by Feature 2 (Control Mapping) for semantic similarity matching.
+
+**control_objective_library_embeddings** — `id (uuid PK)`, `library_objective_id (uuid FK → control_objective_library NOT NULL UNIQUE)`, `embedding (vector(1024) NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `USING ivfflat (embedding vector_cosine_ops)`. Used by Feature 2 (Control Mapping) as few-shot examples for cross-framework mapping.
+
 **evidence_links** — `id (uuid PK)`, `firm_id`, `evidence_item_id (uuid FK → evidence_items NOT NULL)`, `test_procedure_id (uuid FK → test_procedures NOT NULL)`, `linked_by_id (uuid NOT NULL)`, `linked_at (timestamptz NOT NULL)`, `notes (text)`, `ai_suggested (boolean NOT NULL DEFAULT false)`, `ai_decision_id (uuid FK → ai_decisions)`. **Unique:** `(evidence_item_id, test_procedure_id)`. **Indexes:** `(test_procedure_id)`, `(evidence_item_id)`.
 
 **document_requests** — `id (uuid PK)`, `firm_id`, `engagement_id (uuid FK → engagements NOT NULL)`, `control_id (uuid FK → controls)`, `test_procedure_id (uuid FK → test_procedures)`, `assigned_to_id (uuid)`, `title (text NOT NULL)`, `instructions (text NOT NULL)`, `due_date (date)`, `status (doc_request_status NOT NULL DEFAULT 'Pending')`, `reminder_count (integer NOT NULL DEFAULT 0)`, `last_reminder_sent_at (timestamptz)`, `fulfilled_by_evidence_item_id (uuid FK → evidence_items)`, `sent_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(engagement_id)`, `(engagement_id, status)`, `(assigned_to_id)`.
@@ -1226,7 +1234,7 @@ Application-layer isolation.
 
 **workpapers** — `id (uuid PK)`, `engagement_id (uuid NOT NULL)`, `firm_id (uuid NOT NULL)`, `control_id (uuid)`, `workpaper_type (workpaper_type NOT NULL)`, `title (text NOT NULL)`, `content (jsonb NOT NULL DEFAULT '{}')`, `status (workpaper_status NOT NULL DEFAULT 'Draft')`, `prepared_by_id (uuid)`, `reviewed_by_id (uuid)`, `signed_off_by_id (uuid)`, `is_locked (boolean NOT NULL DEFAULT false)`, `prior_workpaper_id (uuid FK → workpapers)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(firm_id)`, `(engagement_id)`, `(engagement_id, status)`.
 
-**workpaper_versions** — `id (uuid PK)`, `workpaper_id (uuid FK → workpapers NOT NULL)`, `version_number (integer NOT NULL)`, `content (jsonb NOT NULL)`, `saved_by_id (uuid NOT NULL)`, `saved_at (timestamptz NOT NULL)`, `is_ai_draft (boolean NOT NULL DEFAULT false)`, `is_addendum (boolean NOT NULL DEFAULT false)`, `addendum_reason (text)`. **Check:** `(is_addendum = false OR addendum_reason IS NOT NULL)`. **Unique:** `(workpaper_id, version_number)`.
+**workpaper_versions** — `id (uuid PK)`, `workpaper_id (uuid FK → workpapers NOT NULL)`, `version_number (integer NOT NULL)`, `content (jsonb NOT NULL)`, `saved_by_id (uuid NOT NULL)`, `saved_at (timestamptz NOT NULL)`, `is_ai_draft (boolean NOT NULL DEFAULT false)`, `ai_content_metadata (jsonb)`, `is_addendum (boolean NOT NULL DEFAULT false)`, `addendum_reason (text)`. **Check:** `(is_addendum = false OR addendum_reason IS NOT NULL)`. **Unique:** `(workpaper_id, version_number)`. **Note:** `is_ai_draft` is a derived convenience field — true when `ai_content_metadata` contains any section with `ai_generated = true AND human_edited = false`.
 
 **review_notes** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `workpaper_id (uuid FK → workpapers NOT NULL)`, `content_anchor (jsonb)`, `created_by_id (uuid NOT NULL)`, `description (text NOT NULL)`, `severity (review_note_severity NOT NULL)`, `status (review_note_status NOT NULL DEFAULT 'Open')`, `response (text)`, `responded_by_id (uuid)`, `responded_at (timestamptz)`, `resolved_by_id (uuid)`, `resolved_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Immutability:** `CREATE RULE review_notes_no_delete AS ON DELETE TO review_notes DO INSTEAD NOTHING;`. **Indexes:** `(workpaper_id, status)`.
 
@@ -1236,7 +1244,7 @@ Application-layer isolation.
 
 **reports** — `id (uuid PK)`, `engagement_id (uuid NOT NULL)`, `firm_id (uuid NOT NULL)`, `report_type (report_type NOT NULL)`, `status (report_status NOT NULL DEFAULT 'Draft')`, `content (jsonb NOT NULL DEFAULT '{}')`, `template_id (uuid)`, `generated_at (timestamptz NOT NULL)`, `issued_at (timestamptz)`, `issued_by_id (uuid)`. **Indexes:** `(firm_id)`, `(engagement_id)`.
 
-**report_versions** — `id (uuid PK)`, `report_id (uuid FK → reports NOT NULL)`, `version_number (integer NOT NULL)`, `content (jsonb NOT NULL)`, `saved_by_id (uuid NOT NULL)`, `saved_at (timestamptz NOT NULL)`, `is_ai_draft (boolean NOT NULL DEFAULT false)`. **Unique:** `(report_id, version_number)`.
+**report_versions** — `id (uuid PK)`, `report_id (uuid FK → reports NOT NULL)`, `version_number (integer NOT NULL)`, `content (jsonb NOT NULL)`, `saved_by_id (uuid NOT NULL)`, `saved_at (timestamptz NOT NULL)`, `is_ai_draft (boolean NOT NULL DEFAULT false)`, `ai_content_metadata (jsonb)`. **Unique:** `(report_id, version_number)`. **Note:** `is_ai_draft` is a derived convenience field — true when `ai_content_metadata` contains any section with `ai_generated = true AND human_edited = false`.
 
 ---
 
@@ -1277,9 +1285,9 @@ System-wide reference tables (`frameworks`, `framework_requirements`, `control_o
 
 ### Entity Count Summary
 
-- **Total domain entities:** 39
-- **identity_db tables:** 10
-- **core_db tables:** 21 (4 system + 17 tenant-scoped)
+- **Total domain entities:** 43
+- **identity_db tables:** 11 (includes firm_control_objective_embeddings; pgvector required)
+- **core_db tables:** 23 (6 system + 17 tenant-scoped; system tables include framework_requirement_embeddings and control_objective_library_embeddings)
 - **trial_balance_db tables:** 4
 - **workpaper_db tables:** 3
 - **reporting_db tables:** 2

@@ -987,10 +987,14 @@ paths:
       operationId: getAnomalies
       summary: Get AI-flagged account anomalies
       description: |
-        Returns anomalies flagged by the AI inference layer (AWS Bedrock) and persisted in
-        the `AIDecision` table in core_db. Each anomaly references the source `ai_decision_id`
-        for full audit trail and human-in-the-loop review. Results are read from
-        `trial_balance_accounts.ai_decision_id` joined with anomaly records.
+        Returns anomalies flagged by the AI anomaly detection job (AWS Bedrock, Claude Haiku).
+        Anomalies are computed by a nightly River background job and on initial TB import.
+
+        **PCAOB tier behavior:** For nonissuer engagements, anomaly flags are informational
+        (Tier 1) — no `AIDecision` record is created. For PCAOB engagements (`FinancialAudit_Public`),
+        each flag creates an `AIDecision` record in core_db via internal REST call (Tier 2),
+        and the auditor must document their investigation response. The `ai_decision_id` field
+        on each anomaly record is populated only for PCAOB engagements.
 
         **Role access:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly.
       tags:

@@ -54,7 +54,8 @@
       "Bash(cmd.exe *)",
       "Bash(gh api *)",
       "WebFetch(domain:api.github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python axiom_infrastructure.py)"
     ]
   }
 }

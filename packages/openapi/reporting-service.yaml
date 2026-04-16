@@ -14,7 +14,9 @@ info:
     ```
 
     - **Draft**: Initial state after async generation. Content may be edited. AI-drafted sections
-      are flagged with `is_ai_draft` on each version.
+      are tracked via `ai_content_metadata` on each version (section-level `ai_generated`,
+      `human_edited`, and `modification_ratio` fields). The `is_ai_draft` boolean is a derived
+      convenience flag.
     - **ClientReview**: Shared with the client portal for review and feedback.
     - **FirmReview**: Client review acknowledged; auditors perform final internal sign-off.
     - **Issued**: Partner has formally issued the report. The report becomes **read-only**. Records
@@ -357,6 +359,12 @@ paths:
         Transitions the report from **FirmReview** → **Issued**. Records `issued_at` (UTC) and
         `issued_by_id` on the report row.
 
+        **AI content gate:** before issuance, the service validates that all AI-generated sections
+        in the latest `ReportVersion.ai_content_metadata` have `human_edited = true`. If any
+        AI section has not been edited, issuance is blocked with 422 (`AI_CONTENT_NOT_REVIEWED`).
+        Sections with `modification_ratio < 0.05` trigger a soft gate: the response includes a
+        `warnings` array; the caller must re-submit with `confirm_minimal_edits: true`.
+
         **Triggers deadline computation:** after status is persisted, the service calls Audit Core
         to compute and store `assembly_deadline` and `retention_deadline` on the Engagement.
         The computed deadlines are included in the response.
@@ -437,6 +445,112 @@ paths:
           $ref: './common.yaml#/components/responses/NotFound'
         '422':
           description: The report PDF is not yet available (e.g. still generating).
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # AI Section Draft Generation
+  # ---------------------------------------------------------------------------
+
+  /reports/{reportId}/generate-section-draft:
+
+    parameters:
+      - $ref: './common.yaml#/components/parameters/X-User-Id'
+      - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+      - $ref: './common.yaml#/components/parameters/X-User-Role'
+      - name: reportId
+        in: path
+        required: true
+        description: UUID of the report.
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      tags: [Reports]
+      summary: Request AI draft for a specific report section
+      operationId: generateReportSectionDraft
+      description: |
+        Triggers an asynchronous AI draft generation job (River worker `ai.report-section-draft`).
+        The AI generates a first draft of a specific report section using Claude Sonnet, based on:
+        report type and template, engagement-wide data (controls, test results, exceptions,
+        evidence statistics), prior year report (if rollforward), and the firm report template.
+
+        The generated draft is inserted into the specified section with full `ai_content_metadata`
+        section-level tracking. An `AIDecision` record with `context_type = ReportSectionDraft`
+        is created in Audit Core via internal REST call.
+
+        **Supported sections:**
+        - `description-of-tests` — Description of Tests of Controls (SOC 1, SOC 2)
+        - `scope-and-approach` — Scope and Approach (all report types)
+        - `system-description` — System Description summary (SOC 1, SOC 2)
+        - `control-environment` — Control Environment Overview (financial audit)
+
+        **Sections AI does NOT draft:** audit opinions, management assertions, going concern,
+        emphasis of matter, qualification language — these require professional judgment.
+
+        Returns **202 Accepted** immediately. The draft appears in the report content when the
+        background job completes. Poll `GET /reports/{reportId}` for updates.
+
+        **Guards:**
+        - Report must be in `Draft` status.
+        - `section_id` must be a supported section for the report type.
+
+        **Allowed roles:** Partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - section_id
+              properties:
+                section_id:
+                  type: string
+                  description: Identifier of the report section to draft.
+                  enum:
+                    - description-of-tests
+                    - scope-and-approach
+                    - system-description
+                    - control-environment
+                  examples:
+                    - scope-and-approach
+      responses:
+        '202':
+          description: Draft generation job accepted. Poll the report resource for updates.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                properties:
+                  message:
+                    type: string
+                    examples:
+                      - "AI section draft generation started for 'scope-and-approach'. Poll the report resource for updates."
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '409':
+          description: Report is not in Draft status.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '422':
+          description: |
+            The requested section is not supported for AI drafting with this report type.
           content:
             application/json:
               schema:
@@ -805,9 +919,66 @@ components:
         is_ai_draft:
           type: boolean
           description: |
-            Whether this version was produced by an AI draft operation. Used for
-            human-in-the-loop compliance auditing (logged in `AIDecision` table via Audit Core).
+            Derived convenience field. True when `ai_content_metadata` contains any section
+            with `ai_generated = true` AND `human_edited = false`. The section-level
+            `ai_content_metadata` provides the authoritative gate logic.
           default: false
+        ai_content_metadata:
+          type:
+            - object
+            - "null"
+          description: |
+            Section-level AI content tracking. Same schema as WorkpaperVersion.ai_content_metadata.
+            Null when no AI drafting was used. Contains per-section tracking and a summary with
+            counts and overall modification ratio. Report issuance validates that all AI sections
+            have `human_edited = true`; sections with `modification_ratio < 0.05` trigger a
+            confirmable warning.
+          properties:
+            sections:
+              type: array
+              items:
+                type: object
+                properties:
+                  section_id:
+                    type: string
+                  ai_generated:
+                    type: boolean
+                  ai_generated_at:
+                    type: string
+                    format: date-time
+                  human_edited:
+                    type: boolean
+                  human_edited_by:
+                    type: string
+                    format: uuid
+                  human_edited_at:
+                    type:
+                      - string
+                      - "null"
+                    format: date-time
+                  ai_character_count:
+                    type: integer
+                  current_character_count:
+                    type: integer
+                  modification_ratio:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+            summary:
+              type: object
+              properties:
+                total_sections:
+                  type: integer
+                ai_generated_sections:
+                  type: integer
+                ai_sections_edited:
+                  type: integer
+                ai_sections_unedited:
+                  type: integer
+                overall_modification_ratio:
+                  type: number
+                  minimum: 0
+                  maximum: 1
 
     EngagementExport:
       type: object
@@ -924,8 +1095,9 @@ components:
           type: boolean
           description: |
             Set to `true` when this update originates from an AI generation operation.
-            Propagated to the created `ReportVersion.is_ai_draft` field and logged for
-            human-in-the-loop compliance.
+            When true, the service populates `ai_content_metadata` on the created
+            `ReportVersion` with section-level tracking. The derived `is_ai_draft` flag
+            is set accordingly.
           default: false
 
     CreateEngagementExportRequest:

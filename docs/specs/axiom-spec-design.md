@@ -1,5 +1,5 @@
-# Axiom Product Specification v2
-**Date:** April 12, 2026
+# Axiom Product Specification
+**Date:** April 15, 2026
 **Status:** Implementation-Ready
 
 ---
