@@ -5,6 +5,8 @@
 **Developer context:** Solo engineer + AI coding agent, beginner-comfortable with Go and React
 **Key constraint:** Delay AWS spending as long as possible — everything runs locally until Phase 10
 
+**Git workflow:** Each phase is built on its own branch (`phase-N-description`). All commits go to that branch and are pushed to remote. The user creates a PR to master, reviews, and merges. At the start of the next phase, return to master, pull, verify the merge, then create a new branch.
+
 ---
 
 ## Table of Contents

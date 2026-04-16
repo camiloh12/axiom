@@ -10,6 +10,30 @@
 
 ---
 
+## Git Workflow
+
+Before starting any task, create the phase branch and push all work there:
+
+- [ ] **Create phase branch**
+
+```bash
+git checkout master
+git pull origin master
+git checkout -b phase-0-1-scaffold-and-identity
+```
+
+All commits in Tasks 1–17 go to this branch. Push the branch after each commit:
+
+```bash
+git push -u origin phase-0-1-scaffold-and-identity
+```
+
+After all tasks are complete, the user creates a PR from `phase-0-1-scaffold-and-identity` → `master`, reviews, and merges.
+
+**Before starting the next phase (Phase 2):** return to master, pull the merged changes, verify, then create a new branch for that phase.
+
+---
+
 ## File Structure
 
 ```
