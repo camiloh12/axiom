@@ -10,6 +10,41 @@
 
 ---
 
+## UI Methodology: Mockups + Impeccable
+
+**All React work in this plan must reference the existing mockups and the impeccable design system.** This is a hard rule, not a suggestion.
+
+- **Mockups** live in `mockups/journey-*/` (62 HTML screens across 10 user journeys). They are the visual + structural source of truth.
+- **`.impeccable.md`** at the repo root is the design system: typography, color tokens (OKLCH), spacing, component patterns, voice. It applies to every screen.
+- **The `frontend-design` skill** (the "impeccable" methodology) is used whenever a screen has no corresponding mockup, or when extending a component.
+
+### Per-task rules
+
+For every UI task in this plan:
+
+1. **Before writing React code,** identify the corresponding mockup file and read it. The HTML mockup is the design contract — match its structure, hierarchy, spacing, typography, and design tokens.
+2. **If no mockup exists for a screen** (login is the example here), invoke the `frontend-design` skill to design from `.impeccable.md` first, then implement.
+3. **If a new component is needed** that isn't in the mockups, invoke `frontend-design` for that component.
+
+### Mockup → Phase 0/1 page mapping
+
+| React page | Mockup file |
+|---|---|
+| `pages/register.tsx` | `mockups/journey-01-firm-setup/01-signup-form.html` (+ `03-intake-form.html` for the multi-step intake flow if combined) |
+| `pages/firm-settings.tsx` | `mockups/journey-01-firm-setup/04-firm-profile.html` |
+| `pages/users.tsx` (invite staff) | `mockups/journey-01-firm-setup/08-invite-staff.html` |
+| `pages/dashboard.tsx` | `mockups/journey-01-firm-setup/09-onboarding-complete.html` |
+| `pages/accept-invitation.tsx` | `mockups/journey-02-staff-onboarding/02-magic-link-landing.html` + `03-profile-setup.html` |
+| `pages/login.tsx` | **No mockup** — use `frontend-design` skill with `.impeccable.md` |
+| `pages/clients.tsx` | **No mockup** in journey-01/02 — use `frontend-design` skill |
+| `components/layout.tsx` (sidebar + topbar) | Extract from any post-onboarding mockup (e.g., `09-onboarding-complete.html`) — the shell is consistent |
+
+### End-of-phase validation (Task 19 below)
+
+Before the phase is considered complete, every page built or modified in this phase must pass an impeccable validation pass. See Task 19 for the procedure.
+
+---
+
 ## Development Methodology: Test-Driven Development
 
 **This plan is executed test-first.** The canonical policy lives in `docs/superpowers/specs/implementation-plan-design.md` under "Cross-Cutting Methodology: Test-Driven Development" — read that section before starting. This section codifies how it applies to every task below.
@@ -2804,28 +2839,42 @@ git commit -m "feat: add React auth context, API client with token refresh, and 
 - Create: `apps/web/src/pages/register.tsx`
 - Create: `apps/web/src/pages/dashboard.tsx`
 - Create: `apps/web/src/components/layout.tsx`
+- Create/extend: design tokens file (CSS variables from `.impeccable.md`)
 
-- [ ] **Step 1: Create login page**
+**Mockup + impeccable rule (read before writing code):**
+- Read `.impeccable.md` end-to-end before starting — fonts, OKLCH color tokens, spacing scale, component patterns, voice.
+- Each step below names the mockup file to match. Open it in a browser and read its HTML/CSS to extract structure, classes, design tokens, copy.
+- For screens with no mockup, invoke the `frontend-design` skill before writing React code.
+- Set up the Plus Jakarta Sans + JetBrains Mono fonts and the OKLCH color tokens once (in `apps/web/src/styles/tokens.css` or equivalent) before building the first page.
 
-`apps/web/src/pages/login.tsx` — form with email and password fields, calls `useAuth.login()`, navigates to `/dashboard` on success, shows error on failure, link to `/register`.
+- [ ] **Step 1: Create register page — mockup-driven**
 
-- [ ] **Step 2: Create register page**
+Source mockups:
+- `mockups/journey-01-firm-setup/01-signup-form.html` (top-level signup)
+- `mockups/journey-01-firm-setup/03-intake-form.html` (multi-step intake: country, staff count, audit types)
 
-`apps/web/src/pages/register.tsx` — form with firm name, admin email, admin name, password, country dropdown (US/CA), staff count dropdown, audit type checkboxes. Calls `useAuth.register()`, navigates to `/dashboard` on success.
+`apps/web/src/pages/register.tsx` — implement as a multi-step form matching the mockup structure. Match the typography hierarchy, field grouping, button styling, and microcopy from the mockups exactly. Calls `useAuth.register()` on final submit, navigates to `/dashboard` on success.
 
-- [ ] **Step 3: Create layout shell**
+If you find yourself improvising visual structure not in the mockup, stop and re-read the mockup.
 
-`apps/web/src/components/layout.tsx` — sidebar with navigation links (Dashboard, Clients, Users, Settings), top bar with firm name and user display name, logout button. Wrap protected routes in this layout.
+- [ ] **Step 2: Create login page — frontend-design skill**
 
-- [ ] **Step 4: Create dashboard page**
+There is **no mockup** for login. Invoke the `frontend-design` skill to design it from `.impeccable.md`. The result must:
+- Use the same typography, color tokens, button styles, and form-field styles as the register page.
+- Match the visual register page so a user moving between them sees a cohesive product.
+- Form fields: email, password. Calls `useAuth.login()`, navigates to `/dashboard` on success, error state on failure, link to `/register`.
 
-`apps/web/src/pages/dashboard.tsx` — wrapped in `Layout`. Shows onboarding checklist:
-1. Complete firm profile → link to `/settings`
-2. Invite your team → link to `/users`
-3. Add a client → link to `/clients`
-4. Create first engagement → link to `/engagements` (disabled, Phase 2)
+- [ ] **Step 3: Create layout shell — extract from mockups**
 
-Fetch firm and user profile on mount via `useAuth.loadProfile()`.
+Source mockup: `mockups/journey-01-firm-setup/09-onboarding-complete.html` (or any post-onboarding mockup that shows the shell).
+
+`apps/web/src/components/layout.tsx` — sidebar nav (Dashboard, Clients, Users, Settings), top bar with firm name + user display name, logout button. Match the spacing, typography weights, sidebar width, and color tokens from the mockup. Wrap protected routes in this layout.
+
+- [ ] **Step 4: Create dashboard page — mockup-driven**
+
+Source mockup: `mockups/journey-01-firm-setup/09-onboarding-complete.html`.
+
+`apps/web/src/pages/dashboard.tsx` — wrapped in `Layout`. Onboarding checklist exactly as shown in the mockup (four items: complete firm profile, invite team, add client, create first engagement — last one disabled/"coming soon"). Fetch firm and user profile on mount via `useAuth.loadProfile()`.
 
 - [ ] **Step 5: Write RTL tests for pages with logic — TDD applies**
 
@@ -2884,21 +2933,33 @@ git commit -m "feat: add login, register, and dashboard pages with layout shell 
 - Create: `apps/web/src/pages/accept-invitation.tsx`
 - Modify: `apps/web/src/App.tsx` (add routes)
 
-- [ ] **Step 1: Create users page**
+**Mockup + impeccable rule:** same as Task 15 — read the named mockup before implementing each step. For screens without a mockup, invoke the `frontend-design` skill.
 
-`apps/web/src/pages/users.tsx` — table of firm users (fetched via `GET /users`). "Invite Staff" button opens a form (email, role dropdown). Pending invitations section showing sent invitations with resend/cancel actions.
+- [ ] **Step 1: Create users page — mockup-driven**
 
-- [ ] **Step 2: Create clients page**
+Source mockup: `mockups/journey-01-firm-setup/08-invite-staff.html`.
 
-`apps/web/src/pages/clients.tsx` — table of clients. "Add Client" button opens a form (name, industry, contact email). Click a client row to edit inline or in a modal.
+`apps/web/src/pages/users.tsx` — table of firm users (`GET /users`). "Invite Staff" form (email, role dropdown) matching the mockup. Pending invitations section with resend/cancel actions, styled to the design system.
 
-- [ ] **Step 3: Create firm settings page**
+- [ ] **Step 2: Create clients page — frontend-design skill**
 
-`apps/web/src/pages/firm-settings.tsx` — form pre-populated with current firm data (name, timezone, billing email). Save button calls `PATCH /firms/current`.
+There is no mockup in journey-01/02 for the clients list. Invoke the `frontend-design` skill to design the table, "Add Client" form, and inline/modal edit, working from `.impeccable.md` and matching the styling of the users page (consistent table component, form patterns).
 
-- [ ] **Step 4: Create accept invitation page**
+`apps/web/src/pages/clients.tsx` — table of clients, "Add Client" form (name, industry, contact email), edit per row.
 
-`apps/web/src/pages/accept-invitation.tsx` — reads token from URL query param. Calls `GET /invitations/validate/{token}` to show invitation details (email, role). Form to set display name and password. Submit calls `POST /invitations/accept`. On success, stores tokens and redirects to dashboard.
+- [ ] **Step 3: Create firm settings page — mockup-driven**
+
+Source mockup: `mockups/journey-01-firm-setup/04-firm-profile.html`.
+
+`apps/web/src/pages/firm-settings.tsx` — form pre-populated with current firm data (name, timezone, billing email). Match the mockup's section layout, form-row spacing, and save-button placement. Save calls `PATCH /firms/current`.
+
+- [ ] **Step 4: Create accept invitation page — mockup-driven**
+
+Source mockups:
+- `mockups/journey-02-staff-onboarding/02-magic-link-landing.html` (token validation + invitation details)
+- `mockups/journey-02-staff-onboarding/03-profile-setup.html` (name + password form)
+
+`apps/web/src/pages/accept-invitation.tsx` — reads token from URL query param, calls `GET /invitations/validate/{token}` to show invitation details (email, role). Form to set display name + password. Submit calls `POST /invitations/accept`. On success, stores tokens and redirects to dashboard. Match the two-screen flow visually (consider whether to render as one page with two states, matching the journey).
 
 - [ ] **Step 5: Add routes to App.tsx**
 
@@ -3382,6 +3443,66 @@ When the user opens the PR from `phase-0-1-scaffold-and-identity` → `master`, 
 
 ---
 
+### Task 19: End-of-phase impeccable validation
+
+**Files:**
+- Create: `docs/superpowers/reviews/phase-0-1-impeccable-validation.md` (the validation report)
+
+This task runs **after** all UI tasks (14, 15, 16) are complete and before the phase is marked done. It is a hard gate, not optional. Its purpose is to catch design drift before it compounds in later phases.
+
+- [ ] **Step 1: Invoke the `frontend-design` (impeccable) skill**
+
+Use the Skill tool to invoke `frontend-design`. Tell it the goal is **validation, not creation** — it should evaluate the built screens against `.impeccable.md` and the corresponding mockups.
+
+- [ ] **Step 2: Build the validation matrix**
+
+For every page built or modified in Phase 0/1, fill in this matrix:
+
+| Page | Mockup reference | Implementation file | Validation status | Issues |
+|---|---|---|---|---|
+| `register.tsx` | `mockups/journey-01-firm-setup/01-signup-form.html` + `03-intake-form.html` | `apps/web/src/pages/register.tsx` | ✅ / ⚠ / ❌ | … |
+| `login.tsx` | (no mockup; designed via skill) | `apps/web/src/pages/login.tsx` | … | … |
+| `dashboard.tsx` | `09-onboarding-complete.html` | `apps/web/src/pages/dashboard.tsx` | … | … |
+| `firm-settings.tsx` | `04-firm-profile.html` | `apps/web/src/pages/firm-settings.tsx` | … | … |
+| `users.tsx` | `08-invite-staff.html` | `apps/web/src/pages/users.tsx` | … | … |
+| `clients.tsx` | (no mockup; designed via skill) | `apps/web/src/pages/clients.tsx` | … | … |
+| `accept-invitation.tsx` | `mockups/journey-02-staff-onboarding/02-magic-link-landing.html` + `03-profile-setup.html` | `apps/web/src/pages/accept-invitation.tsx` | … | … |
+| `components/layout.tsx` | extracted from `09-onboarding-complete.html` | `apps/web/src/components/layout.tsx` | … | … |
+
+- [ ] **Step 3: Run the validation pass**
+
+Start the React dev server and the Go API. For each page in the matrix, in a browser:
+
+1. **Mockup compare.** Open the mockup and the live page side by side. Check structure, hierarchy, spacing, button styles, form layout, table styles, microcopy. Drift > "minor" → flag as ⚠ or ❌.
+2. **Design system compliance** (against `.impeccable.md`):
+   - **Typography:** Plus Jakarta Sans for UI, JetBrains Mono on tabular/financial data, correct sizes from the type scale, line-heights, letter-spacing
+   - **Color:** OKLCH tokens used (not raw hex), correct surface/text/accent contrast, no decorative gradients
+   - **Spacing:** consistent scale, no ad-hoc margins
+   - **Components:** consistent button, form-field, table, badge styles across pages
+   - **Voice:** copy is "sharp, clinical, confident" — no marketing fluff, no exclamation points, no generic SaaS phrasing
+   - **Anti-patterns absent:** no hero gradients, no glassmorphism, no decorative illustrations, no heavy drop shadows
+3. **Tabular numbers** on any numeric data (`font-variant-numeric: tabular-nums`).
+4. **Accessibility quick check:** color contrast, focus states visible, form labels present.
+
+- [ ] **Step 4: Write the validation report**
+
+`docs/superpowers/reviews/phase-0-1-impeccable-validation.md` — fill in the matrix above, list every issue found per page, classify as **must-fix** (blocks phase completion) or **nice-to-have** (logged for follow-up).
+
+- [ ] **Step 5: Fix all must-fix issues**
+
+For each must-fix item, fix the React code and re-validate. Re-run the validation pass on the fixed pages. Iterate until every page is ✅.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add docs/superpowers/reviews/phase-0-1-impeccable-validation.md apps/web/
+git commit -m "design: end-of-phase impeccable validation pass for phase 0/1 UI"
+```
+
+The phase is not complete until the validation report shows ✅ for every page and all must-fix items are resolved.
+
+---
+
 ## Self-Review Checklist
 
 **Spec coverage:**
@@ -3402,6 +3523,7 @@ When the user opens the PR from `phase-0-1-scaffold-and-identity` → `master`, 
 - [x] RLS isolation verification — Task 17
 - [x] Invitation acceptance flow — Tasks 13, 16
 - [x] GitHub Actions CI pipeline (build, test, lint, vuln scan, CodeQL, secret scan) — Task 18
+- [x] End-of-phase impeccable design validation — Task 19
 
 **Not in scope (deferred to Phase 2+):**
 - Methodology templates (Phase 2)
