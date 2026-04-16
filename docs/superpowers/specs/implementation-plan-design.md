@@ -5,7 +5,7 @@
 **Developer context:** Solo engineer + AI coding agent, beginner-comfortable with Go and React
 **Key constraint:** Delay AWS spending as long as possible — everything runs locally until Phase 10
 
-**Git workflow:** Each phase is built on its own branch (`phase-N-description`). All commits go to that branch and are pushed to remote. The user creates a PR to master, reviews, and merges. At the start of the next phase, return to master, pull, verify the merge, then create a new branch.
+**Git workflow:** Each phase is built on its own branch (`feature/phase-N-description`). All commits go to that branch and are pushed to remote. The user creates a PR to master, reviews, and merges. At the start of the next phase, return to master, pull, verify the merge, then create a new branch.
 
 ---
 
@@ -42,6 +42,58 @@ The entire application runs on a developer laptop until Phase 10. No AWS account
 | River (jobs) | Same — River runs on Postgres | No change needed |
 
 **Cost of Phases 0–9: $0/month** plus ~$5–10 one-time Anthropic API credit when AI features are built in Phase 7.
+
+---
+
+## Cross-Cutting Methodology: Test-Driven Development
+
+**Every phase is built test-first.** This is not optional — it applies to every task in every phase from Phase 0 onward. The CI pipeline (set up in Phase 0) blocks any PR whose tests don't pass, which makes TDD the path of least resistance.
+
+### The loop
+
+For every unit of behavior (a service method, a handler, a React hook, a SQL query, a React component with logic):
+
+1. **Red** — write the failing test first. The test names the behavior in terms of inputs and expected outputs, not implementation details. Run it and confirm it fails for the right reason (not a compile error masking the actual assertion).
+2. **Green** — write the minimum implementation that makes the test pass. Resist adding "while I'm here" code.
+3. **Refactor** — with the test locking behavior in place, clean up names, extract helpers, remove duplication. Re-run the test after each change.
+
+Skipping the red step is the most common failure mode — writing a test *after* the code already works means the test has never actually demonstrated it can fail. If you catch yourself doing this, delete the code, re-run the test to see it fail, then re-implement.
+
+### What counts as a test
+
+| Layer | Test type | Example |
+|---|---|---|
+| Pure functions, domain logic | Go unit tests (`_test.go`, no DB) | JWT signing, slug generation, state machine guards, Levenshtein ratios |
+| Service methods (DB-touching) | Integration tests with a real Postgres test database | `RegisterFirm`, `CreateEngagement`, `AdvanceToFieldwork` |
+| HTTP handlers | `httptest.NewRecorder` tests covering status codes, body shape, auth failures | `POST /api/v1/auth/register`, `GET /api/v1/engagements/:id` |
+| River workers | Worker unit tests with fake AI/storage/email clients | `ai-completeness-check`, `document-extract`, `notification-deliver` |
+| RLS policies | Multi-tenant isolation tests (two firms, assert zero leakage) | One per new RLS-guarded table |
+| React hooks & logic | Vitest + React Testing Library | `useAuth`, form validation, AI modification-ratio display |
+| React components | RTL render + interaction assertions | Login form submits, engagement wizard advances steps |
+| End-to-end journey | Playwright against running dev stack (from Phase 2 onward) | "Staff completes review → Partner signs off" |
+
+### What does not need a test
+
+- Auto-generated code (sqlc output, openapi-typescript output, oapi-codegen interfaces) — tested transitively through the service/handler tests that consume it.
+- Trivial struct literals, constants, and config parsing with no branching.
+- Third-party library behavior (Chi router, pgx, React Router) — test the integration, not the dependency.
+
+Use judgment: if a mistake in the code would be caught by a compiler, a linter, or an integration test one layer up, a dedicated test adds noise without signal.
+
+### Coverage expectations
+
+- **Business logic packages** (`identity`, `auditcore`, `trialbalance`, `workpaper`, `reporting`, `ai`, state machine guards, AI content tracking): target **≥85% line coverage**. Every public method has at least one happy-path and one error-path test.
+- **Gateway, platform infrastructure**: target **≥70%**. Middleware gets direct tests (auth, role checks, RLS isolation).
+- **UI components**: target **≥60%**. Focus tests on components with logic; trivial layout components can be covered by journey/E2E tests.
+- **No coverage threshold on generated code, main.go wiring, or migration SQL files.**
+
+Coverage thresholds are enforced by CI after Phase 1 — the baseline is captured from the Phase 1 codebase, and no subsequent PR may regress it. The CI workflow defined in Phase 0 uploads `coverage.out` as an artifact; the threshold gate is wired in once real business logic exists.
+
+### How this shows up in each phase
+
+Each phase description below lists a "Testable Outcome." These are the acceptance criteria at the phase level — **they must be exercised by automated tests**, not only by manual browser walkthroughs. When a phase says "Staff submits workpaper → Manager reviews → Partner signs off," that entire flow has a corresponding integration test that drives it through the service layer, plus the relevant unit tests for each guard and sign-off rule it exercises.
+
+The Phase 9 compliance validation explicitly requires automated integration tests walking the full SOC 2 and PCAOB lifecycles. That is the final backstop: by the end of Phase 9, every regulatory guard, immutability rule, and sign-off hierarchy is covered by an automated test.
 
 ---
 
@@ -129,6 +181,40 @@ turbo.json
 ### Testable Outcome
 
 Run `docker compose up -d`, `go run ./cmd/server`, and `npm run dev` — browser shows "Axiom" with a green "API connected" indicator.
+
+### Continuous Integration
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every pull request targeting `master`. All jobs must pass before merge. Jobs run in parallel where possible; Turborepo `--filter` scopes work to affected packages.
+
+**Build & compile:**
+- `go build ./...` across the Go module (fails on any compile error)
+- `tsc --noEmit` for the React app (strict TypeScript compile check)
+- `npm run build` via Turborepo (full production build of `apps/web`)
+- OpenAPI codegen check: regenerate Go + TS clients from `packages/openapi/*.yaml`, fail if working tree dirty (enforces committed specs match generated code)
+
+**Unit tests (TDD-enforced — see Cross-Cutting Methodology):**
+- `go test ./... -race -count=1` with the race detector enabled
+- `npm test` (Vitest) for the React app
+- Coverage report uploaded as a job artifact. Hard thresholds activate in Phase 1: ≥85% on business-logic packages, ≥70% on platform/gateway, ≥60% on UI components. PRs that regress a package's coverage are blocked.
+- Every task that adds a service method, handler, worker, RLS policy, or component-with-logic lands with its tests in the same commit or an earlier commit in the same PR — never in a follow-up
+
+**Linting & formatting:**
+- `golangci-lint run` (config at `.golangci.yml` — starts with the default linter set: `errcheck`, `govet`, `staticcheck`, `unused`, `gosimple`, `ineffassign`)
+- `gofmt -l .` (fails if any file is not formatted)
+- `eslint` on `apps/web/src`
+- `prettier --check` on the web workspace
+- `actionlint` on `.github/workflows/*.yml` (catches workflow syntax errors)
+- `hadolint` on all `Dockerfile`s
+
+**Security & vulnerability scanning** (all free for public/private repos on GitHub):
+- **`govulncheck ./...`** — Go's official vulnerability scanner, cross-references the Go vuln DB against imported packages and actual call paths
+- **`npm audit --audit-level=high`** — flags high/critical npm advisories
+- **CodeQL** — GitHub's static analysis for Go and JavaScript/TypeScript; scheduled weekly plus on PR, results surface in the Security tab
+- **Dependabot** — enabled via `.github/dependabot.yml` for Go modules, npm, GitHub Actions, and Docker base images; opens PRs for updates
+- **`gitleaks`** — scans the diff for accidentally committed secrets (API keys, JWT secrets, AWS credentials)
+- **Trivy** — filesystem scan for known CVEs in dependencies and (later) container images
+
+**Status checks required for merge:** build, unit-tests, lint, govulncheck, codeql, gitleaks. Dependabot and Trivy scheduled scans report findings but don't block PRs.
 
 ---
 

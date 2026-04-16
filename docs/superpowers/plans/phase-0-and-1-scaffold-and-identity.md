@@ -10,6 +10,45 @@
 
 ---
 
+## Development Methodology: Test-Driven Development
+
+**This plan is executed test-first.** The canonical policy lives in `docs/superpowers/specs/implementation-plan-design.md` under "Cross-Cutting Methodology: Test-Driven Development" — read that section before starting. This section codifies how it applies to every task below.
+
+### The loop for every task
+
+For any file containing behavior (service methods, handlers, middleware, hooks, components with logic, SQL queries worth asserting against):
+
+1. **Red** — write the test file and assertions first. Run the test suite and confirm it fails. A compile error is *not* a valid red — the test must reach an assertion that evaluates to false before you write the implementation.
+2. **Green** — write the smallest implementation that makes the failing test pass. Do not stub out features that aren't under test.
+3. **Refactor** — rename, extract, deduplicate. Re-run the test between each change.
+
+Every task below that uses this pattern already shows it as three-step choreography: "Write test → Run — expect failure → Implement → Run — expect pass." If a task doesn't show these steps explicitly (e.g., a pure configuration task), it either has no behavior to test or its coverage comes from the next task that consumes it.
+
+### What each layer looks like in this plan
+
+| File pattern | Test type | Where in this plan |
+|---|---|---|
+| `internal/*/service.go` (DB-touching) | Integration tests with `platform.TestDB(t)` | Tasks 10, 13 |
+| `internal/*/handler.go` | `httptest.NewRecorder` tests | Tasks 11, 13 |
+| `internal/identity/jwt.go` | Pure unit tests (no DB) | Task 8 |
+| `internal/gateway/middleware.go` | Unit tests with mocked JWT issuer | Task 9 |
+| `internal/platform/*.go` | Pure unit tests where there's branching | Task 5 |
+| RLS policies | Multi-tenant isolation tests | Task 17 |
+| React hooks (`use-auth.ts`) | Vitest + RTL | Task 14 |
+| React forms (`login.tsx`, `register.tsx`) | RTL interaction tests | Tasks 15, 16 |
+
+### Rules for this phase
+
+- **Do not move to the next task until the current task's tests pass.** A failing test is a blocking issue, not a TODO.
+- **Do not commit an implementation without its tests in the same commit** (or an earlier commit in the same PR that introduced the failing test). "Tests to follow" is not acceptable.
+- **Commit messages for test-first work** should either call out the tests ("feat: add JWT issuer with RSA signing, verification, and refresh — incl. unit tests") or be split into two commits ("test: add failing JWT issuer tests" → "feat: implement JWT issuer").
+- **Trivial code does not need a test.** Config struct parsing, one-line constructors with no branching, and generated sqlc code are covered transitively by the tests on the code that uses them. When in doubt: if a plausible bug would be caught by a test one layer up, skip the dedicated test.
+- **When adjusting tests to match reality** (e.g., sqlc generated types differ from what the test assumed), verify the adjustment preserves the original intent of the assertion. Do not weaken a test to make it pass.
+
+The Phase 0 CI pipeline (Task 18) runs all tests on every PR. A failing test blocks merge.
+
+---
+
 ## Git Workflow
 
 Before starting any task, create the phase branch and push all work there:
@@ -481,9 +520,14 @@ git commit -m "chore: add Turborepo config and OpenAPI TypeScript codegen pipeli
 
 **Files:**
 - Create: `apps/axiom-api/internal/platform/config.go`
+- Create: `apps/axiom-api/internal/platform/config_test.go`
 - Create: `apps/axiom-api/internal/platform/database.go`
 - Create: `apps/axiom-api/internal/platform/errors.go`
+- Create: `apps/axiom-api/internal/platform/errors_test.go`
 - Create: `apps/axiom-api/internal/platform/response.go`
+- Create: `apps/axiom-api/internal/platform/response_test.go`
+
+**TDD note:** Config loading, error constructors, and response helpers all have branching behavior worth locking in with tests. `database.go` is tested transitively by the identity service tests in Task 10 (which uses `platform.NewDBPool` via `TestDB`), so a dedicated test is not required here.
 
 - [ ] **Step 1: Create config.go**
 
@@ -629,16 +673,162 @@ func WriteError(w http.ResponseWriter, err error) {
 }
 ```
 
-- [ ] **Step 5: Install Go dependencies**
+- [ ] **Step 5: Install Go dependencies (needed for tests to compile)**
 
 ```bash
 cd apps/axiom-api
 go get github.com/kelseyhightower/envconfig
 go get github.com/jackc/pgx/v5
+go get github.com/stretchr/testify
 go mod tidy
 ```
 
-- [ ] **Step 6: Verify compilation**
+- [ ] **Step 6: Write failing tests for config, errors, and response**
+
+Following TDD, write the test files first, run them, confirm they fail, *then* the implementations above will already satisfy them. (Ordering note: in a strict Red→Green cycle you'd write these tests before the implementation in Steps 1–4. If you did those steps first, treat this as a validation pass — delete each implementation file temporarily, re-run the relevant test, confirm red, restore the implementation, confirm green.)
+
+`apps/axiom-api/internal/platform/config_test.go`:
+
+```go
+package platform_test
+
+import (
+	"testing"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestLoadConfig_Defaults(t *testing.T) {
+	t.Setenv("PORT", "")
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("ENVIRONMENT", "")
+
+	cfg, err := platform.LoadConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "8080", cfg.Port)
+	assert.Contains(t, cfg.DatabaseURL, "axiom_db")
+	assert.Equal(t, "development", cfg.Environment)
+}
+
+func TestLoadConfig_EnvOverrides(t *testing.T) {
+	t.Setenv("PORT", "9090")
+	t.Setenv("DATABASE_URL", "postgres://custom/db")
+	t.Setenv("ENVIRONMENT", "production")
+
+	cfg, err := platform.LoadConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "9090", cfg.Port)
+	assert.Equal(t, "postgres://custom/db", cfg.DatabaseURL)
+	assert.Equal(t, "production", cfg.Environment)
+}
+```
+
+`apps/axiom-api/internal/platform/errors_test.go`:
+
+```go
+package platform_test
+
+import (
+	"net/http"
+	"testing"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestAppError_Error(t *testing.T) {
+	err := platform.ErrNotFound("user")
+	assert.Contains(t, err.Error(), "404")
+	assert.Contains(t, err.Error(), "user")
+}
+
+func TestErrorConstructors_SetCorrectStatusCodes(t *testing.T) {
+	cases := []struct {
+		name     string
+		err      *platform.AppError
+		expected int
+	}{
+		{"NotFound", platform.ErrNotFound("x"), http.StatusNotFound},
+		{"Unauthorized", platform.ErrUnauthorized("x"), http.StatusUnauthorized},
+		{"Forbidden", platform.ErrForbidden("x"), http.StatusForbidden},
+		{"BadRequest", platform.ErrBadRequest("x"), http.StatusBadRequest},
+		{"Conflict", platform.ErrConflict("x"), http.StatusConflict},
+		{"Validation", platform.ErrValidation("x", "d"), http.StatusUnprocessableEntity},
+		{"Internal", platform.ErrInternal("x"), http.StatusInternalServerError},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.expected, c.err.Code)
+		})
+	}
+}
+
+func TestErrValidation_CarriesDetail(t *testing.T) {
+	err := platform.ErrValidation("missing fields", "email is required")
+	assert.Equal(t, "missing fields", err.Message)
+	assert.Equal(t, "email is required", err.Detail)
+}
+```
+
+`apps/axiom-api/internal/platform/response_test.go`:
+
+```go
+package platform_test
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestWriteJSON_SetsStatusAndBody(t *testing.T) {
+	rr := httptest.NewRecorder()
+	platform.WriteJSON(rr, http.StatusCreated, map[string]string{"ok": "yes"})
+
+	assert.Equal(t, http.StatusCreated, rr.Code)
+	assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+
+	var body map[string]string
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
+	assert.Equal(t, "yes", body["ok"])
+}
+
+func TestWriteError_AppErrorRendersCode(t *testing.T) {
+	rr := httptest.NewRecorder()
+	platform.WriteError(rr, platform.ErrNotFound("firm"))
+
+	assert.Equal(t, http.StatusNotFound, rr.Code)
+	var body map[string]string
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &body))
+	assert.Equal(t, "firm", body["error"])
+}
+
+func TestWriteError_GenericErrorRenders500(t *testing.T) {
+	rr := httptest.NewRecorder()
+	platform.WriteError(rr, errors.New("boom"))
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+```
+
+- [ ] **Step 7: Run tests — expect pass**
+
+```bash
+cd apps/axiom-api
+go test ./internal/platform/ -v -count=1
+```
+
+Expected: all tests PASS.
+
+- [ ] **Step 8: Verify compilation across the module**
 
 ```bash
 go build ./...
@@ -646,11 +836,11 @@ go build ./...
 
 Expected: no errors.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add apps/axiom-api/internal/platform/ apps/axiom-api/go.mod apps/axiom-api/go.sum
-git commit -m "feat: add platform package with config, database pool, errors, and response helpers"
+git commit -m "feat: add platform package with config, database pool, errors, and response helpers (incl. unit tests)"
 ```
 
 ---
@@ -2528,7 +2718,47 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 ```
 
-- [ ] **Step 4: Update App.tsx with routing**
+- [ ] **Step 4: Write tests (Vitest + RTL) — TDD applies**
+
+Install test dependencies if not already present:
+
+```bash
+cd apps/web
+npm install -D vitest @vitest/ui jsdom @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+Create `apps/web/vitest.config.ts` (if it doesn't exist) with `environment: 'jsdom'` and a setup file that imports `@testing-library/jest-dom`.
+
+Write the following failing tests **before** considering the implementations above final. If you already wrote the implementation, delete it, confirm the test fails, then restore — this validates the test is actually exercising the behavior.
+
+- `src/api/client.test.ts`:
+  - `api()` injects `Authorization: Bearer <token>` when a token is set (mock `fetch`)
+  - On 401 with a refresh token present, calls `/auth/refresh`, saves new tokens, and retries the original request
+  - On 401 with no refresh token (or refresh fails), clears tokens and throws `ApiError(401)`
+  - `setTokens`/`clearTokens` round-trip via `localStorage`
+
+- `src/hooks/use-auth.test.tsx`:
+  - `login()` calls the API, stores tokens, flips `isAuthenticated` to `true`
+  - `logout()` clears tokens and resets state
+  - `register()` stores `user` and `firm` from the response
+  - Failed login leaves state untouched and rethrows
+
+- `src/components/protected-route.test.tsx`:
+  - When authenticated, renders `children`
+  - When not authenticated, renders a `<Navigate>` to `/login` (mock router assertion or assert the returned element)
+
+Use `msw` or plain `vi.stubGlobal('fetch', ...)` to mock API calls. Reset `localStorage` between tests.
+
+- [ ] **Step 5: Run tests — expect pass**
+
+```bash
+cd apps/web
+npm test -- --run
+```
+
+Expected: all tests PASS.
+
+- [ ] **Step 6: Update App.tsx with routing**
 
 ```tsx
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -2558,11 +2788,11 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add apps/web/src/
-git commit -m "feat: add React auth context, API client with token refresh, and protected routing"
+git add apps/web/
+git commit -m "feat: add React auth context, API client with token refresh, and protected routing (incl. unit tests)"
 ```
 
 ---
@@ -2597,7 +2827,37 @@ git commit -m "feat: add React auth context, API client with token refresh, and 
 
 Fetch firm and user profile on mount via `useAuth.loadProfile()`.
 
-- [ ] **Step 5: Test in browser**
+- [ ] **Step 5: Write RTL tests for pages with logic — TDD applies**
+
+For forms and components with branching behavior, write tests first. Use `@testing-library/user-event` for form interactions. Mock `useAuth` with `vi.mock(...)` so tests don't hit the network.
+
+- `src/pages/login.test.tsx`:
+  - Submitting valid credentials calls `useAuth.login` with the entered email and password
+  - A rejected `login()` renders an error message
+  - The "Register" link points to `/register`
+
+- `src/pages/register.test.tsx`:
+  - Submitting the full form calls `useAuth.register` with the form payload (including country, staff count, audit types)
+  - Missing required fields prevents submission (or surfaces validation errors)
+  - A rejected `register()` renders an error message
+
+- `src/pages/dashboard.test.tsx`:
+  - Renders the onboarding checklist with four items
+  - "Create first engagement" item is disabled/marked "coming soon"
+  - Calls `useAuth.loadProfile()` on mount
+
+Layout shell is mostly static markup — cover it transitively via the dashboard test rendering `<Layout>` as a wrapper; no dedicated test required.
+
+- [ ] **Step 6: Run tests — expect pass**
+
+```bash
+cd apps/web
+npm test -- --run
+```
+
+Expected: all tests PASS.
+
+- [ ] **Step 7: Manual browser walkthrough**
 
 Start Go API and React dev server. Navigate to `http://localhost:3000`:
 1. Redirected to `/login` (no token)
@@ -2606,11 +2866,11 @@ Start Go API and React dev server. Navigate to `http://localhost:3000`:
 4. Click logout → redirected to login
 5. Login with same credentials → back to dashboard
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/web/src/
-git commit -m "feat: add login, register, and dashboard pages with layout shell"
+git add apps/web/
+git commit -m "feat: add login, register, and dashboard pages with layout shell (incl. unit tests)"
 ```
 
 ---
@@ -2650,7 +2910,40 @@ Add routes:
 
 All protected routes wrapped in `Layout`.
 
-- [ ] **Step 6: Test full flow in browser**
+- [ ] **Step 6: Write RTL tests for pages with logic — TDD applies**
+
+- `src/pages/users.test.tsx`:
+  - Renders the user table with fetched users (mock `api` response)
+  - Opening the invite form and submitting calls `POST /users/invite` with email + role
+  - Pending invitation resend/cancel buttons call the right endpoints
+
+- `src/pages/clients.test.tsx`:
+  - Renders the client table
+  - Creating a client calls `POST /clients` with the form payload
+  - Editing a client calls `PATCH /clients/:id`
+
+- `src/pages/firm-settings.test.tsx`:
+  - Pre-populates the form from `GET /firms/current`
+  - Save calls `PATCH /firms/current` with the updated fields
+  - Shows a success indicator on save
+
+- `src/pages/accept-invitation.test.tsx`:
+  - Reads token from query param, calls validate endpoint, displays email + role
+  - Submitting password calls accept endpoint, stores tokens, navigates to dashboard
+  - Expired/invalid token surfaces an error state
+
+Use `vi.mock` to stub the `api` module; assert the mock was called with the expected URL and body.
+
+- [ ] **Step 7: Run tests — expect pass**
+
+```bash
+cd apps/web
+npm test -- --run
+```
+
+Expected: all tests PASS.
+
+- [ ] **Step 8: Manual full-flow browser walkthrough**
 
 1. Register firm → dashboard
 2. Navigate to Settings → update firm name → save → verify changed
@@ -2660,11 +2953,11 @@ All protected routes wrapped in `Layout`.
 6. Navigate to Clients → create "TechCorp" → see in list
 7. Log out and log back in as the invited staff user → verify limited access
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add apps/web/src/
-git commit -m "feat: add users, clients, firm settings, and invitation acceptance pages"
+git add apps/web/
+git commit -m "feat: add users, clients, firm settings, and invitation acceptance pages (incl. unit tests)"
 ```
 
 ---
@@ -2756,6 +3049,339 @@ git commit -m "test: add RLS multi-tenant isolation verification test"
 
 ---
 
+### Task 18: GitHub Actions CI pipeline
+
+**Files:**
+- Create: `.github/workflows/ci.yml`
+- Create: `.github/dependabot.yml`
+- Create: `.golangci.yml`
+- Create: `.gitleaks.toml` (optional — defaults are fine for most repos)
+
+This task sets up the CI pipeline that runs on every pull request from a feature branch to `master`. It validates build, tests, lint, and security on the full codebase produced by Tasks 1–17.
+
+- [ ] **Step 1: Create golangci-lint config**
+
+`.golangci.yml`:
+
+```yaml
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - gofmt
+    - goimports
+    - misspell
+    - bodyclose
+    - rowserrcheck
+    - sqlclosecheck
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/axiom-platform/axiom
+```
+
+- [ ] **Step 2: Create Dependabot config**
+
+`.github/dependabot.yml`:
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/apps/axiom-api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "npm"
+    directory: "/packages/openapi"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+```
+
+- [ ] **Step 3: Create CI workflow**
+
+`.github/workflows/ci.yml`:
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write  # required for CodeQL upload
+  pull-requests: read
+
+jobs:
+  go-build-test:
+    name: Go build & test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: axiom_db
+          POSTGRES_USER: axiom_svc
+          POSTGRES_PASSWORD: localdev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U axiom_svc -d axiom_db"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/axiom-api/go.mod
+          cache-dependency-path: apps/axiom-api/go.sum
+      - name: Install migrate
+        run: go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+      - name: Run migrations
+        run: migrate -path apps/axiom-api/migrations -database "postgres://axiom_svc:localdev@localhost:5432/axiom_db?sslmode=disable" up
+      - name: Build
+        working-directory: apps/axiom-api
+        run: go build ./...
+      - name: Test (with race detector)
+        working-directory: apps/axiom-api
+        run: go test ./... -race -count=1 -coverprofile=coverage.out
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: apps/axiom-api/coverage.out
+
+  go-lint:
+    name: Go lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/axiom-api/go.mod
+          cache-dependency-path: apps/axiom-api/go.sum
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: apps/axiom-api
+      - name: gofmt check
+        working-directory: apps/axiom-api
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "gofmt found unformatted files:"
+            gofmt -l .
+            exit 1
+          fi
+
+  go-vuln:
+    name: Go vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/axiom-api/go.mod
+          cache-dependency-path: apps/axiom-api/go.sum
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        working-directory: apps/axiom-api
+        run: govulncheck ./...
+
+  web-build-test:
+    name: Web build, test, lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Codegen (verify specs match generated code)
+        run: |
+          npm run codegen
+          if ! git diff --exit-code apps/web/src/api/generated/; then
+            echo "::error::Generated TypeScript types are out of sync with OpenAPI specs."
+            echo "Run 'npm run codegen' and commit the result."
+            exit 1
+          fi
+      - name: Type check
+        working-directory: apps/web
+        run: npx tsc --noEmit
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+      - name: Test
+        working-directory: apps/web
+        run: npm test -- --run
+      - name: Build
+        run: npm run build
+      - name: npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: false
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [go, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  gitleaks:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trivy:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+  workflow-lint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
+```
+
+- [ ] **Step 4: Add test scripts to apps/web/package.json**
+
+Ensure `apps/web/package.json` has these scripts (add any missing):
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "test": "vitest",
+    "preview": "vite preview"
+  }
+}
+```
+
+Install Vitest if not already present:
+
+```bash
+cd apps/web
+npm install -D vitest @vitest/ui jsdom @testing-library/react @testing-library/jest-dom
+```
+
+- [ ] **Step 5: Configure branch protection (manual — user action)**
+
+Document that the user should configure branch protection on `master` in GitHub settings:
+- Require a pull request before merging
+- Require status checks to pass before merging, selecting: `Go build & test`, `Go lint`, `Go vulnerability scan`, `Web build, test, lint`, `CodeQL`, `Secret scan`
+- Require branches to be up to date before merging
+
+`Trivy filesystem scan` and `actionlint` are recommended but can be left non-blocking while the codebase stabilizes.
+
+- [ ] **Step 6: Verify locally before push**
+
+Run each check locally against the current branch to confirm the pipeline will pass:
+
+```bash
+# Go checks
+cd apps/axiom-api
+go build ./...
+go test ./... -race -count=1
+gofmt -l .  # should output nothing
+
+# Web checks
+cd ../..
+npm ci
+npm run codegen
+npx tsc --noEmit --project apps/web
+cd apps/web && npm run lint && npm test -- --run && cd ../..
+npm run build
+```
+
+Expected: all commands succeed with no errors.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add .github/ .golangci.yml apps/web/package.json apps/web/package-lock.json
+git commit -m "ci: add GitHub Actions pipeline with build, test, lint, and security scans"
+```
+
+- [ ] **Step 8: Verify CI runs on PR**
+
+When the user opens the PR from `phase-0-1-scaffold-and-identity` → `master`, confirm:
+- All required jobs trigger and complete within ~10 minutes
+- Any failures are surfaced inline on the PR
+- CodeQL results appear in the Security tab
+- Dependabot opens its first update PRs within a day or two
+
+---
+
 ## Self-Review Checklist
 
 **Spec coverage:**
@@ -2775,6 +3401,7 @@ git commit -m "test: add RLS multi-tenant isolation verification test"
 - [x] React pages (login, register, dashboard, settings, users, clients) — Tasks 15, 16
 - [x] RLS isolation verification — Task 17
 - [x] Invitation acceptance flow — Tasks 13, 16
+- [x] GitHub Actions CI pipeline (build, test, lint, vuln scan, CodeQL, secret scan) — Task 18
 
 **Not in scope (deferred to Phase 2+):**
 - Methodology templates (Phase 2)
