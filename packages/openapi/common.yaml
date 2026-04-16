@@ -3,8 +3,8 @@ info:
   title: Axiom Common Schemas
   version: 1.0.0
   description: |
-    Shared schema components, parameters, and responses used across all Axiom service specs.
-    Referenced via `$ref: './common.yaml#/components/...'` from each service spec.
+    Shared schema components, parameters, and responses used across all Axiom module specs.
+    Referenced via `$ref: './common.yaml#/components/...'` from each module spec.
 
 paths: {}
 
@@ -14,7 +14,7 @@ components:
       name: X-User-Id
       in: header
       required: true
-      description: UUID of the authenticated user, injected by the API Gateway from the verified JWT.
+      description: UUID of the authenticated user, injected by the gateway middleware from the verified JWT.
       schema:
         type: string
         format: uuid
@@ -23,7 +23,7 @@ components:
       name: X-Firm-Id
       in: header
       required: true
-      description: UUID of the user's firm, injected by the API Gateway from the verified JWT.
+      description: UUID of the user's firm, injected by the gateway middleware from the verified JWT.
       schema:
         type: string
         format: uuid
@@ -32,7 +32,7 @@ components:
       name: X-User-Role
       in: header
       required: true
-      description: Role of the authenticated user, injected by the API Gateway from the verified JWT.
+      description: Role of the authenticated user, injected by the gateway middleware from the verified JWT.
       schema:
         type: string
         enum:

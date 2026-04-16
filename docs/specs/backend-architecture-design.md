@@ -1,7 +1,7 @@
 # Axiom Backend Architecture Design
-**Date:** 2026-04-12
+**Date:** 2026-04-16
 **Status:** Approved
-**Supersedes:** Section 7 (Technology Stack) of `axiom-spec-design.md`
+**Supersedes:** Section 7 (Technology Stack) of `axiom-spec-design.md`; previous microservices decomposition (2026-04-12)
 **Related:** [`domain-and-data-model-design.md`](./domain-and-data-model-design.md) (authoritative domain model and entity definitions)
 
 ---
@@ -26,17 +26,22 @@ The following decisions were made in sequence:
 
 3. **Python retained for PDF extraction.** Python's `pdfplumber` handles complex, multi-column, scanned audit documents (financial statements, SOC 2 system descriptions) better than any Go library. UniPDF (the closest Go alternative) is commercial and still weaker on layout analysis for the hardest documents. The Python service is stateless — one endpoint, one job — so the polyglot cost is contained.
 
-4. **Microservices with bounded-context decomposition.** Services are split along genuine bounded contexts in the data model, not along the five product modules. The core engagement/control/evidence cluster is too tightly coupled to split without distributed transactions, so it stays in one service with a shared database. Independent domains (identity, trial balance, workpapers, reporting) get their own services and databases.
+4. **Modular monolith over microservices.** The previous version of this design decomposed the backend into seven microservices aligned to bounded contexts. That architecture is technically sound but mismatched to the current development context:
+   - **Team size.** The product is being built by a single engineer with an AI coding agent. Microservices impose operational overhead (7 ECS services, 5 databases, 5 sets of migrations, cross-service REST contracts, distributed tracing) that consumes development time without delivering value until there are multiple independent teams deploying on different cadences.
+   - **AI agent effectiveness.** AI coding agents perform significantly better when they can see the full codebase — handlers, business logic, database queries, and domain types in one context window. In a microservices architecture, the agent must reason about HTTP contracts between services instead of function calls, and cannot trace a request end-to-end.
+   - **Cross-module transactions.** The evidence chain (`EvidenceItem → EvidenceLink → TestProcedure → Control → FirmControlObjective → FrameworkRequirement`) spans what were previously separate databases. The microservices design required cross-service REST calls to resolve framework mappings, internal REST endpoints for AIDecision creation, and SQS queues for cross-service events. In a monolith, these are function calls with ACID transactions.
+   - **Industry direction.** A 2025 CNCF survey found 42% of organizations that adopted microservices have consolidated services back into larger units. Amazon Prime Video, Shopify, Basecamp, GitHub, and Stack Overflow have demonstrated that well-structured monoliths scale further than most products will ever need.
+   - **Extraction path.** Go packages provide natural module boundaries. Each module exposes a Go interface; replacing an in-process call with an HTTP call is a mechanical change. Any module can be extracted to a separate service when team size or scaling requirements justify it.
 
-5. **Population analysis runs in PostgreSQL.** Trial balance population analysis (gap testing, duplicate detection, threshold filtering, Benford's law) runs as SQL queries against the trial balance database. The application layer handles orchestration and result formatting only. This removes performance as a differentiator between language options and makes Python's GIL a non-issue for this workload.
+   The Python Document Processing service remains separate — it has a different runtime, different resource profile (CPU-bound OCR), and no shared state.
+
+5. **Population analysis runs in PostgreSQL.** Trial balance population analysis (gap testing, duplicate detection, threshold filtering, Benford's law) runs as SQL queries against the database. The application layer handles orchestration and result formatting only.
 
 **AWS infrastructure** — account structure, VPC design, ECS/Fargate configuration, RDS instance sizing, S3 bucket policies, CI/CD pipeline, Terraform workspace segmentation, observability, and security controls are specified in [`infrastructure-design.md`](./infrastructure-design.md).
 
 ---
 
-## 2. Service Decomposition
-
-### Overview
+## 2. Architecture Overview
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -48,47 +53,60 @@ The following decisions were made in sequence:
 └───────────────────────────┬──────────────────────────────────┘
                             │
 ┌───────────────────────────▼──────────────────────────────────┐
-│                   API Gateway  (Go)                           │
-│   JWT verification · request routing · rate limiting         │
-│   Loads Identity public key at startup — no per-request      │
-│   call to Identity on the hot path.                          │
-└──┬──────────┬─────────────┬──────────┬──────────┬────────────┘
-   │          │             │          │          │
-   ▼          ▼             ▼          ▼          ▼
-Identity  Audit Core   Trial Bal   Workpaper  Reporting
-(Go)       (Go)          (Go)        (Go)       (Go)
-                          ▲
-                          │ HTTP (from River worker)
-                    Doc Processing
-                       (Python)
+│                    Axiom API  (Go)                            │
+│   Single binary — all domain modules + background workers    │
+│                                                              │
+│  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌──────────┐      │
+│  │ Gateway  │ │ Identity │ │ Audit Core│ │ Trial Bal│      │
+│  │(midware) │ │          │ │           │ │          │      │
+│  └──────────┘ └──────────┘ └───────────┘ └──────────┘      │
+│  ┌──────────┐ ┌──────────┐ ┌───────────┐                    │
+│  │Workpaper │ │Reporting │ │    AI     │                    │
+│  │ (+WS)    │ │          │ │ (Bedrock) │                    │
+│  └──────────┘ └──────────┘ └───────────┘                    │
+│                                                              │
+│  River background workers (all modules, one instance)        │
+└──────────┬───────────────────────────────────────────────────┘
+           │ HTTP (document extraction only)
+┌──────────▼───────────────────────────────────────────────────┐
+│              Document Processing  (Python)                    │
+│              FastAPI · pdfplumber · Tesseract                 │
+└──────────────────────────────────────────────────────────────┘
+           │
+      PostgreSQL
+     (single DB, RLS)
 ```
 
-All services run as ECS Fargate Services. The API Gateway routes by URL prefix (e.g., `/api/v1/engagements/*` → Audit Core, `/api/v1/trial-balance/*` → Trial Balance). Internal service-to-service calls use ECS Service Connect DNS (`http://audit-core` within the VPC namespace).
+Two deployed services:
+
+- **Axiom API** — a single Go binary containing all domain modules (identity, audit core, trial balance, workpaper, reporting) plus the gateway middleware, AI integration layer, and River background workers. Runs as an ECS Fargate service.
+- **Document Processing** — a stateless Python service for PDF text extraction and OCR. Called via HTTP from the Axiom API's `auditcore.document-extract` River worker. Not exposed through the ALB.
+
+Modules communicate via Go function calls, not HTTP. Each module defines a service interface that other modules depend on. Dependencies are wired at application startup.
 
 ---
 
-### Service 1: API Gateway
+## 3. Internal Modules
 
-**Language:** Go
-**Database:** None
-**Framework:** Standard library `net/http` + `httputil.ReverseProxy`
+### Module: Gateway (Middleware)
+
+**Package:** `internal/gateway`
+
+Not a separate service — implemented as Chi middleware functions composed into the router.
 
 Responsibilities:
-- Verify JWT signature using Identity Service's RSA public key (loaded at startup, refreshed on rotation via a background goroutine).
-- Inject `X-User-Id`, `X-Firm-Id`, `X-User-Role` headers for downstream services. Downstream services trust these headers — they never re-validate the JWT.
-- Route requests to the appropriate downstream service by URL prefix.
-- Enforce rate limits per `firm_id` (token bucket, in-memory per pod — sufficient at launch scale).
-- Return 401 for missing/invalid JWT before any downstream call is made.
+- Verify JWT signature using the Identity module's RSA public key (loaded at startup, refreshed on rotation via a background goroutine).
+- Inject `X-User-Id`, `X-Firm-Id`, `X-User-Role` into the request context for downstream handlers.
+- Enforce rate limits per `firm_id` (token bucket, in-memory — sufficient at launch scale).
+- Return 401 for missing/invalid JWT before any handler is invoked.
 
-This is infrastructure, not a domain service. It has no business logic and no database. Target: under 500 lines of Go.
+Target: under 300 lines of Go.
 
 ---
 
-### Service 2: Identity Service
+### Module: Identity
 
-**Language:** Go
-**Database:** `identity_db` (own Postgres database on the shared RDS instance)
-**Framework:** Chi + oapi-codegen
+**Package:** `internal/identity`
 
 Owns:
 - `Firm` — root tenant entity
@@ -100,24 +118,22 @@ Owns:
 
 Responsibilities:
 - User registration, login (email/password + MFA), SSO via SAML (Microsoft/Google).
-- JWT issuance and refresh. JWTs are signed with an RSA private key held only by this service.
+- JWT issuance and refresh. JWTs are signed with an RSA private key held only by this module's configuration.
 - RBAC: role assignment, permission checks. Roles: `FirmAdmin | Partner | Manager | Staff | EQReviewer | ClientAdmin | ClientUser | ViewOnly`.
 - Firm settings and subscription tier management.
 - Staff invitation management (magic link issuance, expiry, day-5 reminders).
 - Methodology template CRUD (including pre-drafted document request templates).
 - Firm control objective CRUD and framework requirement mappings.
 
-Client users (`ClientAdmin`, `ClientUser`) belong to a `Client` record in this service, not a `Firm`. Their JWT encodes the `client_id` and the specific engagement IDs they are invited to.
+Client users (`ClientAdmin`, `ClientUser`) belong to a `Client` record, not a `Firm`. Their JWT encodes the `client_id` and the specific engagement IDs they are invited to.
 
 ---
 
-### Service 3: Audit Core
+### Module: Audit Core
 
-**Language:** Go
-**Database:** `core_db` — shared Postgres with RLS (see Section 3)
-**Framework:** Chi + oapi-codegen
-**Background jobs:** River (Postgres-backed, uses `core_db`)
-**Step Functions state machines:** `EngagementLifecycleStateMachine`, `DocumentRequestReminderStateMachine`
+**Package:** `internal/auditcore`
+
+The largest module by entity count. Owns the central domain model.
 
 Owns:
 - `Engagement`, `EngagementTeamMember`, `EngagementFramework`
@@ -133,91 +149,83 @@ System tables (seeded, not tenant-scoped, updated via migrations):
 - `Framework`, `FrameworkRequirement`
 - `ControlObjectiveLibrary`, `ControlObjectiveLibraryMapping`
 
-River workers (background jobs within `core_db`):
-- `document.extract` — calls Document Processing Service via HTTP; stores extracted text in `EvidenceItem.extracted_text`
-- `document.embed` — generates embeddings via Claude API; stores vectors in pgvector
-- `ai.completeness-check` — per document upload, checks completeness against request
-- `ai.nightly-sweep` — engagement-level completeness review
-- `ai.batch-control-mapping` — maps new FirmControlObjectives to FrameworkRequirements; reads FirmControlObjectives via Identity Service REST API, writes mappings back via REST (triggered by SQS event from Identity Service)
-- `ai.evidence-link-suggestion` — triggered when an auditor opens a test procedure for evidence linking, or when a document is accepted via completeness review (Feature 1). Proposes which evidence items should link to a test procedure. Creates AIDecision records per suggestion. Claude Haiku.
-- `ai.risk-category-suggestion` — triggered when a partner opens the ClientAcceptance form. Suggests quality risk categories based on client/engagement context and prior year findings. Creates AIDecision record. Claude Sonnet. Low volume (one per engagement).
-- `notification.deliver` — creates Notification records and delivers transactional email via SES based on recipient notification preferences
+**Step Functions state machines** (invoked via AWS SDK):
+- `EngagementLifecycleStateMachine` — engagement status transitions with guard conditions
+- `DocumentRequestReminderStateMachine` — reminder escalation sequence
 
-This is the largest service by entity count and intentionally so. The evidence chain within `core_db` (`EvidenceItem → EvidenceLink → TestProcedure → Control`) requires ACID transactions. `Control.firm_control_objective_id` is a cross-database reference to `identity_db` — framework mapping resolution (`FirmControlObjective → FirmControlObjectiveMapping → FrameworkRequirement`) traverses the Identity Service via REST, but this is a read-only lookup that can be cached per engagement. The critical atomic operations (e.g., accepting a document request must atomically create an `EvidenceLink` and update `DocumentRequest.status`) stay within `core_db`.
+River workers:
+- `auditcore.document-extract` — calls Document Processing service via HTTP; stores extracted text in `EvidenceItem.extracted_text`
+- `auditcore.document-embed` — generates embeddings via Bedrock; stores vectors in pgvector
+- `auditcore.ai-completeness-check` — per document upload, checks completeness against request
+- `auditcore.ai-nightly-sweep` — engagement-level completeness review
+- `auditcore.ai-batch-control-mapping` — maps new FirmControlObjectives to FrameworkRequirements; reads FirmControlObjectives directly from the identity module (function call, not REST). Triggered when the identity module creates new FirmControlObjectives (enqueued directly).
+- `auditcore.ai-evidence-link-suggestion` — triggered when an auditor opens a test procedure for evidence linking, or when a document is accepted via completeness review. Proposes evidence-to-test-procedure links. Creates AIDecision records. Claude Haiku.
+- `auditcore.ai-risk-category-suggestion` — triggered when a partner opens the ClientAcceptance form. Suggests risk categories based on client/engagement context. Creates AIDecision record. Claude Sonnet. Low volume (one per engagement).
+- `auditcore.notification-deliver` — creates Notification records and delivers transactional email via SES based on recipient notification preferences.
+
+The evidence chain (`EvidenceItem → EvidenceLink → TestProcedure → Control`) is fully within one database with ACID transactions. `Control.firm_control_objective_id` references `FirmControlObjective` in the identity module's tables — since they share the same database, this is a real foreign key with referential integrity.
 
 ---
 
-### Service 4: Trial Balance Service
+### Module: Trial Balance
 
-**Language:** Go
-**Database:** `trial_balance_db` (own Postgres database)
-**Framework:** Chi + oapi-codegen
-**Background jobs:** River (Postgres-backed, uses `trial_balance_db`)
+**Package:** `internal/trialbalance`
 
 Owns:
 - `TrialBalance`, `TrialBalanceAccount`, `TrialBalanceAdjustment`
 - `ColumnMappingProfile` — saved column mapping configurations per accounting system for reuse across imports
 
-`engagement_id` is stored as a plain UUID column — no foreign key, no join to `core_db`. If a request requires validating that the engagement exists and the requesting user has access, the service makes one REST call to Audit Core at the start of the handler and caches the result for the duration of the request.
+Exists only for `FinancialAudit` engagement types. Population analysis (gap testing, duplicate detection, threshold filtering, Benford's law distribution analysis) runs as SQL queries. No application-layer computation for bulk analytics.
 
-Exists only for `FinancialAudit` engagement types. Population analysis (gap testing, duplicate detection, threshold filtering, Benford's law distribution analysis) runs as SQL queries against `trial_balance_db`. No application-layer computation for bulk analytics.
-
-River workers (background jobs within `trial_balance_db`):
-- `ai.account-mapping` — triggered on trial balance import. Classifies each account into a standard financial statement line item using Claude Haiku few-shot classification. Creates `AIDecision` records via Audit Core REST API. Prior year confirmed mappings are used as few-shot context on rollforward engagements.
-- `ai.anomaly-detection` — nightly background job on all engagements in Fieldwork status with an imported trial balance. Also runs once immediately after initial TB import and account mapping confirmation. Computes period-over-period variance, financial ratios, and flags unusual activity. For nonissuer engagements, flags are Tier 1 (informational, no AIDecision). For PCAOB engagements, creates `AIDecision` records via Audit Core REST API (Tier 2). Engagement type is fetched from Audit Core at job start.
-
-The spreadsheet UI (AG Grid + HyperFormula) has distinct scaling and collaboration requirements from the rest of the product, which justifies independent deployment. This service is the most likely candidate to be rewritten (e.g., if a dedicated spreadsheet service like Univer is adopted).
+River workers:
+- `trialbalance.ai-account-mapping` — triggered on trial balance import. Classifies each account into a standard financial statement line item using Claude Haiku few-shot classification. Creates `AIDecision` records directly (same database — function call to auditcore module). Prior year confirmed mappings are used as few-shot context on rollforward engagements.
+- `trialbalance.ai-anomaly-detection` — nightly background job on all engagements in Fieldwork status with an imported trial balance. Also runs once immediately after initial TB import and account mapping confirmation. Computes period-over-period variance, financial ratios, and flags unusual activity. For nonissuer engagements, flags are Tier 1 (informational, no AIDecision). For PCAOB engagements, creates `AIDecision` records (Tier 2). Engagement type is read directly from the auditcore module (function call).
 
 ---
 
-### Service 5: Workpaper Service
+### Module: Workpaper
 
-**Language:** Go
-**Database:** `workpaper_db` (own Postgres database)
-**Framework:** Chi + oapi-codegen + WebSocket (Gorilla WebSocket or nhooyr/websocket)
+**Package:** `internal/workpaper`
 
 Owns:
 - `Workpaper`, `WorkpaperVersion`
 - `ReviewNote` — structured reviewer feedback anchored to workpaper content (cannot be deleted — AU-C 230)
-- Yjs document awareness state (in-memory per document, persisted to `workpaper_db` on save)
+- Yjs document awareness state (in-memory per document, persisted to database on save)
 
-`engagement_id` and `control_id` are plain UUID references — no foreign keys to `core_db`.
+Handles WebSocket connections for Yjs real-time collaboration on a dedicated route group (`/api/v1/workpapers/ws/*`). The ALB natively supports WebSocket upgrade requests.
 
-The WebSocket server for Yjs real-time collaboration has different scaling characteristics from REST API services (long-lived connections vs stateless request/response). This is the primary reason to keep workpapers as a separate service. Workpaper tasks are scaled independently via a custom CloudWatch metric (active WebSocket connection count), not request throughput.
+River workers:
+- `workpaper.ai-workpaper-draft` — triggered when an auditor explicitly requests a narrative draft after marking a TestProcedure as Complete. Calls Bedrock (Claude Sonnet) with control description, test procedure, linked evidence text, exceptions, prior year workpaper (if rollforward), and firm template. Inserts draft text into the workpaper editor with `ai_content_metadata` tracking per section. Creates `AIDecision` record with `context_type = WorkpaperDraft`.
 
-River workers (background jobs within `workpaper_db`):
-- `ai.workpaper-draft` — triggered when an auditor explicitly requests a narrative draft after marking a TestProcedure as Complete. Calls Bedrock (Claude Sonnet) with control description, test procedure, linked evidence text, exceptions, prior year workpaper (if rollforward), and firm template. Inserts draft text into the workpaper editor with `ai_content_metadata` tracking per section. Creates `AIDecision` record via Audit Core REST API with `context_type = WorkpaperDraft`.
-
-**AI content tracking:** `WorkpaperVersion` carries `ai_content_metadata` (jsonb) that tracks AI origin per section — `ai_generated`, `human_edited`, and `modification_ratio` (Levenshtein distance between AI-generated text and current text, divided by AI character count). The `modification_ratio` is computed on each save, not in real-time. The `is_ai_draft` boolean is retained as a derived convenience field: true when any section has `ai_generated = true AND human_edited = false`. The advancement gate (`PreparedPendingReview`) checks: (1) all AI-generated sections must have `human_edited = true`, (2) sections with `modification_ratio < 0.05` trigger a confirmable warning. This replaces the prior binary `is_ai_draft` check and satisfies PCAOB AS 1105.
+**AI content tracking:** `WorkpaperVersion` carries `ai_content_metadata` (jsonb) that tracks AI origin per section — `ai_generated`, `human_edited`, and `modification_ratio` (Levenshtein distance between AI-generated text and current text, divided by AI character count). The `modification_ratio` is computed on each save, not in real-time. The `is_ai_draft` boolean is retained as a derived convenience field: true when any section has `ai_generated = true AND human_edited = false`. The advancement gate (`PreparedPendingReview`) checks: (1) all AI-generated sections must have `human_edited = true`, (2) sections with `modification_ratio < 0.05` trigger a confirmable warning. This satisfies PCAOB AS 1105.
 
 ---
 
-### Service 6: Reporting Service
+### Module: Reporting
 
-**Language:** Go
-**Database:** `reporting_db` (own Postgres database)
-**Framework:** Chi + oapi-codegen
+**Package:** `internal/reporting`
 
 Owns:
 - `Report`, `ReportVersion`
 
-Report generation is an async operation (not a synchronous API response). The Reporting Service runs its own River instance backed by `reporting_db`. When a report is requested, a River job is enqueued in `reporting_db`. The worker:
-1. Calls Audit Core REST API for engagement data, controls, evidence, and workpapers.
-2. Calls Trial Balance REST API for trial balance data (if financial audit).
-3. Calls Workpaper REST API for workpaper content.
+Report generation is an async operation. When a report is requested, a River job is enqueued. The worker:
+1. Reads engagement data, controls, evidence, and workpapers from the auditcore module (function calls).
+2. Reads trial balance data from the trialbalance module (function call, if financial audit).
+3. Reads workpaper content from the workpaper module (function call).
 4. Renders the report using a Go template.
-5. Stores the rendered report in S3 and the metadata in `reporting_db`.
+5. Stores the rendered report in S3 and the metadata in the database.
 
-River workers (additional, beyond report generation):
-- `ai.report-section-draft` — triggered when a partner explicitly requests an AI draft of a specific report section. Calls Bedrock (Claude Sonnet) with report type/template, engagement-wide data (controls, test results, exceptions, evidence statistics), prior year report (if rollforward), and firm template. Inserts draft text into the specific report section with `ai_content_metadata` tracking. Creates `AIDecision` record via Audit Core REST API with `context_type = ReportSectionDraft`. AI may draft: Description of Tests of Controls (SOC 1/2), Scope and Approach (all), System Description summary (SOC 1/2), Control Environment Overview (financial audit). AI does NOT draft: opinions, management assertions, going concern, emphasis of matter, or qualification language.
+River workers:
+- `reporting.report-generate` — assembles and renders reports as described above.
+- `reporting.ai-report-section-draft` — triggered when a partner explicitly requests an AI draft of a specific report section. Calls Bedrock (Claude Sonnet) with report type/template, engagement-wide data (controls, test results, exceptions, evidence statistics), prior year report (if rollforward), and firm template. Inserts draft text into the specific report section with `ai_content_metadata` tracking. Creates `AIDecision` record with `context_type = ReportSectionDraft`. AI may draft: Description of Tests of Controls (SOC 1/2), Scope and Approach (all), System Description summary (SOC 1/2), Control Environment Overview (financial audit). AI does NOT draft: opinions, management assertions, going concern, emphasis of matter, or qualification language.
 
-**AI content tracking:** `ReportVersion` carries `ai_content_metadata` (jsonb) with the same section-level tracking schema as `WorkpaperVersion` — `ai_generated`, `human_edited`, `modification_ratio`. The `is_ai_draft` boolean is a derived convenience field. Report issuance (`Report.status = Issued`) validates that all AI-drafted sections have been substantively edited: all sections must have `human_edited = true`, and sections with `modification_ratio < 0.05` trigger a confirmable warning.
+**AI content tracking:** `ReportVersion` carries `ai_content_metadata` (jsonb) with the same section-level tracking schema as `WorkpaperVersion` — `ai_generated`, `human_edited`, `modification_ratio`. Report issuance (`Report.status = Issued`) validates that all AI-drafted sections have been substantively edited: all sections must have `human_edited = true`, and sections with `modification_ratio < 0.05` trigger a confirmable warning.
 
-Finalized and archived reports use S3 Object Lock (WORM) to satisfy regulatory immutability requirements. `Report` records transition to read-only in `reporting_db` at the same time.
+Finalized and archived reports use S3 Object Lock (WORM) to satisfy regulatory immutability requirements. `Report` records transition to read-only in the database at the same time.
 
 ---
 
-### Service 7: Document Processing Service
+### External Service: Document Processing
 
 **Language:** Python
 **Database:** None (stateless)
@@ -233,99 +241,113 @@ Internally:
 - `pytesseract` (wrapping Tesseract) for scanned documents where `is_scanned` is detected.
 - No state retained between calls.
 
-Called exclusively by Audit Core's `document.extract` River worker. Not exposed through the API Gateway.
+Called exclusively by the Axiom API's `auditcore.document-extract` River worker. Not exposed through the ALB. Accessed via ECS Service Connect DNS (`http://doc-processing`).
 
 ---
 
-## 3. Database Topology
+## 4. Database
 
-### Physical Layout
+### Single Database with RLS
 
-One RDS PostgreSQL instance (Multi-AZ for production, Single-AZ for staging/dev), five logical databases:
+One RDS PostgreSQL instance (Multi-AZ for production, Single-AZ for staging/dev), one logical database:
 
 ```
 RDS PostgreSQL (Multi-AZ)
-├── identity_db          → Identity Service
-├── core_db              → Audit Core (RLS enabled)
-├── trial_balance_db     → Trial Balance Service
-├── workpaper_db         → Workpaper Service
-└── reporting_db         → Reporting Service
+└── axiom_db    → Axiom API (RLS on all tenant-scoped tables)
 ```
 
-Each service has its own Postgres user with access only to its own database. No cross-database queries. Cross-service data is resolved via REST API calls at runtime.
+The Axiom API connects with a single database user (`axiom_svc`). A separate `master` user is used for migrations and break-glass access.
 
-PgBouncer (transaction-mode connection pooling) is deployed as an ECS sidecar container in each service's task definition. Each service connects to PgBouncer at `localhost:6432`, not directly to RDS.
+PgBouncer (transaction-mode connection pooling) is deployed as an ECS sidecar container in the Axiom API's task definition. The application connects to PgBouncer at `localhost:6432`, not directly to RDS.
 
-### core_db: Multi-Tenancy via RLS
+### Row-Level Security
 
-`core_db` uses PostgreSQL Row-Level Security for multi-tenancy. `firm_id` is indexed on every tenant-scoped table. Application sets `SET app.current_firm_id = $1` at session/transaction start. RLS policies enforce the firm boundary at the database layer.
+All tenant-scoped tables use PostgreSQL Row-Level Security. `firm_id` is indexed on every tenant-scoped table. The application sets `SET app.current_firm_id = $1` at transaction start. RLS policies enforce the firm boundary at the database layer.
 
-The three authorization middleware functions from the v2 spec are preserved as Go middleware:
-- `WithFirmIsolation` — reads `firm_id` from JWT headers, sets Postgres session variable
+The three authorization middleware functions are implemented as Go middleware in the gateway module:
+- `WithFirmIsolation` — reads `firm_id` from JWT context, sets Postgres session variable
 - `WithEngagementAccess` — verifies `EngagementTeamMember` record exists for the requested engagement
 - `WithClientScoping` — for `ClientUser` roles, filters to invited engagements only
 
-### Other databases: Application-Layer Isolation
+### Module Table Ownership
 
-`identity_db`, `trial_balance_db`, `workpaper_db`, and `reporting_db` enforce tenant isolation at the application layer (query always includes `WHERE firm_id = $1`). RLS is not required because these services are simpler and the isolation logic is less complex.
+Each module owns specific tables and accesses them via its own sqlc queries. Cross-module data is accessed through the module's service interface, not by querying another module's tables directly. This preserves clean boundaries and makes future service extraction straightforward.
+
+| Module | Tables |
+|---|---|
+| Identity | `firms`, `users`, `clients`, `invitations`, `methodology_templates`, `template_controls`, `template_test_procedures`, `template_document_requests`, `firm_control_objectives`, `firm_control_objective_mappings`, `firm_control_objective_embeddings` |
+| Audit Core | `engagements`, `engagement_team_members`, `engagement_frameworks`, `client_acceptances`, `engagement_quality_reviews`, `eqr_findings`, `controls`, `test_procedures`, `evidence_items`, `evidence_links`, `evidence_embeddings`, `document_requests`, `client_hub_tokens`, `delegation_tokens`, `ai_decisions`, `audit_logs`, `notifications`, `frameworks`, `framework_requirements`, `framework_requirement_embeddings`, `control_objective_library`, `control_objective_library_embeddings`, `control_objective_library_mappings` |
+| Trial Balance | `trial_balances`, `trial_balance_accounts`, `trial_balance_adjustments`, `column_mapping_profiles` |
+| Workpaper | `workpapers`, `workpaper_versions`, `review_notes` |
+| Reporting | `reports`, `report_versions` |
+
+Foreign keys that cross module boundaries (e.g., `controls.firm_control_objective_id → firm_control_objectives.id`) are enforced at the database level — a significant advantage over the previous multi-database design where these were plain UUID references without referential integrity.
 
 ### pgvector
 
-pgvector extension is enabled on `core_db` and `identity_db`. In `core_db`, embedding vectors are stored for: `EvidenceItem` records (`evidence_embeddings`), `FrameworkRequirement` records (`framework_requirement_embeddings`), and `ControlObjectiveLibrary` records (`control_objective_library_embeddings`). In `identity_db`, embeddings are stored for `FirmControlObjective` records (`firm_control_objective_embeddings`). These embeddings support AI Feature 2 (Control Mapping) and Feature 5 (Evidence Link Suggestion).
+The pgvector extension is enabled on `axiom_db`. Embedding vectors are stored for: `EvidenceItem` records (`evidence_embeddings`), `FrameworkRequirement` records (`framework_requirement_embeddings`), `ControlObjectiveLibrary` records (`control_objective_library_embeddings`), and `FirmControlObjective` records (`firm_control_objective_embeddings`). These embeddings support AI Feature 2 (Control Mapping) and Feature 5 (Evidence Link Suggestion).
 
 ---
 
-## 4. Inter-Service Communication
+## 5. Inter-Module Communication
 
-### Synchronous (REST over HTTP)
+### Internal (Go Function Calls)
 
-Used for request/response queries where the caller needs an immediate result. Examples:
-- API Gateway → any service (all client-initiated requests)
-- Audit Core → Identity Service (resolve FirmControlObjective and framework mappings for evidence chain)
-- Trial Balance Service → Audit Core (validate engagement access)
-- Workpaper Service → Audit Core (validate engagement and control access)
-- Reporting Service → Audit Core, Trial Balance, Workpaper (assemble report data)
-- Trial Balance, Workpaper, Reporting → Audit Core (create `AIDecision` records — see below)
+Modules communicate via Go interfaces. Each module exports a service interface; other modules depend on the interface, not the implementation. Dependencies are wired at application startup via constructor injection.
 
-All internal service calls use ECS Service Connect DNS. No service mesh at launch — direct HTTP with standard retry/timeout middleware in each Go client. mTLS can be added via Amazon VPC Lattice post-launch if the security posture requires it.
+Example: when the Trial Balance module's `ai-account-mapping` worker needs to create an AIDecision, it calls the Audit Core module's `AIDecisionService.Create()` method — a function call within the same process, same database transaction if needed. No HTTP, no serialization, no retry logic.
 
-### Asynchronous (AWS SQS)
+This replaces:
+- All internal REST API calls between services (the previous design had 6 cross-service REST patterns)
+- All SQS queues for cross-service events (3 queues eliminated)
+- The internal `/internal/ai-decisions` endpoint pattern
 
-Used for cross-service events where the producer does not need an immediate response. Examples:
-- Audit Core → SQS → Document Processing triggered when a new `EvidenceItem` is uploaded
-- Identity Service → SQS → Audit Core notified when a user is deactivated (revoke engagement access)
-- Identity Service → SQS → Audit Core notified when new FirmControlObjectives are created (trigger AI batch control mapping)
+### External (HTTP to Document Processing)
 
-SQS standard queues (at-least-once delivery). Consumers are idempotent — processing the same event twice has no side effects (idempotency key stored in the relevant table).
+The only HTTP inter-service call is from the Axiom API to the Document Processing service. The `auditcore.document-extract` River worker sends the file bytes via `POST /extract` to `http://doc-processing:8000` (ECS Service Connect DNS). Standard retry with exponential backoff on failure.
 
-### Internal Async (River)
+### Background Jobs (River)
 
-River is used for background jobs in four services, each backed by its own database: Audit Core (`core_db`), Trial Balance (`trial_balance_db`), Workpaper (`workpaper_db`), and Reporting (`reporting_db`). Jobs that stay within a single service never cross a service boundary and do not use SQS. River provides durable job execution with retry and dead-letter queues, using the existing PostgreSQL connection — no additional infrastructure per service.
+One River instance backed by `axiom_db`. All modules register their workers with the shared River client. Job types are prefixed by module to avoid collisions:
 
-### Cross-Service AIDecision Creation
+| Module | Job types |
+|---|---|
+| Audit Core | `auditcore.document-extract`, `auditcore.document-embed`, `auditcore.ai-completeness-check`, `auditcore.ai-nightly-sweep`, `auditcore.ai-batch-control-mapping`, `auditcore.ai-evidence-link-suggestion`, `auditcore.ai-risk-category-suggestion`, `auditcore.notification-deliver` |
+| Trial Balance | `trialbalance.ai-account-mapping`, `trialbalance.ai-anomaly-detection` |
+| Workpaper | `workpaper.ai-workpaper-draft` |
+| Reporting | `reporting.report-generate`, `reporting.ai-report-section-draft` |
 
-`AIDecision` records are owned by Audit Core and stored in `core_db`. AI features that execute in other services (Trial Balance Features 3 and 7, Workpaper Feature 4, Reporting Feature 8) create `AIDecision` records via a synchronous REST call to Audit Core (`POST /internal/ai-decisions`). This internal endpoint is not exposed through the API Gateway — it uses ECS Service Connect DNS (`http://audit-core`) and requires an internal service header for authentication. The calling service includes the full AIDecision payload (context_type, context_id, context_table, model_id, token counts, raw_output, suggested_value, confidence, explanation). The synchronous approach is preferred over SQS because the calling service needs the `ai_decision_id` in its response to the frontend.
+River provides durable job execution with retry and dead-letter handling, using the existing PostgreSQL connection — no additional infrastructure.
+
+### Workflow Engine (Step Functions)
+
+Two Step Functions state machines, unchanged from the previous design:
+- `EngagementLifecycleStateMachine` — long-running engagement status transitions with guard conditions and scheduled archival
+- `DocumentRequestReminderStateMachine` — reminder escalation sequence
+
+Invoked from the Audit Core module via the AWS SDK for Go.
 
 ---
 
-## 5. Go Tech Stack (Per Service)
+## 6. Go Tech Stack
 
 | Concern | Choice | Rationale |
 |---|---|---|
 | HTTP framework | [Chi](https://github.com/go-chi/chi) | Lightweight, idiomatic, uses standard `net/http` — no lock-in to framework-specific types |
-| API contract | OpenAPI 3.1 spec (written first) + [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) | API-first: spec is the contract; codegen produces server interfaces and typed request/response structs |
+| API contract | OpenAPI 3.1 spec (written first) + [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) | API-first: spec is the contract; codegen produces server interfaces and typed request/response structs. Specs organized per module for clean code generation. |
 | Database access | [sqlc](https://sqlc.dev/) + [pgx/v5](https://github.com/jackc/pgx) | Type-safe SQL — queries are plain SQL files, sqlc generates Go functions; no ORM magic hiding query behavior (important for audit-grade explainability) |
-| Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) | SQL migration files, supports Postgres, integrates with CI |
-| Background jobs | [River](https://riverqueue.com/) | Postgres-backed job queue, Go-native equivalent of pg-boss; each service runs its own River instance backed by its own database (`core_db`, `trial_balance_db`, `workpaper_db`, `reporting_db`) |
+| Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) | SQL migration files, supports Postgres, integrates with CI. Single migration directory for all modules. |
+| Background jobs | [River](https://riverqueue.com/) | Postgres-backed job queue, Go-native. One shared instance across all modules. |
 | Config | [envconfig](https://github.com/kelseyhightower/envconfig) | 12-factor config from environment variables with struct tags |
 | Testing | [testify](https://github.com/stretchr/testify) + [httptest](https://pkg.go.dev/net/testing/httptest) | Standard Go HTTP testing; integration tests use a real Postgres instance (not mocks) |
 | Logging | [slog](https://pkg.go.dev/log/slog) (stdlib) | Structured logging; no external dependency |
 | Tracing | OpenTelemetry Go SDK → AWS X-Ray | AWS-native tracing, no additional vendor |
-| AWS SDK | [aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2) | Bedrock (AI model inference via VPC endpoint), Step Functions (workflow state machines), SQS (cross-service events) |
+| WebSocket | [nhooyr/websocket](https://github.com/nhooyr/websocket) or Gorilla WebSocket | Yjs collaboration in the workpaper module, served on the same binary |
+| AWS SDK | [aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2) | Bedrock (AI model inference via VPC endpoint), Step Functions (workflow state machines), S3 (evidence and report storage), SES (transactional email) |
 
 ---
 
-## 6. Python Tech Stack (Document Processing Service)
+## 7. Python Tech Stack (Document Processing)
 
 | Concern | Choice |
 |---|---|
@@ -337,66 +359,77 @@ River is used for background jobs in four services, each backed by its own datab
 
 ---
 
-## 7. Monorepo Structure
+## 8. Monorepo Structure
 
 ```
 apps/
-  gateway/           — Go: API Gateway
-  identity/          — Go: Identity Service
-  audit-core/        — Go: Audit Core (largest service)
-  trial-balance/     — Go: Trial Balance Service
-  workpaper/         — Go: Workpaper Service
-  reporting/         — Go: Reporting Service
-  doc-processing/    — Python: Document Processing Service
+  axiom-api/                — Go: Modular monolith (single binary)
+    cmd/server/             — main.go entrypoint, dependency wiring
+    internal/
+      gateway/              — Chi middleware: JWT verification, rate limiting,
+                              header injection, request context
+      identity/             — Auth, RBAC, firm/user/client management,
+                              templates, firm control objectives
+      auditcore/            — Engagements, controls, evidence, document
+                              requests, AI decisions, audit log, notifications
+      trialbalance/         — Trial balance, population analysis, column mapping
+      workpaper/            — Workpapers, Yjs collaboration (WebSocket),
+                              review notes
+      reporting/            — Report generation, S3 archival
+      ai/                   — Bedrock client, prompt templates, embedding
+                              helpers, shared AI utilities
+      platform/             — DB connection pool, config, error types,
+                              OpenTelemetry setup, River client, common middleware
+    migrations/             — All SQL migrations (single ordered sequence)
+    go.mod
+  doc-processing/           — Python: PDF extraction only
+    pyproject.toml
 
 packages/
-  go-shared/         — Shared Go: JWT middleware, SQS client wrappers,
-                        OpenTelemetry setup, common error types
-  openapi/           — OpenAPI specs for all services (source of truth)
-  ai/                — Go: Bedrock client wrappers, AIDecision recording client
-                        (REST client for Audit Core's internal AIDecision endpoint),
-                        prompt templates per AI feature. Used by Audit Core, Trial Balance,
-                        Workpaper, and Reporting services.
+  openapi/                  — OpenAPI 3.1 specs (organized per module for
+                              code generation; single API surface for frontend)
 
 infra/
-  modules/           — Reusable Terraform modules (vpc, ecs-service, rds, etc.)
-  workspaces/        — Layer-based Terraform workspaces (network, data, compute, etc.)
-  envs/              — Per-environment tfvars (dev, staging, prod)
+  modules/                  — Reusable Terraform modules (vpc, ecs-service, rds, etc.)
+  workspaces/               — Layer-based Terraform workspaces (network, data, compute, etc.)
+  envs/                     — Per-environment tfvars (dev, staging, prod)
 ```
 
-Each Go service has its own `go.mod`. `go-shared` is a local module referenced by each service. The Python service has its own `pyproject.toml`.
+The Axiom API has a single `go.mod`. Each internal package is a Go module boundary — packages import each other's exported interfaces, not internal types. The `platform` package provides shared infrastructure (database pool, configuration, telemetry) that all modules depend on.
 
-Turborepo manages the monorepo with per-service build caching. Go services build to single binaries; the Python service builds a Docker image. Infrastructure is provisioned via Terraform with layer-based workspace segmentation — see [`infrastructure-design.md`](./infrastructure-design.md) for full details.
+Turborepo manages the monorepo with build caching. The Go service builds to a single binary; the Python service builds a Docker image. Infrastructure is provisioned via Terraform with layer-based workspace segmentation — see [`infrastructure-design.md`](./infrastructure-design.md) for full details.
 
 ---
 
-## 8. Infrastructure Changes from v2 Spec
+## 9. Infrastructure Changes from v2 Spec
 
 | Component | v2 Spec | This Design |
 |---|---|---|
 | API layer | tRPC | REST + OpenAPI |
 | Primary language | TypeScript/Node.js | Go |
+| Architecture | Microservices (7 services) | Modular monolith (1 Go binary) + Python extraction service |
 | PDF service | Python FastAPI (unchanged) | Python FastAPI (unchanged) |
 | ORM/DB access | Prisma | sqlc + pgx |
-| Background jobs | pg-boss (Node.js) | River (Go) — per-service instances in Audit Core, Trial Balance, Workpaper, and Reporting |
-| Database structure | Single shared Postgres | Shared `core_db` + 4 separate databases |
+| Background jobs | pg-boss (Node.js) | River (Go) — single instance, all modules |
+| Database structure | Single shared Postgres | Single database with RLS on all tenant-scoped tables |
+| Inter-module communication | N/A (was tRPC) | Go function calls (interfaces); HTTP only for doc processing |
+| Cross-service messaging | SQS queues | Eliminated — direct function calls + River job enqueue |
 | Hasura | Rejected (unchanged) | N/A |
-| Temporal | TypeScript SDK | Step Functions Standard Workflows (no self-hosted or cloud Temporal dependency) |
+| Temporal | TypeScript SDK | Step Functions Standard Workflows |
 | AI model API | Anthropic direct | AWS Bedrock (PrivateLink, IAM auth, single AWS sub-processor) |
 | Transactional email | SES or SendGrid (undecided) | SES |
 | Frontend type sharing | tRPC inferred types | openapi-typescript (generated from OpenAPI spec) |
-| Container orchestration | EKS (Kubernetes) | ECS Fargate — no node management, no control plane upgrades; ECS Service Connect for internal DNS; Amazon VPC Lattice for deferred mTLS |
-| Infrastructure-as-code | Undefined | Terraform with layer-based workspace segmentation (network, data, compute, dns-cdn, observability, cicd) — see [`infrastructure-design.md`](./infrastructure-design.md) |
-| CI/CD | Undefined | GitHub Actions with OIDC federation to AWS (no long-lived credentials) |
-| AWS account structure | Undefined | Multi-account via AWS Organizations (management, tooling, dev, staging, prod) |
-| Observability | Undefined | CloudWatch Logs + Metrics + Dashboards + Alarms, X-Ray via OpenTelemetry |
+| Container orchestration | EKS (Kubernetes) | ECS Fargate — 2 services (Axiom API + doc-processing) |
+| Infrastructure-as-code | Undefined | Terraform with layer-based workspace segmentation |
+| CI/CD | Undefined | GitHub Actions with OIDC federation to AWS |
 
 The frontend (`apps/web`) remains TypeScript + React. `openapi-typescript` generates typed API clients from the OpenAPI specs in `packages/openapi/`. The code-generation step runs as part of the Turborepo build pipeline — a spec change automatically regenerates the client on the next build.
 
 ---
 
-## 9. What This Design Defers
+## 10. What This Design Defers
 
-- **mTLS between services** — deferred until compliance review requires it. Amazon VPC Lattice provides mTLS natively for ECS services without a sidecar service mesh. Current posture: VPC internal network trusted, JWT already validates user identity at the gateway.
-- **Database-per-service for core_db** — the tightly coupled evidence chain makes this impractical without distributed transactions. If a specific entity cluster within `core_db` needs to scale or be rewritten independently, it can be extracted at that time with a defined migration path.
-- **gRPC for internal service communication** — REST is simpler to debug, observe, and test. gRPC can replace REST for high-frequency internal calls if profiling shows REST overhead is significant.
+- **Service extraction** — any module can be extracted to a separate service by replacing its Go interface with an HTTP client. The most likely extraction candidate is the Workpaper module (WebSocket connections have different scaling characteristics than REST). Trigger: WebSocket connection count drives autoscaling beyond what's efficient for the combined service, or a second team needs independent deployment.
+- **Database-per-module** — all modules share one database. If a module's query patterns diverge significantly (e.g., trial balance analytical queries competing with audit core transactional writes), a read replica or database split can be introduced. The module table ownership boundaries make this a data migration, not a code rewrite.
+- **mTLS for doc processing** — the Axiom API calls Document Processing over plaintext HTTP within the VPC. Amazon VPC Lattice provides mTLS natively if the security posture requires it.
+- **gRPC for doc processing** — REST is simpler to debug. gRPC can replace it if profiling shows serialization overhead is significant for large documents.

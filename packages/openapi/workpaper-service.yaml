@@ -1,21 +1,22 @@
 openapi: 3.1.0
 
 info:
-  title: Axiom Workpaper Service API
+  title: Axiom Workpaper Module API
   version: 1.0.0
   description: |
-    API for the Axiom Workpaper Service. Handles collaborative workpaper editing,
+    API for the Axiom Workpaper module. Handles collaborative workpaper editing,
     version history, and the review note workflow.
+
+    This spec covers the Workpaper module within the Axiom API modular monolith.
 
     ## Architecture
 
-    The Workpaper Service is a Go microservice (Chi + oapi-codegen) backed by `workpaper_db`
-    (PostgreSQL). Real-time collaborative editing is provided via WebSocket (Yjs CRDT protocol).
-    `engagement_id` and `control_id` are plain UUIDs — no foreign key into `core_db`. Access
-    authorization is validated via a REST call to the Audit Core service.
+    Real-time collaborative editing is provided via WebSocket (Yjs CRDT protocol) served
+    by the same Go binary at `/api/v1/workpapers/ws/*`. Access authorization is validated
+    via the audit core module's service interface (in-process function call).
 
-    The API Gateway injects `X-User-Id`, `X-Firm-Id`, and `X-User-Role` headers on every
-    inbound request after JWT verification. These headers must be present on all calls.
+    The gateway middleware injects `X-User-Id`, `X-Firm-Id`, and `X-User-Role` headers on
+    every inbound request after JWT verification. These headers must be present on all calls.
 
     ## Status Lifecycle
 
@@ -32,7 +33,7 @@ info:
       → ReviewComplete          POST /complete-review  (Manager)
                                   Guard: all ReviewNotes must be Resolved
       → SignedOff               POST /sign-off         (Partner)
-                                  Side-effect: AuditLog entry written via Audit Core REST call
+                                  Side-effect: AuditLog entry written via audit core module call
     ```
 
     Once a workpaper reaches **SignedOff** and is locked (`is_locked = true`) via `POST /lock`,
@@ -562,7 +563,7 @@ paths:
         Transitions status: `ReviewComplete → SignedOff`.
 
         Records the signing Partner as `signed_off_by_id`. After the status transition
-        the service makes a synchronous REST call to Audit Core to write an `AuditLog`
+        the service makes a synchronous call to the audit core module to write an `AuditLog`
         entry recording the sign-off event, user, timestamp, and workpaper reference.
 
         **Sign-off hierarchy:** Staff prepares → Manager reviews → Partner signs off.
@@ -719,7 +720,7 @@ paths:
 
         The generated draft is inserted into the workpaper content with full `ai_content_metadata`
         section-level tracking. An `AIDecision` record with `context_type = WorkpaperDraft` is
-        created in Audit Core via internal REST call.
+        created in Audit Core via internal module call.
 
         Returns **202 Accepted** immediately. The draft appears in the workpaper content
         when the background job completes (typically 5–15 seconds). The client should poll
@@ -1164,7 +1165,7 @@ paths:
         the upgrade with 401 if invalid or expired.
 
         **Authorization:** The service verifies that the caller has access to the
-        engagement containing this workpaper via a REST call to Audit Core before
+        engagement containing this workpaper via a call to the audit core module before
         completing the upgrade.
 
         **Locked workpapers:** Clients connected to a locked workpaper receive the document
@@ -1229,7 +1230,7 @@ paths:
           6. Awareness messages (cursor position, user metadata) are forwarded to all
              other connected clients without server-side persistence.
 
-          **Persistence:** The server persists the Yjs document state to `workpaper_db`
+          **Persistence:** The server persists the Yjs document state to `axiom_db`
           (column: `workpapers.content`) after a debounced write interval (default: 1 s).
           A new `WorkpaperVersion` row is written every time the debounced flush triggers,
           keeping an immutable version trail alongside the live document.
@@ -1345,7 +1346,7 @@ components:
         engagement_id:
           type: string
           format: uuid
-          description: UUID of the parent engagement (plain UUID; no FK to core_db).
+          description: UUID of the parent engagement (plain UUID; no FK to axiom_db).
         firm_id:
           type: string
           format: uuid

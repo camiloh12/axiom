@@ -100,15 +100,17 @@ Splitting this chain across contexts would force distributed transactions or eve
 
 ### Database Mapping
 
-| Bounded Context | Database | Isolation |
-|---|---|---|
-| 1: Firm Identity + 3: Firm Methodology | `identity_db` | Application-layer (FK to firms) |
-| 2: Regulatory Framework + 4: Audit Core + cross-cutting | `core_db` | RLS + application-layer |
-| 5: Trial Balance | `trial_balance_db` | Application-layer |
-| 6: Workpaper Authoring | `workpaper_db` | Application-layer |
-| 7: Reporting | `reporting_db` | Application-layer |
+| Bounded Context | Database | Module | Isolation |
+|---|---|---|---|
+| 1: Firm Identity + 3: Firm Methodology | `axiom_db` | `internal/identity` | RLS (`firm_id`) |
+| 2: Regulatory Framework + 4: Audit Core + cross-cutting | `axiom_db` | `internal/auditcore` | RLS (`firm_id`) |
+| 5: Trial Balance | `axiom_db` | `internal/trialbalance` | RLS (`firm_id`) |
+| 6: Workpaper Authoring | `axiom_db` | `internal/workpaper` | RLS (`firm_id`) |
+| 7: Reporting | `axiom_db` | `internal/reporting` | RLS (`firm_id`) |
 
-See [Backend Architecture](backend-architecture-design.md) for service decomposition and database topology details.
+All bounded contexts share a single database (`axiom_db`) with RLS on all tenant-scoped tables. Each module owns specific tables and accesses them via its own sqlc queries. Cross-module data is accessed through Go service interfaces, preserving clean boundaries for future service extraction.
+
+See [Backend Architecture](backend-architecture-design.md) for module descriptions and database topology details.
 
 ---
 
@@ -377,7 +379,7 @@ One engagement = one client, one primary framework, one audit period. The centra
 |---|---|---|
 | id | uuid | |
 | firm_id | uuid | |
-| client_id | uuid | Ref to Client in identity_db |
+| client_id | uuid | FK → clients (identity module) |
 | name | text | |
 | engagement_type | enum | FinancialAudit_Private, FinancialAudit_Public, SOC1, SOC2, ISO27001, HIPAA, AgreedUponProcedures, Advisory |
 | primary_framework_id | uuid | FK → Framework |
@@ -385,7 +387,7 @@ One engagement = one client, one primary framework, one audit period. The centra
 | period_end | date | |
 | status | enum | Planning, Fieldwork, Review, Reporting, Finalized, Archived |
 | prior_engagement_id | uuid | FK → Engagement, nullable — for rollforward |
-| methodology_template_id | uuid | Ref to MethodologyTemplate in identity_db |
+| methodology_template_id | uuid | FK → methodology_templates (identity module) |
 | report_issued_at | timestamptz | Populated when report is issued |
 | assembly_deadline | date | Computed: report_issued_at + 60 days (AICPA) or + 45 days (PCAOB) |
 | retention_deadline | date | Computed: report_issued_at + 5 yrs (AICPA/SOC/ISO), + 7 yrs (PCAOB), + 6 yrs (HIPAA) |
@@ -439,7 +441,7 @@ Associates users to an engagement with an engagement-level role.
 |---|---|---|
 | id | uuid | |
 | engagement_id | uuid | FK → Engagement |
-| user_id | uuid | Ref to User in identity_db |
+| user_id | uuid | FK → users (identity module) |
 | engagement_role | text | Partner, Manager, Staff — the role on this specific engagement |
 | assigned_at | timestamptz | |
 | removed_at | timestamptz | Nullable |
@@ -538,7 +540,7 @@ An instantiation of a FirmControlObjective within a specific engagement.
 |---|---|---|
 | id | uuid | |
 | engagement_id | uuid | FK → Engagement |
-| firm_control_objective_id | uuid | Ref to FirmControlObjective in identity_db |
+| firm_control_objective_id | uuid | FK → firm_control_objectives (identity module) |
 | description | text | |
 | control_owner_id | uuid | Ref to User — who owns the control at the client |
 | auditor_assigned_to_id | uuid | Ref to User — who is testing this control |
@@ -592,7 +594,7 @@ A single uploaded document or artifact. **Stored at the firm + client level, not
 |---|---|---|
 | id | uuid | |
 | firm_id | uuid | |
-| client_id | uuid | Ref to Client in identity_db |
+| client_id | uuid | FK → clients (identity module) |
 | filename | text | |
 | storage_path | text | S3 key |
 | content_type | text | MIME type |
@@ -644,7 +646,7 @@ A PBC (Provided By Client) request sent to the client.
 | engagement_id | uuid | FK → Engagement |
 | control_id | uuid | FK → Control, nullable |
 | test_procedure_id | uuid | FK → TestProcedure, nullable |
-| assigned_to_id | uuid | Ref to client user in identity_db |
+| assigned_to_id | uuid | FK → users (identity module, client user) |
 | title | text | |
 | instructions | text | Detailed description of what to provide |
 | due_date | date | |
@@ -735,7 +737,7 @@ Container for an imported trial balance.
 | Attribute | Type | Description |
 |---|---|---|
 | id | uuid | |
-| engagement_id | uuid | Plain UUID ref — no FK to core_db |
+| engagement_id | uuid | FK → engagements (auditcore module) |
 | firm_id | uuid | For tenant isolation |
 | period_date | date | |
 | import_source | text | Accounting system name (QBO, NetSuite, Sage, Xero) |
@@ -759,7 +761,7 @@ Individual account row within a trial balance.
 | net_balance | numeric(19,4) | Computed: balance_debit - balance_credit |
 | mapped_fs_line_item | text | Financial statement line item classification |
 | mapping_status | enum | Unmapped, AISuggested, Confirmed, Overridden |
-| ai_decision_id | uuid | Plain UUID ref to AIDecision in core_db |
+| ai_decision_id | uuid | FK → ai_decisions (auditcore module) |
 | confirmed_by_id | uuid | |
 | confirmed_at | timestamptz | |
 
@@ -1029,34 +1031,34 @@ In-app and email delivery system for platform events.
 
 ## 10. Data Model
 
-The data model translates the domain model above into PostgreSQL tables across five databases. This section covers physical design decisions that go beyond the domain model: column types, constraints, indexes, enum definitions, and cross-database reference strategy.
+The data model translates the domain model above into PostgreSQL tables in a single database (`axiom_db`). This section covers physical design decisions that go beyond the domain model: column types, constraints, indexes, enum definitions, and cross-module reference strategy.
 
 ### Database Topology
 
 ```
 RDS PostgreSQL Instance (Multi-AZ production, Single-AZ dev/staging)
-├── identity_db      → Contexts 1 + 3 (Firm Identity, Firm Methodology)
-├── core_db          → Contexts 2 + 4 + cross-cutting (Framework, Audit Core, AI/Audit/Notification)
-├── trial_balance_db → Context 5 (Trial Balance)
-├── workpaper_db     → Context 6 (Workpaper Authoring)
-└── reporting_db     → Context 7 (Reporting)
+└── axiom_db
+    ├── Identity module tables     → Contexts 1 + 3 (Firm Identity, Firm Methodology)
+    ├── Audit Core module tables   → Contexts 2 + 4 + cross-cutting (Framework, Audit Core, AI/Audit/Notification)
+    ├── Trial Balance module tables → Context 5 (Trial Balance)
+    ├── Workpaper module tables    → Context 6 (Workpaper Authoring)
+    └── Reporting module tables    → Context 7 (Reporting)
 ```
 
-Each service has its own Postgres user with access only to its own database. No cross-database joins.
+All tables share one database. The Axiom API connects with a single database user (`axiom_svc`). RLS is enabled on all tenant-scoped tables.
 
-### Cross-Database Reference Strategy
+### Cross-Module Reference Strategy
 
-References to entities in other databases use plain UUID columns with no foreign key constraint. Referential integrity is enforced at the application layer via REST calls. Within a database, standard foreign key constraints apply.
+All cross-module references use standard foreign key constraints with full referential integrity — a significant advantage of the single-database modular monolith over the previous multi-database design. Each module accesses other modules' data through Go service interfaces, not direct SQL queries against other modules' tables. This preserves clean module boundaries for future service extraction.
 
 | Pattern | Usage |
 |---|---|
-| FK constraint | References within the same database |
-| Plain UUID column | References to entities in other databases (e.g., `engagement_id` in workpaper_db) |
-| REST validation | When a request requires confirming cross-database entity existence or access |
+| FK constraint | All entity references, including cross-module (e.g., `engagement_id` in workpaper tables → `engagements` in auditcore tables) |
+| Go service interface | Cross-module data access at the application layer (e.g., workpaper module calls auditcore module to validate engagement access) |
 
 ### Enum Types
 
-**identity_db:**
+**Identity module enums:**
 
 ```sql
 CREATE TYPE user_role AS ENUM (
@@ -1067,7 +1069,7 @@ CREATE TYPE notification_frequency AS ENUM ('RealTime','Daily','Weekly');
 CREATE TYPE invitation_status AS ENUM ('Sent','Accepted','Expired');
 ```
 
-**core_db:**
+**Audit Core module enums:**
 
 ```sql
 CREATE TYPE engagement_type AS ENUM (
@@ -1106,7 +1108,7 @@ CREATE TYPE notification_type AS ENUM (
 CREATE TYPE delivery_channel AS ENUM ('InApp','Email','Both');
 ```
 
-**trial_balance_db:**
+**Trial Balance module enums:**
 
 ```sql
 CREATE TYPE account_type AS ENUM ('Asset','Liability','Equity','Revenue','Expense');
@@ -1114,7 +1116,7 @@ CREATE TYPE mapping_status AS ENUM ('Unmapped','AISuggested','Confirmed','Overri
 CREATE TYPE adjustment_type AS ENUM ('Proposed','Passed','Waived');
 ```
 
-**workpaper_db:**
+**Workpaper module enums:**
 
 ```sql
 CREATE TYPE workpaper_type AS ENUM (
@@ -1127,7 +1129,7 @@ CREATE TYPE review_note_severity AS ENUM ('Question','Suggestion','RequiredChang
 CREATE TYPE review_note_status AS ENUM ('Open','Responded','Resolved');
 ```
 
-**reporting_db:**
+**Reporting module enums:**
 
 ```sql
 CREATE TYPE report_type AS ENUM (
@@ -1136,11 +1138,11 @@ CREATE TYPE report_type AS ENUM (
 CREATE TYPE report_status AS ENUM ('Draft','ClientReview','FirmReview','Issued','Archived');
 ```
 
-### Table Definitions by Database
+### Table Definitions by Module
 
-All UUID primary keys use `DEFAULT gen_random_uuid()`. All timestamps use `timestamptz` with `DEFAULT now()` where applicable.
+All tables reside in `axiom_db`. All UUID primary keys use `DEFAULT gen_random_uuid()`. All timestamps use `timestamptz` with `DEFAULT now()` where applicable.
 
-#### identity_db
+#### Identity Module
 
 **firms** — `id (uuid PK)`, `name (text NOT NULL)`, `slug (text NOT NULL UNIQUE)`, `logo_url (text)`, `timezone (text NOT NULL DEFAULT 'America/New_York')`, `billing_contact_email (text NOT NULL)`, `subscription_tier (text NOT NULL CHECK IN ('Growth','Scale','Enterprise'))`, `country (text NOT NULL CHECK IN ('US','CA'))`, `staff_count_range (text)`, `primary_audit_types (jsonb)`, `settings (jsonb NOT NULL DEFAULT '{}')`, `created_at (timestamptz NOT NULL)`.
 
@@ -1162,9 +1164,9 @@ All UUID primary keys use `DEFAULT gen_random_uuid()`. All timestamps use `times
 
 **firm_control_objective_mappings** — `id (uuid PK)`, `firm_control_objective_id (uuid FK → firm_control_objectives NOT NULL)`, `framework_requirement_id (uuid NOT NULL)`. **Unique:** `(firm_control_objective_id, framework_requirement_id)`. **Indexes:** `(firm_control_objective_id)`, `(framework_requirement_id)`.
 
-**firm_control_objective_embeddings** — `id (uuid PK)`, `firm_control_objective_id (uuid FK → firm_control_objectives NOT NULL UNIQUE)`, `embedding (vector(1024) NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `USING ivfflat (embedding vector_cosine_ops)`. Requires pgvector extension on `identity_db`. Used by Feature 2 (Control Mapping) for semantic similarity retrieval.
+**firm_control_objective_embeddings** — `id (uuid PK)`, `firm_control_objective_id (uuid FK → firm_control_objectives NOT NULL UNIQUE)`, `embedding (vector(1024) NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `USING ivfflat (embedding vector_cosine_ops)`. Requires pgvector extension on `axiom_db`. Used by Feature 2 (Control Mapping) for semantic similarity retrieval.
 
-#### core_db — System Reference Tables (no RLS, not tenant-scoped)
+#### Audit Core Module — System Reference Tables (no RLS, not tenant-scoped)
 
 **frameworks** — `id (uuid PK)`, `name (text NOT NULL)`, `version (text NOT NULL)`, `effective_date (date NOT NULL)`, `deprecated_at (date)`, `governing_body (text NOT NULL)`. **Unique:** `(name, version)`.
 
@@ -1174,7 +1176,7 @@ All UUID primary keys use `DEFAULT gen_random_uuid()`. All timestamps use `times
 
 **control_objective_library_mappings** — `id (uuid PK)`, `library_objective_id (uuid FK → control_objective_library NOT NULL)`, `framework_requirement_id (uuid FK → framework_requirements NOT NULL)`. **Unique:** `(library_objective_id, framework_requirement_id)`.
 
-#### core_db — Tenant-Scoped Tables (RLS via firm_id)
+#### Audit Core Module — Tenant-Scoped Tables (RLS via firm_id)
 
 All tables below carry `firm_id uuid NOT NULL` with an index. RLS policy: `USING (firm_id = current_setting('app.current_firm_id')::uuid)`.
 
@@ -1216,7 +1218,7 @@ All tables below carry `firm_id uuid NOT NULL` with an index. RLS policy: `USING
 
 **notifications** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `recipient_id (uuid NOT NULL)`, `notification_type (notification_type NOT NULL)`, `title (text NOT NULL)`, `body (text)`, `deep_link (text)`, `is_read (boolean NOT NULL DEFAULT false)`, `delivery_channel (delivery_channel NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(recipient_id, is_read, created_at DESC)`.
 
-#### trial_balance_db
+#### Trial Balance Module
 
 Application-layer isolation (`WHERE firm_id = $1`), no RLS.
 
@@ -1228,7 +1230,7 @@ Application-layer isolation (`WHERE firm_id = $1`), no RLS.
 
 **column_mapping_profiles** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `name (text NOT NULL)`, `accounting_system (text)`, `column_mappings (jsonb NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(firm_id)`.
 
-#### workpaper_db
+#### Workpaper Module
 
 Application-layer isolation.
 
@@ -1238,7 +1240,7 @@ Application-layer isolation.
 
 **review_notes** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `workpaper_id (uuid FK → workpapers NOT NULL)`, `content_anchor (jsonb)`, `created_by_id (uuid NOT NULL)`, `description (text NOT NULL)`, `severity (review_note_severity NOT NULL)`, `status (review_note_status NOT NULL DEFAULT 'Open')`, `response (text)`, `responded_by_id (uuid)`, `responded_at (timestamptz)`, `resolved_by_id (uuid)`, `resolved_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Immutability:** `CREATE RULE review_notes_no_delete AS ON DELETE TO review_notes DO INSTEAD NOTHING;`. **Indexes:** `(workpaper_id, status)`.
 
-#### reporting_db
+#### Reporting Module
 
 Application-layer isolation.
 
@@ -1250,15 +1252,17 @@ Application-layer isolation.
 
 ## 11. Multi-Tenancy and Isolation
 
-| Database | Isolation Mechanism | firm_id Indexed | RLS |
-|---|---|---|---|
-| identity_db | Application-layer (FK to firms) | Yes | No |
-| core_db | RLS + application-layer | Yes (all tenant tables) | Yes |
-| trial_balance_db | Application-layer WHERE clause | Yes | No |
-| workpaper_db | Application-layer WHERE clause | Yes | No |
-| reporting_db | Application-layer WHERE clause | Yes | No |
+All tables reside in `axiom_db`. RLS is enabled on all tenant-scoped tables.
 
-`core_db` uses RLS because it contains the most sensitive data and has the most complex access patterns. The three authorization dimensions:
+| Module | Tables | firm_id Indexed | RLS |
+|---|---|---|---|
+| Identity | 11 (includes firm_control_objective_embeddings) | Yes | Yes |
+| Audit Core | 23 (6 system + 17 tenant-scoped) | Yes (tenant tables) | Yes (tenant tables) |
+| Trial Balance | 4 | Yes | Yes |
+| Workpaper | 3 | Yes | Yes |
+| Reporting | 2 | Yes | Yes |
+
+The three authorization dimensions:
 
 1. **Firm isolation** — RLS + middleware. Every query scoped to current_firm_id.
 2. **Engagement team membership** — Application-layer middleware. Point lookup on `engagement_team_members (engagement_id, user_id)`.
@@ -1286,8 +1290,9 @@ System-wide reference tables (`frameworks`, `framework_requirements`, `control_o
 ### Entity Count Summary
 
 - **Total domain entities:** 43
-- **identity_db tables:** 11 (includes firm_control_objective_embeddings; pgvector required)
-- **core_db tables:** 23 (6 system + 17 tenant-scoped; system tables include framework_requirement_embeddings and control_objective_library_embeddings)
-- **trial_balance_db tables:** 4
-- **workpaper_db tables:** 3
-- **reporting_db tables:** 2
+- **Total tables in `axiom_db`:** 43
+- **Identity module:** 11 (includes firm_control_objective_embeddings; pgvector required)
+- **Audit Core module:** 23 (6 system + 17 tenant-scoped; system tables include framework_requirement_embeddings and control_objective_library_embeddings)
+- **Trial Balance module:** 4
+- **Workpaper module:** 3
+- **Reporting module:** 2

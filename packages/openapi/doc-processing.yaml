@@ -3,12 +3,12 @@ info:
   title: Axiom Document Processing Service
   version: 1.0.0
   description: |
-    Stateless internal microservice that extracts text and table data from PDF and image documents.
+    Stateless internal service that extracts text and table data from PDF and image documents.
 
-    **Internal service — not exposed via the API Gateway.**
-    This service is called exclusively by Audit Core's `document.extract` River worker over HTTP
-    within the VPC. No authentication is required. It must never be reachable from outside the
-    VPC network boundary.
+    **Internal service — not exposed via the ALB.**
+    This service is called exclusively by the Axiom API's `auditcore.document-extract` River
+    worker over HTTP within the VPC. No authentication is required. It must never be reachable
+    from outside the VPC network boundary.
 
     Extraction engines:
     - **pdfplumber** — layout-aware text and table extraction for digital PDFs.

@@ -1,22 +1,24 @@
 openapi: 3.1.0
 
 info:
-  title: Axiom Trial Balance Service
+  title: Axiom Trial Balance Module API
   version: 1.0.0
   description: |
     Manages trial balance import, account mapping, adjustments, analytics, and population
     analysis for financial audit engagements.
 
+    This spec covers the Trial Balance module within the Axiom API modular monolith.
+
     ## Authentication
 
     All requests must include the headers `X-User-Id`, `X-Firm-Id`, and `X-User-Role`, which
-    are injected by the API Gateway after verifying the caller's JWT. Requests missing these
-    headers are rejected with `401 Unauthorized`.
+    are injected by the gateway middleware after verifying the caller's JWT. Requests missing
+    these headers are rejected with `401 Unauthorized`.
 
     ## Engagement Access
 
-    `engagement_id` is a plain UUID with no foreign key to `core_db`. Engagement-level access
-    is validated at request time via a REST call to Audit Core.
+    Engagement-level access is validated at request time via the audit core module's service
+    interface (in-process function call within the monolith).
 
     ## Conventions
 
@@ -992,7 +994,7 @@ paths:
 
         **PCAOB tier behavior:** For nonissuer engagements, anomaly flags are informational
         (Tier 1) — no `AIDecision` record is created. For PCAOB engagements (`FinancialAudit_Public`),
-        each flag creates an `AIDecision` record in core_db via internal REST call (Tier 2),
+        each flag creates an `AIDecision` record in axiom_db via internal module call (Tier 2),
         and the auditor must document their investigation response. The `ai_decision_id` field
         on each anomaly record is populated only for PCAOB engagements.
 
@@ -1813,7 +1815,7 @@ components:
             - string
             - "null"
           format: uuid
-          description: Reference to the `AIDecision` record in core_db that produced the suggestion.
+          description: Reference to the `AIDecision` record in axiom_db that produced the suggestion.
         confirmed_by_id:
           type:
             - string
@@ -2288,7 +2290,7 @@ components:
           type: string
           format: uuid
           description: |
-            Reference to the `AIDecision` record in core_db for full audit trail and
+            Reference to the `AIDecision` record in axiom_db for full audit trail and
             human-in-the-loop review.
         net_balance:
           type: string

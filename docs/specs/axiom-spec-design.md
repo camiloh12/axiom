@@ -258,18 +258,18 @@ The `Framework` table treats each version as a separate row. ISO 27001 2013 and 
 
 The domain is organized into 7 bounded contexts and 3 cross-cutting concerns, derived from the [user journeys](../user-journeys/all-journeys.md):
 
-| # | Context | Key Entities | Database |
+| # | Context | Key Entities | Module |
 |---|---|---|---|
-| 1 | Firm Identity | Firm, User, Client, Invitation | `identity_db` |
-| 2 | Regulatory Framework | Framework, FrameworkRequirement, ControlObjectiveLibrary | `core_db` |
-| 3 | Firm Methodology | MethodologyTemplate, FirmControlObjective, template items | `identity_db` |
-| 4 | Audit Core | Engagement, Control, TestProcedure, EvidenceItem, EvidenceLink, DocumentRequest, ClientAcceptance, EngagementQualityReview | `core_db` |
-| 5 | Trial Balance | TrialBalance, TrialBalanceAccount, TrialBalanceAdjustment | `trial_balance_db` |
-| 6 | Workpaper Authoring | Workpaper, WorkpaperVersion, ReviewNote | `workpaper_db` |
-| 7 | Reporting | Report, ReportVersion | `reporting_db` |
-| — | Cross-cutting | AIDecision, AuditLog, Notification | `core_db` |
+| 1 | Firm Identity | Firm, User, Client, Invitation | `internal/identity` |
+| 2 | Regulatory Framework | Framework, FrameworkRequirement, ControlObjectiveLibrary | `internal/auditcore` |
+| 3 | Firm Methodology | MethodologyTemplate, FirmControlObjective, template items | `internal/identity` |
+| 4 | Audit Core | Engagement, Control, TestProcedure, EvidenceItem, EvidenceLink, DocumentRequest, ClientAcceptance, EngagementQualityReview | `internal/auditcore` |
+| 5 | Trial Balance | TrialBalance, TrialBalanceAccount, TrialBalanceAdjustment | `internal/trialbalance` |
+| 6 | Workpaper Authoring | Workpaper, WorkpaperVersion, ReviewNote | `internal/workpaper` |
+| 7 | Reporting | Report, ReportVersion | `internal/reporting` |
+| — | Cross-cutting | AIDecision, AuditLog, Notification | `internal/auditcore` |
 
-**Total entities: 33** across 5 PostgreSQL databases on a shared RDS instance.
+**Total entities: 33** in a single PostgreSQL database (`axiom_db`) with RLS.
 
 ### Cross-Framework Evidence Chain
 
@@ -312,7 +312,7 @@ The following entities were identified through the user journey analysis and are
 
 ### Multi-Tenancy
 
-`core_db` uses PostgreSQL RLS with `firm_id` on all tenant-scoped tables. Other databases use application-layer isolation (`WHERE firm_id = $1`). Three authorization dimensions: firm isolation (RLS), engagement team membership (point lookup), and client user scoping (engagement-level invitation).
+`axiom_db` uses PostgreSQL RLS with `firm_id` on all tenant-scoped tables. Three authorization dimensions: firm isolation (RLS), engagement team membership (point lookup), and client user scoping (engagement-level invitation).
 
 See [Domain and Data Model Design](domain-and-data-model-design.md) for complete attribute definitions, data types, constraints, indexes, enum types, rollforward behavior, and the journey-to-entity traceability matrix.
 
@@ -371,41 +371,43 @@ Fine-tuned models per firm, on-device execution, multi-agent orchestration, AI-g
 
 **TypeScript / React SPA.** Component library: Shadcn/ui (accessible, customizable, no licensing overhead). State management: TanStack Query for server state; Zustand for local UI state. API types are generated from the OpenAPI specs in `packages/openapi/` via `openapi-typescript` — a spec change automatically regenerates the client on the next build.
 
-### Backend: Go Microservices + Python PDF Service
+### Backend: Go Modular Monolith + Python PDF Service
 
-**Decision: Go as the primary backend language, decomposed into bounded-context microservices. Python retained for PDF extraction.**
+**Decision: Go as the primary backend language, structured as a modular monolith. Python retained for PDF extraction.**
 
-Go was chosen for its compile-time type safety, lean container images (30–50MB per Fargate task), and strong fit for compliance SaaS — Workiva, an established player in this space, uses Go for their REST services. The backend is split into services along genuine bounded contexts in the data model, not along the five product modules. The core engagement/control/evidence cluster is too tightly coupled to split without distributed transactions and stays in one service with a shared database. Independent domains get their own services and databases.
+Go was chosen for its compile-time type safety, lean container images (30–50MB per Fargate task), and strong fit for compliance SaaS — Workiva, an established player in this space, uses Go for their REST services. The backend is a single Go binary organized into internal packages by bounded context (identity, audit core, trial balance, workpaper, reporting). Modules communicate via Go interfaces, not HTTP — this provides ACID transactions across the full evidence chain and eliminates distributed systems overhead for a solo developer + AI agent team.
 
 Python is retained as a single stateless service for PDF extraction. `pdfplumber` handles complex, multi-column, scanned audit documents better than any Go library. The polyglot cost is contained — one endpoint, one job, no shared state.
 
-**Full service decomposition, database topology, Go and Python tech stack choices, and inter-service communication patterns are specified in [`backend-architecture-design.md`](./backend-architecture-design.md).**
+**Full module descriptions, database design, Go and Python tech stack choices, and inter-module communication patterns are specified in [`backend-architecture-design.md`](./backend-architecture-design.md).**
 
 **Monorepo structure:**
 ```
 apps/
-  gateway/          — Go: API Gateway (JWT verification, routing)
-  identity/         — Go: Identity Service (Firm, User, Client, templates)
-  audit-core/       — Go: Audit Core (Engagement, Controls, Evidence, AI)
-  trial-balance/    — Go: Trial Balance Service
-  workpaper/        — Go: Workpaper Service (Yjs collaboration)
-  reporting/        — Go: Reporting Service
+  axiom-api/        — Go: Modular monolith (single binary)
+    internal/
+      gateway/      — Chi middleware: JWT verification, routing, rate limiting
+      identity/     — Auth, RBAC, firm/user/client, templates
+      auditcore/    — Engagements, controls, evidence, AI decisions
+      trialbalance/ — Trial balance, population analysis
+      workpaper/    — Workpapers, Yjs collaboration (WebSocket)
+      reporting/    — Report generation, S3 archival
+      ai/           — Bedrock client, prompt templates
+      platform/     — DB, config, OTel, River, common middleware
   doc-processing/   — Python: PDF extraction only
 packages/
-  go-shared/        — Shared Go: JWT middleware, SQS wrappers, OTel setup
-  openapi/          — OpenAPI 3.1 specs for all services (source of truth)
-  ai/               — Go: Claude API client wrappers, AIDecision recording
+  openapi/          — OpenAPI 3.1 specs organized by module (source of truth)
 ```
 
-Turborepo manages the monorepo with per-service build caching.
+Turborepo manages the monorepo with build caching.
 
 ### API Layer: REST + OpenAPI
 
 **Decision: REST with OpenAPI 3.1 for all services. Hasura is rejected.**
 
-**Why REST with OpenAPI:** REST decouples the frontend from the backend language, supporting the Go services alongside the Node.js services without sharing a runtime boundary. OpenAPI enables future public API exposure (webhooks, partner integrations) without adding a separate layer.
+**Why REST with OpenAPI:** REST decouples the frontend from the backend language. OpenAPI enables future public API exposure (webhooks, partner integrations) without adding a separate layer.
 
-Each service defines its API contract as an OpenAPI 3.1 spec in `packages/openapi/`. `oapi-codegen` generates typed Go server interfaces from the spec. `openapi-typescript` generates typed fetch clients for the React frontend. Authorization is enforced as composable Go middleware in each service:
+Each module defines its API contract as an OpenAPI 3.1 spec in `packages/openapi/`. `oapi-codegen` generates typed Go server interfaces from the spec. `openapi-typescript` generates typed fetch clients for the React frontend. Authorization is enforced as composable Go middleware:
 
 - `WithFirmIsolation` — reads `firm_id` from gateway-injected headers, sets Postgres session variable for RLS
 - `WithEngagementAccess` — verifies `EngagementTeamMember` record exists for the requested engagement
@@ -417,9 +419,9 @@ Each service defines its API contract as an OpenAPI 3.1 spec in `packages/openap
 
 ### Database: PostgreSQL with RLS
 
-PostgreSQL is the sole persistent data store. One RDS instance hosts five logical databases — one per service — with no cross-database foreign keys. The Audit Core database (`core_db`) uses row-level security (RLS) for multi-tenancy as described in Section 5; other service databases enforce tenant isolation at the application layer. Database access uses `sqlc` + `pgx/v5` (type-safe SQL generation from plain SQL query files) with `golang-migrate` for schema migrations. PgBouncer for connection pooling in transaction mode.
+PostgreSQL is the sole persistent data store. One RDS instance hosts a single database (`axiom_db`) with row-level security (RLS) on all tenant-scoped tables for multi-tenancy. Each module owns specific tables and accesses them via its own sqlc queries; cross-module data is accessed through Go service interfaces, not direct table queries. Database access uses `sqlc` + `pgx/v5` (type-safe SQL generation from plain SQL query files) with `golang-migrate` for schema migrations. PgBouncer for connection pooling in transaction mode.
 
-**pgvector** extension enabled on `core_db` for embedding storage (Section 6).
+**pgvector** extension enabled on `axiom_db` for embedding storage (Section 6).
 
 **Workpaper content** stored as typed jsonb in `Workpaper.content`. The jsonb structure supports rich text (ProseMirror document format), embedded tables, formula references, and metadata. A dedicated document store is not needed at launch scale.
 
@@ -427,9 +429,9 @@ PostgreSQL is the sole persistent data store. One RDS instance hosts five logica
 
 **Tier 1 — River (PostgreSQL-based job queue) for background jobs:**
 
-All fire-and-forget background work uses River, a Go-native Postgres-backed job queue. Zero additional infrastructure — it uses the existing service database. Jobs are durable (WAL-backed), support retry with exponential backoff, and have dead-letter queues.
+All fire-and-forget background work uses River, a Go-native Postgres-backed job queue. Zero additional infrastructure — it uses the existing database. One River instance serves all modules. Jobs are durable (WAL-backed), support retry with exponential backoff, and have dead-letter queues.
 
-River jobs (running within Audit Core against `core_db`):
+River jobs (running within the Axiom API against `axiom_db`):
 - `document.extract` — PDF extraction via Python service
 - `document.embed` — embedding generation and pgvector indexing
 - `ai.completeness-check` — per document upload
@@ -474,10 +476,9 @@ AG Grid Community handles 200–10,000 rows with virtualization, has a large Rea
 **Primary cloud:** AWS. ECS Fargate for container orchestration (serverless — no node management or control plane upgrades). Infrastructure-as-code via Terraform.
 
 **Key AWS services:**
-- **ECS Fargate** — Container orchestration for all seven services (gateway, identity, audit-core, trial-balance, workpaper, reporting, doc-processing). ECS Service Connect provides internal DNS-based service discovery. Independent per-service scaling; Workpaper service scales on active WebSocket connection count via a custom CloudWatch metric.
+- **ECS Fargate** — Container orchestration for two services: Axiom API (Go modular monolith) and Document Processing (Python). ECS Service Connect provides DNS for API-to-doc-processing communication. Axiom API scales on the maximum of CPU utilization and active WebSocket connection count.
 - **ALB** — Application Load Balancer for TLS termination in front of the API Gateway
-- **RDS PostgreSQL** — Single Multi-AZ instance hosting five logical databases (one per service); pgvector extension enabled on `core_db`
-- **SQS** — Async cross-service event delivery (e.g., document uploaded → extraction triggered)
+- **RDS PostgreSQL** — Single Multi-AZ instance hosting one database (`axiom_db`) with RLS; pgvector extension enabled
 - **S3** — Evidence file storage; Object Lock enabled for finalized engagements (see Section 10)
 - **CloudFront** — CDN for the React SPA
 - **SES** — Transactional email (document request notifications, client invitations, review alerts)

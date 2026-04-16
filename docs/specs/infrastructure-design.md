@@ -9,7 +9,7 @@
 
 This document specifies the complete AWS infrastructure for the Axiom platform — every service, how it is configured, how services integrate, and how the infrastructure is provisioned and managed via Terraform. It is intended to be directly translatable into Terraform workspaces.
 
-The backend architecture design defines seven application services (API Gateway, Identity, Audit Core, Trial Balance, Workpaper, Reporting, Document Processing), their databases, and inter-service communication patterns. This document specifies the AWS infrastructure that hosts and connects those services.
+The backend architecture design defines two deployed services — a Go modular monolith (Axiom API) containing all domain modules (identity, audit core, trial balance, workpaper, reporting) and a stateless Python service (Document Processing) for PDF extraction — sharing a single database. This document specifies the AWS infrastructure that hosts and connects those services.
 
 ### Key Decisions Made in This Document
 
@@ -122,7 +122,6 @@ Dev uses the same two tiers in a single AZ with one NAT Gateway. Private subnets
 | `ecr.api` + `ecr.dkr` | ECS image pulls stay on AWS backbone, avoid NAT costs |
 | `secretsmanager` | Credential retrieval at task startup — high frequency, security-sensitive |
 | `bedrock-runtime` | AI inference traffic never leaves AWS network — required by spec for compliance |
-| `sqs` | Cross-service async messaging stays private |
 | `logs` + `monitoring` | CloudWatch log and metric shipping — high volume |
 | `xray` | Trace data submission |
 | `states` | Step Functions execution from Audit Core |
@@ -133,12 +132,11 @@ SES, ACM validation, and GitHub Actions webhook callbacks route through NAT Gate
 
 | Security group | Inbound | Outbound |
 |---|---|---|
-| `sg-alb` | 443 from `0.0.0.0/0` | All to `sg-ecs-gateway` |
-| `sg-ecs-gateway` | 8080 from `sg-alb` | All to `sg-ecs-services` |
-| `sg-ecs-services` | 8080 from `sg-ecs-gateway`, 8080 from `sg-ecs-services` (inter-service) | 5432 to `sg-rds`, 443 to VPC endpoints, 443 to NAT GW |
-| `sg-rds` | 5432 from `sg-ecs-services` only | None |
+| `sg-alb` | 443 from `0.0.0.0/0` | All to `sg-ecs` |
+| `sg-ecs` | 8080 from `sg-alb`, 8080 from `sg-ecs` (Axiom API → doc-processing) | 5432 to `sg-rds`, 443 to VPC endpoints, 443 to NAT GW |
+| `sg-rds` | 5432 from `sg-ecs` only | None |
 
-The gateway has its own security group so downstream services cannot be reached directly from the ALB — all external traffic flows through the gateway. Inter-service communication (e.g., Reporting Service calling Audit Core REST API) is allowed within `sg-ecs-services`.
+With the modular monolith, there is no separate gateway security group — JWT verification is middleware within the Axiom API process. The self-referencing `sg-ecs` rule allows the Axiom API to call Document Processing via ECS Service Connect.
 
 ---
 
@@ -146,15 +144,11 @@ The gateway has its own security group so downstream services cannot be reached 
 
 ### RDS PostgreSQL
 
-One RDS instance per environment hosting five logical databases as specified in `backend-architecture-design.md`:
+One RDS instance per environment hosting a single logical database as specified in `backend-architecture-design.md`:
 
 | Database | Owner service | RLS |
 |---|---|---|
-| `identity_db` | Identity Service | No (app-layer isolation) |
-| `core_db` | Audit Core | Yes (`firm_id` RLS) |
-| `trial_balance_db` | Trial Balance Service | No |
-| `workpaper_db` | Workpaper Service | No |
-| `reporting_db` | Reporting Service | No |
+| `axiom_db` | Axiom API (all modules) | Yes (`firm_id` RLS on all tenant-scoped tables) |
 
 **Instance configuration by environment:**
 
@@ -169,16 +163,16 @@ One RDS instance per environment hosting five logical databases as specified in 
 | Deletion protection | No | Yes | Yes |
 | Performance Insights | Off | On (7-day free tier) | On (7-day, extend to paid before SOC 2 audit) |
 
-**Extensions enabled:** `pgvector` on `core_db` and `identity_db` (embeddings for evidence items, framework requirements, control objective library, and firm control objectives — see AI Architecture Design Section 2), `pg_stat_statements` on all databases.
+**Extensions enabled:** `pgvector` on `axiom_db` (embeddings for evidence items, framework requirements, control objective library, and firm control objectives — see AI Architecture Design Section 2), `pg_stat_statements`.
 
 **Parameter group customizations:**
 - `rds.force_ssl = 1` — enforce TLS for all connections
 - `shared_preload_libraries = pg_stat_statements,pgvector`
 - `log_min_duration_statement = 1000` — log queries exceeding 1 second
 
-**Authentication:** Each service gets its own database user (`identity_svc`, `audit_core_svc`, `trial_balance_svc`, `workpaper_svc`, `reporting_svc`) with permissions scoped to its own database only. Credentials stored in Secrets Manager with 30-day automatic rotation via the AWS-provided Lambda rotator. A `master` user credential is stored separately for migrations and break-glass access.
+**Authentication:** The Axiom API connects with a single database user (`axiom_svc`). Credentials stored in Secrets Manager with 30-day automatic rotation via the AWS-provided Lambda rotator. A `master` user credential is stored separately for migrations and break-glass access.
 
-**Connection pooling:** PgBouncer deployed as an ECS sidecar container on each database-connected service task, running in transaction mode. Services connect to PgBouncer at `localhost:6432`, PgBouncer connects to RDS.
+**Connection pooling:** PgBouncer deployed as an ECS sidecar container on the Axiom API task, running in transaction mode. The application connects to PgBouncer at `localhost:6432`, PgBouncer connects to RDS.
 
 ### Aurora Migration Criteria
 
@@ -214,28 +208,18 @@ The Terraform `rds` module parameterizes the engine (`engine = var.rds_engine`) 
 
 ### SQS Queues
 
-| Queue | Producer | Consumer | Purpose |
-|---|---|---|---|
-| `axiom-{env}-document-uploaded` | Audit Core | Audit Core (River worker) | Trigger document extraction pipeline |
-| `axiom-{env}-user-deactivated` | Identity Service | Audit Core | Revoke engagement access on user deactivation |
-| `axiom-{env}-fco-created` | Identity Service | Audit Core | Trigger AI batch control mapping when new FirmControlObjectives are created |
-
-Standard queues (at-least-once delivery). Each queue has a corresponding dead-letter queue (`-dlq` suffix) with `maxReceiveCount = 3`. DLQ messages trigger a CloudWatch alarm. Message retention: 7 days on main queue, 14 days on DLQ. Consumers are idempotent — processing the same event twice has no side effects.
+No SQS queues are required. In the previous microservices design, three SQS queues handled cross-service events (document uploaded, user deactivated, FirmControlObjective created). In the modular monolith, these are handled via direct River job enqueue or function calls within the same process.
 
 ### Secrets Manager
 
 | Secret path | Rotation | Used by |
 |---|---|---|
-| `axiom/{env}/rds/identity-svc` | 30-day auto | Identity Service |
-| `axiom/{env}/rds/audit-core-svc` | 30-day auto | Audit Core |
-| `axiom/{env}/rds/trial-balance-svc` | 30-day auto | Trial Balance Service |
-| `axiom/{env}/rds/workpaper-svc` | 30-day auto | Workpaper Service |
-| `axiom/{env}/rds/reporting-svc` | 30-day auto | Reporting Service |
+| `axiom/{env}/rds/axiom-svc` | 30-day auto | Axiom API |
 | `axiom/{env}/rds/master` | 30-day auto | Migrations, break-glass |
-| `axiom/{env}/jwt/rsa-private-key` | Manual (rotate on compromise) | Identity Service only |
-| `axiom/{env}/jwt/rsa-public-key` | Matches private key | API Gateway (loaded at startup) |
-| `axiom/{env}/ses/smtp-credentials` | Manual | Audit Core (email worker) |
-| `axiom/{env}/oauth/{provider}` | Manual | Identity Service (SSO) |
+| `axiom/{env}/jwt/rsa-private-key` | Manual (rotate on compromise) | Axiom API (identity module) |
+| `axiom/{env}/jwt/rsa-public-key` | Matches private key | Axiom API (gateway middleware, loaded at startup) |
+| `axiom/{env}/ses/smtp-credentials` | Manual | Axiom API (notification worker) |
+| `axiom/{env}/oauth/{provider}` | Manual | Axiom API (identity module, SSO) |
 
 RDS credential rotation uses the AWS-provided Lambda rotation function (`SecretsManagerRDSPostgreSQLRotationSingleUser`). The rotation Lambda runs in the same VPC private subnets as the ECS tasks, with a security group allowing 5432 to `sg-rds`.
 
@@ -272,25 +256,20 @@ One ALB per environment in the public subnets.
 | HTTPS 443 | Forward to API Gateway target group. ACM certificate for `api.{env}.axiom.com` (prod: `api.axiom.com`). TLS policy: `ELBSecurityPolicy-TLS13-1-2-2021-06`. |
 | HTTP 80 | Redirect to HTTPS 443. |
 
-Single target group pointing to the API Gateway ECS service. The gateway handles all downstream routing — the ALB does not need per-service listener rules. Adding a new service never requires a Terraform change to ALB resources.
+Single target group pointing to the Axiom API ECS service. All routing (REST and WebSocket) is handled internally by Chi within the Go binary.
 
-**Health check:** `GET /healthz` on the gateway, 30-second interval, 3 consecutive failures before deregistration.
+**Health check:** `GET /healthz` on the Axiom API, 30-second interval, 3 consecutive failures before deregistration.
 
-**WebSocket support:** ALB natively supports WebSocket connections. Workpaper Service WebSocket traffic routes through the gateway at `/api/v1/workpapers/ws/*`. ALB idle timeout set to 3600 seconds (1 hour) for WebSocket connection persistence.
+**WebSocket support:** ALB natively supports WebSocket connections. Workpaper WebSocket traffic is served at `/api/v1/workpapers/ws/*` by the same Axiom API binary. ALB idle timeout set to 3600 seconds (1 hour) for WebSocket connection persistence.
 
 ### ECS Services and Task Definitions
 
 | Service | CPU | Memory | Min tasks (prod) | Max tasks (prod) | Scaling metric | Port |
 |---|---|---|---|---|---|---|
-| `gateway` | 256 | 512 MB | 2 | 6 | CPU > 60% | 8080 |
-| `identity` | 512 | 1024 MB | 2 | 4 | CPU > 60% | 8080 |
-| `audit-core` | 1024 | 2048 MB | 2 | 8 | CPU > 60% | 8080 |
-| `trial-balance` | 512 | 1024 MB | 2 | 4 | CPU > 60% | 8080 |
-| `workpaper` | 512 | 1024 MB | 2 | 6 | Custom: active WebSocket connections | 8080 |
-| `reporting` | 512 | 1024 MB | 1 | 4 | SQS queue depth | 8080 |
-| `doc-processing` | 1024 | 2048 MB | 1 | 4 | SQS queue depth | 8000 |
+| `axiom-api` | 1024 | 2048 MB | 2 | 8 | Max of: CPU > 60%, active WebSocket connections > threshold | 8080 |
+| `doc-processing` | 1024 | 2048 MB | 1 | 4 | River job queue depth (`auditcore.document-extract`) | 8000 |
 
-**Dev and demo-stage overrides:** all services run min 1 / max 2 tasks with 256 CPU / 512 MB (except doc-processing at 512 CPU / 1024 MB for Tesseract OCR). Services not needed at demo stage (`trial-balance`, `workpaper`, `reporting`) are toggled off via `enable_*` Terraform variables.
+**Dev and demo-stage overrides:** `axiom-api` runs min 1 / max 2 tasks with 512 CPU / 1024 MB. `doc-processing` runs min 1 / max 2 tasks with 512 CPU / 1024 MB.
 
 **Task definition configuration (all services):**
 - Fargate platform version: `LATEST`
@@ -298,18 +277,13 @@ Single target group pointing to the API Gateway ECS service. The gateway handles
 - Log driver: `awslogs` to CloudWatch log group `/axiom/{env}/{service-name}`
 - Log retention: dev 7 days, staging 30 days, prod 365 days
 - Environment variables: non-sensitive via ECS task definition `environment` block; sensitive via Secrets Manager ARN references in `secrets` block
-- PgBouncer sidecar container on each database-connected service (256 CPU / 256 MB). Not present on `gateway` or `doc-processing`.
+- PgBouncer sidecar container on the `axiom-api` task (256 CPU / 256 MB). Not present on `doc-processing`.
 
 **Task IAM roles (per-service least privilege):**
 
 | Service | Permissions |
 |---|---|
-| `gateway` | Secrets Manager read (`jwt/rsa-public-key` only) |
-| `identity` | Secrets Manager read (own DB creds, JWT private key, OAuth secrets), SES `SendEmail`, SQS publish to `user-deactivated` and `fco-created` |
-| `audit-core` | Secrets Manager read (own DB creds), S3 read/write to `evidence` and `archive` buckets, SQS publish/consume, SES `SendEmail`, Bedrock `InvokeModel`, Step Functions `StartExecution`, KMS `Decrypt`/`GenerateDataKey` (HIPAA key) |
-| `trial-balance` | Secrets Manager read (own DB creds), Bedrock `InvokeModel` |
-| `workpaper` | Secrets Manager read (own DB creds), Bedrock `InvokeModel` |
-| `reporting` | Secrets Manager read (own DB creds), S3 read from `evidence`, S3 write to `reports`, Bedrock `InvokeModel` (Sonnet only — Feature 8 report section drafts) |
+| `axiom-api` | Secrets Manager read (DB creds, JWT keys, OAuth secrets, SES creds), S3 read/write to `evidence` and `archive` buckets, S3 write to `reports`, SES `SendEmail`, Bedrock `InvokeModel` (Haiku + Sonnet), Step Functions `StartExecution`, KMS `Decrypt`/`GenerateDataKey` (HIPAA key) |
 | `doc-processing` | None (stateless — receives files via HTTP, returns extracted text) |
 
 ### ECS Deployment Configuration
@@ -318,7 +292,7 @@ Single target group pointing to the API Gateway ECS service. The gateway handles
 - **Minimum healthy percent:** 100% (never drop below current task count during deploy)
 - **Maximum percent:** 200% (new tasks start before old tasks drain)
 - **Circuit breaker:** enabled with automatic rollback — if new tasks fail health checks, ECS rolls back to the previous task definition
-- **Deployment order:** `doc-processing` and `identity` first (no dependencies on other services), then `audit-core`, `trial-balance`, `workpaper`, `reporting` in parallel, then `gateway` last (picks up any new Service Connect endpoints)
+- **Deployment order:** `doc-processing` first (no dependencies), then `axiom-api`
 
 ### Step Functions
 
@@ -339,14 +313,12 @@ Model access enabled in `us-east-1`:
 - `anthropic.claude-haiku-4-5` — control mapping (Feature 2), trial balance account mapping (Feature 3), evidence link suggestion (Feature 5), anomaly detection (Feature 7)
 - `anthropic.claude-sonnet-4-6` — document completeness review (Feature 1), workpaper narrative drafts (Feature 4), risk category suggestion (Feature 6), report section drafts (Feature 8)
 
-Traffic routes through the Bedrock VPC endpoint. IAM policies on task roles restrict which services can invoke which models:
+Traffic routes through the Bedrock VPC endpoint. The `axiom-api` task role grants access to both models — all AI features run within the single binary. Model selection per feature is enforced at the application layer (the `internal/ai` package routes each feature to its designated model).
 
-| Service | Haiku | Sonnet |
-|---|---|---|
-| `audit-core` | Yes (Features 2, 5) | Yes (Features 1, 6) |
-| `trial-balance` | Yes (Features 3, 7) | No |
-| `workpaper` | No | Yes (Feature 4) |
-| `reporting` | No | Yes (Feature 8) |
+| Model | Features |
+|---|---|
+| Haiku | Control mapping (2), TB account mapping (3), evidence link suggestion (5), anomaly detection (7) |
+| Sonnet | Completeness review (1), workpaper drafts (4), risk category (6), report section drafts (8) |
 
 On-demand pricing at launch. Monitor `InvocationLatency` and `ThrottlingCount` CloudWatch metrics. If throttling exceeds 5% of requests, request a quota increase or evaluate provisioned throughput.
 
@@ -442,12 +414,7 @@ Not provisioned at demo stage — acceptable risk with zero customers. Enabled w
 
 | Log group | Source | Retention (dev / staging / prod) |
 |---|---|---|
-| `/axiom/{env}/gateway` | ECS awslogs | 7d / 30d / 365d |
-| `/axiom/{env}/identity` | ECS awslogs | 7d / 30d / 365d |
-| `/axiom/{env}/audit-core` | ECS awslogs | 7d / 30d / 365d |
-| `/axiom/{env}/trial-balance` | ECS awslogs | 7d / 30d / 365d |
-| `/axiom/{env}/workpaper` | ECS awslogs | 7d / 30d / 365d |
-| `/axiom/{env}/reporting` | ECS awslogs | 7d / 30d / 365d |
+| `/axiom/{env}/axiom-api` | ECS awslogs | 7d / 30d / 365d |
 | `/axiom/{env}/doc-processing` | ECS awslogs | 7d / 30d / 365d |
 | `/axiom/{env}/pgbouncer` | ECS sidecar awslogs | 7d / 30d / 365d |
 | `/axiom/{env}/waf/cloudfront` | WAF logging | 7d / 30d / 365d |
@@ -485,8 +452,8 @@ Provisioned via Terraform as JSON definitions:
 
 | Dashboard | Contents |
 |---|---|
-| `Axiom-{env}-Overview` | Per-service request rate, error rate, p50/p95/p99 latency. ECS task count. RDS connections and CPU. ALB healthy host count. |
-| `Axiom-{env}-AI` | Bedrock invocation latency, token consumption, throttle rate by model and service. River AI job queue depth and processing time across all four services (audit-core, trial-balance, workpaper, reporting). AIDecision creation rate by context_type. |
+| `Axiom-{env}-Overview` | Request rate, error rate, p50/p95/p99 latency by route group (module). ECS task count. RDS connections and CPU. ALB healthy host count. Active WebSocket connections. |
+| `Axiom-{env}-AI` | Bedrock invocation latency, token consumption, throttle rate by model and feature. River AI job queue depth and processing time by job type. AIDecision creation rate by context_type. |
 | `Axiom-{env}-Data` | RDS CPU, free storage, read/write IOPS, active connections. PgBouncer pool utilization. S3 bucket size and request count. |
 | `Axiom-{env}-Security` | WAF blocked requests by rule. Authentication failures. SES bounce/complaint rate. |
 
@@ -501,9 +468,8 @@ Dashboards are not provisioned at demo stage. Enabled when the full observabilit
 | `{env}-rds-cpu-high` | RDS CPU > 80% for 10 min | SNS → ops email |
 | `{env}-rds-storage-low` | Free storage < 20% of allocated | SNS → ops email |
 | `{env}-rds-connections-high` | Connections > 80% of max | SNS → ops email |
-| `{env}-ecs-cpu-high-{service}` | Service avg CPU > 80% for 10 min | SNS → ops email |
-| `{env}-river-dlq-not-empty-{service}` | River DLQ depth > 0 (per service: audit-core, trial-balance, workpaper, reporting) | SNS → ops email |
-| `{env}-sqs-dlq-not-empty` | SQS DLQ `ApproximateNumberOfMessagesVisible` > 0 | SNS → ops email |
+| `{env}-ecs-cpu-high-{service}` | Service avg CPU > 80% for 10 min (axiom-api, doc-processing) | SNS → ops email |
+| `{env}-river-dlq-not-empty` | River DLQ depth > 0 | SNS → ops email |
 | `{env}-bedrock-throttle-high` | Bedrock throttle > 5% of invocations in 5 min | SNS → ops email |
 | `{env}-ses-bounce-high` | Bounce rate > 5% in 1 hour | SNS → ops email |
 | `{env}-waf-blocked-spike` | WAF blocked > 100 in 5 min | SNS → ops email |
@@ -516,7 +482,7 @@ Demo stage provisions only basic alarms: ALB 5xx, RDS CPU, and RDS storage.
 
 ### X-Ray Distributed Tracing
 
-OpenTelemetry Go SDK in `go-shared` with AWS X-Ray exporter. Traces propagate across service boundaries via `X-Amzn-Trace-Id` header.
+OpenTelemetry Go SDK in the `platform` package with AWS X-Ray exporter. Within the monolith, traces propagate via Go context. The `X-Amzn-Trace-Id` header is used for the Axiom API → Document Processing HTTP call.
 
 **Sampling rules:**
 - Prod: 5% of requests
@@ -553,12 +519,7 @@ One repository per service in the tooling account:
 
 | Repository | Image source |
 |---|---|
-| `axiom/gateway` | Go binary |
-| `axiom/identity` | Go binary |
-| `axiom/audit-core` | Go binary |
-| `axiom/trial-balance` | Go binary |
-| `axiom/workpaper` | Go binary |
-| `axiom/reporting` | Go binary |
+| `axiom/axiom-api` | Go binary (modular monolith) |
 | `axiom/doc-processing` | Python + Tesseract |
 | `axiom/pgbouncer` | PgBouncer with config |
 
@@ -568,7 +529,7 @@ One repository per service in the tooling account:
 - Immutable image tags — a pushed tag cannot be overwritten
 - Cross-account pull access: IAM policies allow dev, staging, and prod execution roles to pull
 
-Demo stage provisions only the 4 repositories needed: `gateway`, `identity`, `audit-core`, `doc-processing`, `pgbouncer`.
+Demo stage provisions all 3 repositories: `axiom-api`, `doc-processing`, `pgbouncer`.
 
 ### GitHub Actions OIDC Federation
 
@@ -602,7 +563,7 @@ lint → build → unit test → terraform plan (dev)
 build → push images → deploy staging → integration test → manual gate → deploy prod
 ```
 
-1. **Build + push:** Turborepo builds affected services. Docker images pushed to ECR with `main-{short-sha}` and `latest` tags.
+1. **Build + push:** Turborepo builds affected apps. Docker images pushed to ECR with `main-{short-sha}` and `latest` tags.
 2. **Deploy staging:** Terraform apply for affected workspaces in `axiom-staging`. ECS services updated to new task definitions. Wait for deployment stability (circuit breaker confirms healthy).
 3. **Integration tests:** Run against staging — API smoke tests, critical path end-to-end tests.
 4. **Manual approval gate:** GitHub Environment protection rule on `prod`. Requires one approval from a designated deployer.
@@ -630,7 +591,7 @@ Migrations run as a dedicated one-shot ECS Fargate task within the deploy pipeli
 
 1. After `data` workspace is applied (RDS exists)
 2. Before `compute` workspace is applied (services expect the new schema)
-3. Fargate task runs `golang-migrate` against each database with pending migrations
+3. Fargate task runs `golang-migrate` against `axiom_db` with pending migrations
 4. Migration task uses `axiom/{env}/rds/master` credentials from Secrets Manager
 5. Pipeline proceeds to `compute` only if all migrations succeed
 
@@ -712,13 +673,12 @@ Workspaces share outputs via **SSM Parameter Store** in each workload account. T
 | `data` | `/axiom/{env}/s3-evidence-bucket-arn` | `compute` |
 | `data` | `/axiom/{env}/s3-archive-bucket-arn` | `compute` |
 | `data` | `/axiom/{env}/s3-reports-bucket-arn` | `compute` |
-| `data` | `/axiom/{env}/sqs-document-uploaded-arn` | `compute` |
-| `data` | `/axiom/{env}/sqs-user-deactivated-arn` | `compute` |
-| `data` | `/axiom/{env}/sqs-fco-created-arn` | `compute` |
 | `data` | `/axiom/{env}/kms-hipaa-key-arn` | `compute` |
 | `compute` | `/axiom/{env}/alb-dns-name` | `dns-cdn` |
 | `compute` | `/axiom/{env}/alb-hosted-zone-id` | `dns-cdn` |
-| `cicd` | `/axiom/ecr-repo-{service}-url` | `compute` (all envs) |
+| `cicd` | `/axiom/ecr-repo-axiom-api-url` | `compute` (all envs) |
+| `cicd` | `/axiom/ecr-repo-doc-processing-url` | `compute` (all envs) |
+| `cicd` | `/axiom/ecr-repo-pgbouncer-url` | `compute` (all envs) |
 
 SSM parameters are typed as `String`, encrypted with the account's default KMS key.
 
@@ -734,10 +694,10 @@ rds_multi_az          = true
 rds_backup_retention  = 35
 rds_storage_gb        = 200
 rds_storage_autoscale = 1000
-ecs_gateway_min       = 2
-ecs_gateway_max       = 6
-ecs_audit_core_min    = 2
-ecs_audit_core_max    = 8
+ecs_axiom_api_min     = 2
+ecs_axiom_api_max     = 8
+ecs_doc_processing_min = 1
+ecs_doc_processing_max = 4
 log_retention_days    = 365
 single_nat            = false
 enable_s3_replication = true
@@ -747,9 +707,6 @@ enable_waf            = true
 enable_guardduty      = true
 enable_aws_config     = true
 enable_xray           = true
-enable_trial_balance  = true
-enable_workpaper      = true
-enable_reporting      = true
 enable_step_functions = true
 xray_sampling_rate    = 0.05
 ```
@@ -762,17 +719,10 @@ rds_multi_az             = false
 rds_backup_retention     = 1
 rds_storage_gb           = 20
 rds_storage_autoscale    = 0
-ecs_gateway_min          = 1
-ecs_gateway_max          = 1
-ecs_audit_core_min       = 1
-ecs_audit_core_max       = 2
-ecs_identity_min         = 1
-ecs_identity_max         = 1
+ecs_axiom_api_min        = 1
+ecs_axiom_api_max        = 2
 ecs_doc_processing_min   = 1
 ecs_doc_processing_max   = 2
-enable_trial_balance     = false
-enable_workpaper         = false
-enable_reporting         = false
 enable_step_functions    = false
 enable_waf               = false
 enable_guardduty         = false
@@ -787,35 +737,23 @@ xray_sampling_rate       = 0.0
 
 CI/CD passes the correct tfvars: `terraform apply -var-file=../../envs/{env}.tfvars`
 
-### Migration Path: Layer-Based → Hybrid (Per-Service Compute)
+### Migration Path: Monolith → Extracted Services
 
-**When to migrate:**
-- Different teams own different services and block each other on `compute` workspace applies
-- A service deploys 5+ times per day while others deploy weekly
-- A service's Terraform config grows complex enough to warrant its own review cycle
+With the modular monolith architecture, compute Terraform is already simple (2 ECS services). The per-service workspace split described below applies only if a module is extracted from the monolith into its own service.
 
-**Migration steps:**
+**When to extract a module:**
+- A second team needs independent deployment of a specific module
+- WebSocket scaling (workpaper) forces over-provisioning of the combined service
+- A module's resource requirements diverge significantly from the rest
 
-1. Create per-service workspace directories: `infra/workspaces/svc-gateway/`, `infra/workspaces/svc-audit-core/`, etc.
-2. Each service workspace uses the existing `ecs-service` module with service-specific parameters. The ECS cluster, ALB, and shared listener remain in a `compute-shared` workspace.
-3. Move state: `terraform state mv` migrates each service's resources from monolithic `compute` state to its per-service state. State-only operation — no infrastructure changes.
-4. Update CI/CD change detection to trigger per-service applies based on which `infra/workspaces/svc-*/` directories changed.
-5. SSM parameter pattern unchanged — per-service workspaces read the same network and data parameters.
+**Extraction steps:**
 
-**What stays in `compute-shared`:**
-- ECS cluster
-- ALB + HTTPS listener
-- ECS Service Connect namespace
-- Step Functions state machines
-- Bedrock model access configuration
+1. Create a new `apps/{module}/` directory with its own `go.mod`, pulling the module's code out of `internal/`.
+2. Replace in-process calls with HTTP client calls (the Go interface boundary makes this mechanical).
+3. Add a new ECS service in the `compute` workspace using the existing `ecs-service` module.
+4. Optionally move the new service's resources to a per-service workspace (`infra/workspaces/svc-{module}/`) if independent Terraform applies are needed.
 
-**What moves to per-service workspaces:**
-- ECS service definition
-- ECS task definition
-- Auto-scaling policies
-- Service-specific IAM task role
-
-The `ecs-service` module is already designed to be instantiated per service — migration is extracting instantiations into separate state files, not rewriting modules.
+The `ecs-service` Terraform module is parameterized to support any number of services without restructuring.
 
 ---
 
@@ -870,7 +808,8 @@ Not enabled at demo stage.
 **No IAM users with long-lived credentials in any workload account.** SCPs enforce this in production. All human access via IAM Identity Center. All CI/CD access via OIDC federation.
 
 **Role naming convention:**
-- `axiom-{env}-{service}-task-role` — ECS task role per service
+- `axiom-{env}-axiom-api-task-role` — Axiom API ECS task role
+- `axiom-{env}-doc-processing-task-role` — Document Processing ECS task role
 - `axiom-{env}-ecs-execution-role` — shared execution role
 - `axiom-ci-{env}` — GitHub Actions deployment role
 - `axiom-{env}-migration-role` — database migration task role
@@ -889,11 +828,11 @@ Defense-in-depth: even if a role's policy is overly broad, the boundary prevents
 
 ### Demo Stage (Pre-Revenue)
 
-Two workload accounts (dev + staging), 4 services each, single AZ, no security controls beyond CloudTrail and S3 public access blocks.
+Two workload accounts (dev + staging), 2 services each, single AZ, no security controls beyond CloudTrail and S3 public access blocks.
 
 | Category | Service | Dev | Staging | Tooling/Mgmt | Total |
 |---|---|---|---|---|---|
-| Compute | ECS Fargate (4 svc × 1 task) | $50-80 | $50-80 | — | $100-160 |
+| Compute | ECS Fargate (2 svc × 1-2 tasks) | $35-55 | $35-55 | — | $70-110 |
 | Database | RDS db.t4g.medium, Single-AZ | $55-65 | $55-65 | — | $110-130 |
 | Networking | NAT Gateway (×1) | $35-45 | $35-45 | — | $70-90 |
 | Networking | VPC Endpoints (×4, 1 AZ) | $30 | $30 | — | $60 |
@@ -903,22 +842,22 @@ Two workload accounts (dev + staging), 4 services each, single AZ, no security c
 | DNS | Route 53 | $1 | $1 | $2 | $4 |
 | AI | Bedrock | $5-10 | $5-15 | — | $10-25 |
 | Email | SES (sandbox) | $0 | $0 | — | $0 |
-| Secrets | Secrets Manager | $2 | $2 | — | $4 |
+| Secrets | Secrets Manager | $1 | $1 | — | $2 |
 | KMS | 1 key/account | $1 | $1 | $1 | $3 |
-| Observability | CloudWatch (logs + basic alarms) | $10-15 | $10-15 | — | $20-30 |
-| Registry | ECR | — | — | $2-3 | $2-3 |
+| Observability | CloudWatch (logs + basic alarms) | $5-10 | $5-10 | — | $10-20 |
+| Registry | ECR | — | — | $1-2 | $1-2 |
 | Org/Trail | CloudTrail | — | — | $5 | $5 |
-| | **Subtotals** | **$210-340** | **$210-350** | **$10-15** | |
-| | **Demo stage total** | | | | **$430-700/mo** |
+| | **Subtotals** | **$190-280** | **$190-290** | **$10-15** | |
+| | **Demo stage total** | | | | **$380-585/mo** |
 
 ### Full Architecture (Post First Customer)
 
 | Category | Service | Est. monthly (prod) |
 |---|---|---|
-| Compute | ECS Fargate (7 svc, 2 tasks avg) | $250-400 |
+| Compute | ECS Fargate (2 svc, 2-4 tasks avg) | $150-250 |
 | Database | RDS db.r7g.xlarge, Multi-AZ, 200 GB | $550-600 |
 | Networking | NAT Gateways (×2) | $70-90 |
-| Networking | VPC Endpoints (×9 interface, 2 AZs) | $135 |
+| Networking | VPC Endpoints (×8 interface, 2 AZs) | $120 |
 | Networking | ALB | $25-40 |
 | Storage | S3 (evidence + archive + reports + SPA) | $5-10 |
 | Storage | S3 cross-region replication | $5-10 |
@@ -927,36 +866,35 @@ Two workload accounts (dev + staging), 4 services each, single AZ, no security c
 | Security | WAF (2 WebACLs) | $20-30 |
 | Security | GuardDuty | $20-50 |
 | Security | KMS (5 keys) | $5-10 |
-| Observability | CloudWatch | $50-80 |
+| Observability | CloudWatch | $30-50 |
 | Observability | X-Ray (5% sampling) | $5-10 |
 | Observability | CloudTrail | $10-20 |
 | Config | AWS Config | $10-20 |
-| Messaging | SQS + SNS | $2-3 |
 | Workflow | Step Functions | $1 |
 | AI | Bedrock (on-demand) | $100-250 |
 | Email | SES | $5-10 |
-| Secrets | Secrets Manager | $10-15 |
-| Registry | ECR | $5-10 |
-| | **Production total** | **$1,300-1,750/mo** |
+| Secrets | Secrets Manager | $3-5 |
+| Registry | ECR | $2-5 |
+| | **Production total** | **$1,150-1,550/mo** |
 
-**Staging:** same topology, smaller instances — **$700-900/mo**.
-**Dev:** single AZ, minimum tasks — **$350-500/mo**.
-**Total across all environments:** **$2,350-3,150/mo ($28k-38k/year)**.
+**Staging:** same topology, smaller instances — **$550-750/mo**.
+**Dev:** single AZ, minimum tasks — **$280-400/mo**.
+**Total across all environments:** **$1,980-2,700/mo ($24k-32k/year)**.
 
 ### Growth Path
 
 | Milestone | Action | Monthly cost |
 |---|---|---|
-| Demo stage (pre-revenue) | 2 workload accounts, 4 services, single AZ | $430-700 |
-| First paying customer | Add prod (Multi-AZ, security controls, all 7 services). Upgrade staging. | $2,200-3,000 |
-| Stable operations | All services in dev. Full dashboards, X-Ray, alarms. | $2,600-3,500 |
-| Pre-SOC 2 audit | GuardDuty, AWS Config, conformance packs in all accounts. | $2,800-3,800 |
-| Savings plans | Fargate + RDS reserved instances (3+ months stable). 25-35% savings. | $2,000-2,800 |
+| Demo stage (pre-revenue) | 2 workload accounts, 2 services, single AZ | $380-585 |
+| First paying customer | Add prod (Multi-AZ, security controls). Upgrade staging. | $1,800-2,500 |
+| Stable operations | Full dashboards, X-Ray, alarms. | $2,100-2,900 |
+| Pre-SOC 2 audit | GuardDuty, AWS Config, conformance packs in all accounts. | $2,300-3,100 |
+| Savings plans | Fargate + RDS reserved instances (3+ months stable). 25-35% savings. | $1,700-2,300 |
 
 ### Cost Scaling Notes
 
 - **Biggest cost driver:** RDS instance size. `db.r7g.2xlarge` doubles the RDS line. Aurora becomes competitive when read replicas are needed.
-- **ECS scales linearly:** ~$30-60/month per additional Fargate task.
+- **ECS scales linearly:** ~$30-60/month per additional Fargate task. With 2 services instead of 7, the Fargate baseline is significantly lower.
 - **Bedrock scales with engagements:** 500 engagements/month → $1,000-2,500/month, still trivial relative to subscription revenue.
 - **NAT Gateway data charges:** evidence file volumes could surprise. S3 gateway endpoint (free) already mitigates the largest NAT traffic source.
 - **Savings plans:** after 3+ months stable, Fargate Savings Plans (1-year no-upfront, 20-30% savings) and RDS Reserved Instances (1-year partial-upfront, 30-40% savings).
@@ -968,8 +906,9 @@ Two workload accounts (dev + staging), 4 services each, single AZ, no security c
 | Item | Current posture | Trigger to revisit |
 |---|---|---|
 | Aurora PostgreSQL | Standard RDS. Simpler, cheaper at launch scale. | Storage > 500 GB, need read replicas with low replication lag, IOPS bottleneck on gp3 |
-| mTLS between services | VPC-internal network trusted, JWT validates user identity at gateway. | SOC 2 auditor requires service-to-service authentication, or compliance review mandates it |
-| Per-service Terraform workspaces | Single `compute` workspace for all services. | Multiple teams, independent deploy cadences, Terraform contention |
+| Service extraction | Modular monolith — all Go modules in one binary. | Second team needs independent deploy cadence, WebSocket scaling diverges from REST, module resource needs diverge significantly |
+| mTLS for doc-processing | Plaintext HTTP within VPC. | SOC 2 auditor requires service-to-service authentication. VPC Lattice provides mTLS natively. |
+| Per-service Terraform workspaces | Single `compute` workspace for 2 services. | A module is extracted to its own service and needs independent Terraform lifecycle |
 | Grafana Cloud / Datadog | CloudWatch-native only. | CloudWatch dashboarding UX becomes a bottleneck, team needs advanced alerting or APM |
 | Multi-region | `us-east-1` only. | EU/APAC enterprise customers require data residency. Architecture supports adding `eu-central-1` deployment. |
 | WAF Bot Control | Managed core rules + rate limiting only. | Bot traffic becomes a meaningful fraction of requests |

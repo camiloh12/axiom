@@ -1,14 +1,19 @@
 openapi: 3.1.0
 
 info:
-  title: Axiom Audit Core API
+  title: Axiom Audit Core Module API
   version: 1.0.0
   description: |
-    **Audit Core** is the central service in the Axiom platform. It owns engagements,
+    **Audit Core** is the central module in the Axiom platform. It owns engagements,
     controls, evidence, document requests, AI decisions, and the append-only audit log.
 
+    This spec covers the Audit Core module within the Axiom API modular monolith. All
+    endpoints are served by a single Go binary alongside other modules (identity, trial
+    balance, workpaper, reporting).
+
     ## Authentication
-    Most endpoints require three headers injected by the API Gateway after JWT verification:
+    Most endpoints require three context values injected by the gateway middleware after
+    JWT verification:
     - `X-User-Id` — UUID of the authenticated user
     - `X-Firm-Id` — UUID of the user's firm
     - `X-User-Role` — role of the authenticated user
@@ -127,10 +132,10 @@ tags:
 
   - name: Internal
     description: |
-      **Service-to-service endpoints — not exposed through the API Gateway.** Used by other
-      Axiom services (Trial Balance, Workpaper, Reporting) to create resources in `core_db`
-      that they cannot write to directly. Authenticated via internal service headers over
-      ECS Service Connect DNS, not JWT.
+      **Internal module endpoints — not exposed to the frontend.** In the modular monolith,
+      these are called directly via the audit core module's Go service interface by other
+      modules (trial balance, workpaper, reporting). The OpenAPI definitions are retained
+      for documentation and as the contract for future service extraction.
 
   - name: AuditLog
     description: |
@@ -363,7 +368,7 @@ paths:
       summary: List engagements
       description: |
         Returns a paginated list of engagement summaries visible to the authenticated user.
-        Row-level security in `core_db` ensures users only see engagements belonging to
+        Row-level security in `axiom_db` ensures users only see engagements belonging to
         their firm. Staff members only see engagements they are assigned to.
 
         **Access:** All authenticated firm users (filtered by RLS).
@@ -3089,9 +3094,9 @@ paths:
       operationId: createAIDecisionInternal
       summary: Create an AI decision record (internal service-to-service)
       description: |
-        **Internal endpoint — not exposed through the API Gateway.** Used by Trial Balance,
-        Workpaper, and Reporting services to create `AIDecision` records in `core_db` after
-        executing AI features (Features 3, 4, 7, 8). Called via ECS Service Connect DNS
+        **Internal module endpoint.** Used by the trial balance, workpaper, and reporting
+        modules to create `AIDecision` records in `axiom_db` after executing AI features
+        (Features 3, 4, 7, 8). In the monolith, called via Go service interface
         (`http://audit-core/internal/ai-decisions`).
 
         Authentication: internal service header (`X-Internal-Service`), not JWT. Requests
@@ -5795,8 +5800,8 @@ components:
     CreateAIDecisionInternalRequest:
       type: object
       description: |
-        Request body for cross-service AI decision creation. Used by Trial Balance,
-        Workpaper, and Reporting services to persist AI decision records in core_db
+        Request body for cross-module AI decision creation. Used by the trial balance,
+        workpaper, and reporting modules to persist AI decision records in axiom_db
         after executing AI features.
       required:
         - firm_id

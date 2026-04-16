@@ -1,11 +1,13 @@
 openapi: 3.1.0
 
 info:
-  title: Axiom Reporting Service
+  title: Axiom Reporting Module API
   version: 1.0.0
   description: |
     Handles async report generation, version history, client review, issuance, and engagement export
     for the Axiom AI-native audit platform.
+
+    This spec covers the Reporting module within the Axiom API modular monolith.
 
     ## Report Status Lifecycle
 
@@ -21,7 +23,7 @@ info:
     - **FirmReview**: Client review acknowledged; auditors perform final internal sign-off.
     - **Issued**: Partner has formally issued the report. The report becomes **read-only**. Records
       `issued_at` and `issued_by_id`. Triggers computation of `assembly_deadline` and
-      `retention_deadline` on the Engagement via an Audit Core REST call.
+      `retention_deadline` on the Engagement via an audit core module call.
     - **Archived**: Issued report archived to S3 with Object Lock (COMPLIANCE mode) for regulatory
       immutability (WORM). No further mutations are permitted.
 
@@ -66,7 +68,7 @@ paths:
       - name: engagementId
         in: path
         required: true
-        description: UUID of the engagement. Not a foreign key into core_db — the Reporting Service
+        description: UUID of the engagement. Not a foreign key into axiom_db — the Reporting Service
           treats this as an opaque identifier.
         schema:
           type: string
@@ -482,7 +484,7 @@ paths:
 
         The generated draft is inserted into the specified section with full `ai_content_metadata`
         section-level tracking. An `AIDecision` record with `context_type = ReportSectionDraft`
-        is created in Audit Core via internal REST call.
+        is created in Audit Core via internal module call.
 
         **Supported sections:**
         - `description-of-tests` — Description of Tests of Controls (SOC 1, SOC 2)

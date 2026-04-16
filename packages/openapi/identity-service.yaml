@@ -1,17 +1,20 @@
 openapi: 3.1.0
 
 info:
-  title: Axiom Identity Service
+  title: Axiom Identity Module API
   version: 1.0.0
   description: |
     Authentication, firm/user/client management, methodology templates, and firm control
     objectives for the Axiom AI-native audit platform.
 
+    This spec covers the Identity module within the Axiom API modular monolith. All endpoints
+    are served by a single Go binary alongside other modules (audit core, trial balance,
+    workpaper, reporting).
+
     ## Authentication model
     Public endpoints (auth, invitation acceptance) do not require gateway-injected headers.
     All other endpoints expect `X-User-Id`, `X-Firm-Id`, and `X-User-Role` headers injected
-    by the API Gateway after JWT verification. Services trust these headers; they do not
-    re-verify JWTs themselves.
+    by the gateway middleware after JWT verification. Handlers trust these context values.
 
     ## Pagination
     List endpoints use opaque cursor-based pagination. Pass the `next_cursor` value from a

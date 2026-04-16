@@ -23,7 +23,7 @@ from diagrams import Cluster, Diagram, Edge
 from diagrams.aws.compute import ECS, ECR
 from diagrams.aws.database import RDS
 from diagrams.aws.engagement import SES
-from diagrams.aws.integration import SNS, SQS, StepFunctions
+from diagrams.aws.integration import SNS, StepFunctions
 from diagrams.aws.management import Cloudtrail, Cloudwatch
 from diagrams.aws.ml import Sagemaker  # stand-in for Amazon Bedrock
 from diagrams.aws.network import ALB, CloudFront, NATGateway, Route53
@@ -77,7 +77,7 @@ with Diagram(
     # ══════════════════════════════════════════════════════════════════════════
     with Cluster("axiom-tooling account"):
         github   = Github("GitHub Actions\n(OIDC federation)")
-        ecr      = ECR("ECR\n8 repositories\n(immutable tags)")
+        ecr      = ECR("ECR\n3 repositories\n(immutable tags)")
         tf_state = S3("S3 + DynamoDB\nTerraform state")
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -96,22 +96,23 @@ with Diagram(
 
             # ECS Fargate cluster
             with Cluster("ECS Fargate Cluster  (Service Connect)"):
-                gw = ECS("API Gateway\nJWT verify · routing\n256 CPU / 512 MB  ×2–6")
-
-                with Cluster("Application Services"):
-                    identity  = ECS("Identity\nauth · RBAC · JWT\n512 CPU / 1 GB  ×2–4")
-                    audit     = ECS("Audit Core\nengagements · evidence\n1024 CPU / 2 GB  ×2–8")
-                    tb        = ECS("Trial Balance\nTB data · populations\n512 CPU / 1 GB  ×2–4")
-                    workpaper = ECS("Workpaper\nYjs real-time sync\n512 CPU / 1 GB  ×2–6")
-                    reporting = ECS("Reporting\nasync PDF gen\n512 CPU / 1 GB  ×1–4")
-                    doc_proc  = ECS("Doc Processing\nPython + Tesseract\n1024 CPU / 2 GB  ×1–4")
+                axiom_api = ECS(
+                    "Axiom API\nGo modular monolith\n"
+                    "identity · auditcore · trialbalance\n"
+                    "workpaper · reporting · ai\n"
+                    "1024 CPU / 2 GB  ×2–8"
+                )
+                doc_proc = ECS(
+                    "Doc Processing\nPython + Tesseract\n"
+                    "1024 CPU / 2 GB  ×1–4"
+                )
 
             # Data layer
             with Cluster("Data Layer"):
                 rds = RDS(
                     "RDS PostgreSQL 18\ndb.r7g.xlarge  Multi-AZ\n"
-                    "identity · core (RLS) · trial_balance\n"
-                    "workpaper · reporting\npgvector + pg_stat_statements"
+                    "axiom_db (RLS all tenants)\n"
+                    "pgvector + pg_stat_statements"
                 )
                 secrets = SecretsManager(
                     "Secrets Manager\nDB creds · JWT keys\nOAuth secrets\n30-day auto-rotation"
@@ -127,11 +128,6 @@ with Diagram(
         bedrock = Sagemaker("Amazon Bedrock\nclaude-haiku-4-5\nclaude-sonnet-4-6\n(via VPC endpoint)")
         sfn     = StepFunctions("Step Functions\nEngagementLifecycle\nDocRequestReminder")
         ses     = SES("SES\naxiom.com\nDKIM + SPF + DMARC")
-
-    with Cluster("SQS Queues  (+ DLQ per queue)"):
-        sqs_doc = SQS("document-uploaded\nAudit Core → Audit Core")
-        sqs_usr = SQS("user-deactivated\nIdentity → Audit Core")
-        sqs_fco = SQS("fco-created\nIdentity → Audit Core")
 
     with Cluster("S3 Storage"):
         s3_spa      = S3("SPA assets\n(CloudFront OAC\nprivate)")
@@ -159,52 +155,31 @@ with Diagram(
     r53     >> waf_alb
     waf_alb >> alb
 
-    # Internet → VPC gateway
-    alb >> gw
+    # Internet → Axiom API
+    alb >> axiom_api
 
-    # Gateway → services (internal Service Connect)
-    gw >> [identity, audit, tb, workpaper, reporting, doc_proc]
+    # Axiom API → Doc Processing (internal HTTP via Service Connect)
+    axiom_api >> doc_proc
 
-    # Services → RDS (PgBouncer sidecar on each service, connects to :5432)
-    identity  >> rds
-    audit     >> rds
-    tb        >> rds
-    workpaper >> rds
-    reporting >> rds
+    # Axiom API → RDS (PgBouncer sidecar, connects to :5432)
+    axiom_api >> rds
 
-    # Audit Core → S3
-    audit >> s3_evidence
-    audit >> s3_archive
-    reporting >> s3_reports
-
-    # Async messaging
-    audit    >> sqs_doc
-    identity >> sqs_usr
-    identity >> sqs_fco
-    sqs_doc  >> audit
-    sqs_usr  >> audit
-    sqs_fco  >> audit
+    # Axiom API → S3
+    axiom_api >> s3_evidence
+    axiom_api >> s3_archive
+    axiom_api >> s3_reports
 
     # AI inference (via Bedrock VPC endpoint)
-    audit     >> bedrock
-    tb        >> bedrock
-    workpaper >> bedrock
-    reporting >> bedrock
+    axiom_api >> bedrock
 
     # Workflow orchestration
-    audit >> sfn
+    axiom_api >> sfn
 
     # Transactional email
-    identity >> ses
-    audit    >> ses
+    axiom_api >> ses
 
     # Secrets Manager → services (dashed = startup credential fetch)
-    secrets >> Edge(**DASHED) >> gw
-    secrets >> Edge(**DASHED) >> identity
-    secrets >> Edge(**DASHED) >> audit
-    secrets >> Edge(**DASHED) >> tb
-    secrets >> Edge(**DASHED) >> workpaper
-    secrets >> Edge(**DASHED) >> reporting
+    secrets >> Edge(**DASHED) >> axiom_api
 
     # KMS encryption (dashed = key usage, not data flow)
     kms >> Edge(**DASHED) >> rds
@@ -215,29 +190,14 @@ with Diagram(
     # CI/CD pipeline
     github   >> ecr
     github   >> tf_state
-    ecr >> Edge(**DASHED) >> gw
-    ecr >> Edge(**DASHED) >> identity
-    ecr >> Edge(**DASHED) >> audit
-    ecr >> Edge(**DASHED) >> tb
-    ecr >> Edge(**DASHED) >> workpaper
-    ecr >> Edge(**DASHED) >> reporting
+    ecr >> Edge(**DASHED) >> axiom_api
     ecr >> Edge(**DASHED) >> doc_proc
 
     # Telemetry → observability
-    gw        >> Edge(**DASHED) >> cw
-    identity  >> Edge(**DASHED) >> cw
-    audit     >> Edge(**DASHED) >> cw
-    tb        >> Edge(**DASHED) >> cw
-    workpaper >> Edge(**DASHED) >> cw
-    reporting >> Edge(**DASHED) >> cw
+    axiom_api >> Edge(**DASHED) >> cw
     doc_proc  >> Edge(**DASHED) >> cw
 
-    gw        >> Edge(**DASHED) >> xray
-    identity  >> Edge(**DASHED) >> xray
-    audit     >> Edge(**DASHED) >> xray
-    tb        >> Edge(**DASHED) >> xray
-    workpaper >> Edge(**DASHED) >> xray
-    reporting >> Edge(**DASHED) >> xray
+    axiom_api >> Edge(**DASHED) >> xray
 
     # Alarms → SNS → ops
     cw >> sns

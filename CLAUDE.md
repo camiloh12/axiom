@@ -24,7 +24,7 @@ This repository currently contains no implemented code. All guidance below refle
 | Frontend | TypeScript, React (SPA on CloudFront) |
 | Backend | Go (primary), Python (PDF extraction only) |
 | API | REST + OpenAPI 3.1 (oapi-codegen, openapi-typescript) |
-| Database | PostgreSQL — `core_db` (RLS), plus separate DBs per service |
+| Database | PostgreSQL — single `axiom_db` with RLS on all tenant-scoped tables |
 | DB access | sqlc + pgx/v5 (no ORM) |
 | Background jobs | River (Postgres-backed, Go-native) |
 | Workflow engine | AWS Step Functions |
@@ -36,17 +36,23 @@ This repository currently contains no implemented code. All guidance below refle
 
 ## Architecture Overview
 
-Microservices decomposed by bounded context, all behind an API Gateway (Go):
+Modular monolith (single Go binary) with internal packages per bounded context, plus a separate Python service for PDF extraction:
 
-1. **API Gateway** — JWT verification, routing, rate limiting
-2. **Identity Service** — auth, RBAC, firm/user/client management, JWT issuance
-3. **Audit Core** — engagements, controls, evidence, document requests, AI decisions
-4. **Trial Balance Service** — trial balance data, population analysis (SQL-based)
-5. **Workpaper Service** — collaborative workpapers with Yjs real-time sync (WebSocket)
-6. **Reporting Service** — async report generation, S3 WORM archiving
-7. **Document Processing Service** (Python) — PDF extraction via pdfplumber + Tesseract
+**Axiom API** (Go modular monolith):
+- `internal/gateway` — Chi middleware: JWT verification, routing, rate limiting
+- `internal/identity` — auth, RBAC, firm/user/client management, JWT issuance
+- `internal/auditcore` — engagements, controls, evidence, document requests, AI decisions
+- `internal/trialbalance` — trial balance data, population analysis (SQL-based)
+- `internal/workpaper` — collaborative workpapers with Yjs real-time sync (WebSocket)
+- `internal/reporting` — async report generation, S3 WORM archiving
+- `internal/ai` — Bedrock client, prompt templates, embedding helpers
+- `internal/platform` — DB, config, OTel, River, common middleware
 
-See `docs/specs/backend-architecture-design.md` for full service decomposition and monorepo structure.
+**Document Processing** (Python) — stateless PDF extraction via pdfplumber + Tesseract
+
+Modules communicate via Go interfaces (function calls), not HTTP. The only inter-service HTTP call is Axiom API → Document Processing for PDF extraction.
+
+See `docs/specs/backend-architecture-design.md` for full module descriptions and monorepo structure.
 
 ## Key Domain Concepts
 
