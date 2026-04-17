@@ -9,7 +9,7 @@
 
 This document specifies the complete AWS infrastructure for the Axiom platform — every service, how it is configured, how services integrate, and how the infrastructure is provisioned and managed via Terraform. It is intended to be directly translatable into Terraform workspaces.
 
-The backend architecture design defines two deployed services — a Go modular monolith (Axiom API) containing all domain modules (identity, audit core, trial balance, workpaper, reporting) and a stateless Python service (Document Processing) for PDF extraction — sharing a single database. This document specifies the AWS infrastructure that hosts and connects those services.
+The backend architecture design defines two deployed services — a Go modular monolith (Axiom API) containing all domain modules (identity, audit core, control mapping, workpaper, reporting, provenance) and a stateless Python service (Document Processing) for PDF extraction — sharing a single database. This document specifies the AWS infrastructure that hosts and connects those services.
 
 ### Key Decisions Made in This Document
 
@@ -194,9 +194,10 @@ The Terraform `rds` module parameterizes the engine (`engine = var.rds_engine`) 
 
 | Bucket | Purpose | Configuration |
 |---|---|---|
-| `axiom-{env}-evidence` | Evidence file uploads (`EvidenceItem.storage_path`) | SSE-S3 default encryption. HIPAA-flagged objects uploaded with per-request SSE-KMS using the `axiom-{env}-hipaa` key. Versioning enabled. Lifecycle: IA after 90 days, Glacier after 1 year. Cross-region replication to `us-west-2` (prod only). |
-| `axiom-{env}-archive` | WORM storage for finalized engagements | S3 Object Lock in COMPLIANCE mode. Retention set per-object using `retention_deadline`. SSE-KMS with `axiom-{env}-hipaa` key. No lifecycle transitions — objects remain until retention expires then auto-delete. |
-| `axiom-{env}-reports` | Generated report PDFs | SSE-S3. Versioning enabled. Lifecycle: IA after 30 days. |
+| `axiom-{env}-evidence` | Evidence file uploads (`EvidenceItem.storage_path`). Carries cryptographically signed artifacts (signed screenshots, hashed DOM snapshots, provenance manifests) per the compliance provenance model. | S3 Object Lock in COMPLIANCE mode for signed artifacts (WORM — artifact immutability is central to auditor-defensibility). SSE-S3 default encryption. HIPAA-flagged objects uploaded with per-request SSE-KMS using the `axiom-{env}-hipaa` key. Versioning enabled. Lifecycle: IA after 90 days, Glacier after 1 year (subject to Object Lock retention). Cross-region replication to `us-west-2` (prod only). |
+| `axiom-{env}-archive` | WORM storage for finalized engagements (SOC 2 reports, ISO certs, ISO 42001 certs, PCI ROC/AOC, HIPAA attestations, HITRUST r2 reports) | S3 Object Lock in COMPLIANCE mode. Retention set per-object using `retention_deadline`. SSE-KMS with `axiom-{env}-hipaa` key. No lifecycle transitions — objects remain until retention expires then auto-delete. |
+| `axiom-{env}-reports` | Generated report PDFs (SOC 2 Type 1/2, ISO 27001/27701/42001 audit reports and cert packages, PCI ROC/AOC, HIPAA/HITRUST r2 attestations) | S3 Object Lock in COMPLIANCE mode for finalized reports. SSE-S3. Versioning enabled. Lifecycle: IA after 30 days (subject to Object Lock retention). |
+| `axiom-{env}-scf-catalog` | SCF (Secure Controls Framework) catalog seed data — source-of-truth crosswalks for platform-level `CommonControl` entities. OSCAL, AICPA, and CIS mapping imports land here before ingestion. | SSE-S3. Versioning enabled. Read-mostly. Private — accessed by the `scf-import` scheduled job via VPC endpoint. Lifecycle: retain all versions (small, auditable provenance of catalog changes). |
 | `axiom-{env}-spa` | React SPA static assets | SSE-S3. Versioning enabled. Private — accessed only via CloudFront OAC. |
 
 **SSE-KMS for HIPAA evidence explained:** SSE-S3 uses an AWS-managed key with no CloudTrail logging of decrypt calls and no IAM-level key access control. SSE-KMS provides: CloudTrail logging of every decrypt call (HIPAA §164.312(b) audit controls), key policy restricting decrypt to specific IAM roles (defense in depth beyond S3 bucket policy), and customer-managed annual key rotation (HIPAA §164.312(a)(2)(iv)). The application layer checks `Engagement.engagement_type` to determine which encryption to apply at upload time.
@@ -204,7 +205,8 @@ The Terraform `rds` module parameterizes the engine (`engine = var.rds_engine`) 
 **Bucket policies (all buckets):**
 - Deny non-TLS requests (`aws:SecureTransport = false`)
 - Deny public access (enforced at both bucket and account level)
-- Archive bucket: additional policy denying `s3:DeleteObject` and `s3:PutObjectRetention` with `bypass-governance-retention` — defense in depth on top of Object Lock COMPLIANCE mode
+- Archive, evidence, and reports buckets: additional policy denying `s3:DeleteObject` and `s3:PutObjectRetention` with `bypass-governance-retention` — defense in depth on top of Object Lock COMPLIANCE mode
+- SCF catalog bucket: read access restricted to the `scf-import` task role; write access restricted to the platform admin role used for curated catalog uploads
 
 ### SQS Queues
 
@@ -230,10 +232,11 @@ RDS credential rotation uses the AWS-provided Lambda rotation function (`Secrets
 | `axiom-{env}-default` | Each workload account | Default encryption for CloudWatch Logs, SSM parameters, SNS topics | Annual automatic |
 | `axiom-{env}-hipaa` | Each workload account | S3 SSE-KMS for HIPAA evidence and archive buckets | Annual automatic |
 | `axiom-{env}-rds` | Each workload account | RDS instance encryption at rest | Annual automatic |
+| `axiom-{env}-provenance-signing` | Each workload account | **Asymmetric (`ECC_NIST_P256`, `SIGN_VERIFY`).** Used by the provenance signer to sign evidence artifacts, `AIDecision` ledger entries, and finalized report manifests. Key material is non-exportable — only signing and verification via KMS API. Public key exposed for downstream auditor verification. | Manual rotation (new key version on schedule; signatures remain verifiable under prior versions) |
 | `axiom-cloudtrail` | `axiom-management` | CloudTrail log file encryption | Annual automatic |
 | `axiom-terraform-state` | `axiom-tooling` | Terraform state bucket encryption | Annual automatic |
 
-Key policies follow least privilege. The HIPAA key policy grants `kms:GenerateDataKey` and `kms:Decrypt` only to the `audit-core` task role — no other service can encrypt or decrypt HIPAA evidence.
+Key policies follow least privilege. The HIPAA key policy grants `kms:GenerateDataKey` and `kms:Decrypt` only to the Axiom API task role — no other service can encrypt or decrypt HIPAA evidence. The provenance-signing key grants `kms:Sign` only to the `provenance-signer` task role (isolated) and `kms:Verify` / `kms:GetPublicKey` to the `axiom-api` task role for verification flows. No role has `kms:Decrypt` or export permissions on the signing key — the key material cannot leave HSM boundary.
 
 ---
 
@@ -268,8 +271,11 @@ Single target group pointing to the Axiom API ECS service. All routing (REST and
 |---|---|---|---|---|---|---|
 | `axiom-api` | 1024 | 2048 MB | 2 | 8 | Max of: CPU > 60%, active WebSocket connections > threshold | 8080 |
 | `doc-processing` | 1024 | 2048 MB | 1 | 4 | River job queue depth (`auditcore.document-extract`) | 8000 |
+| `provenance-signer` | 512 | 1024 MB | 2 | 4 | River job queue depth (`provenance.sign`) | 8090 |
 
-**Dev and demo-stage overrides:** `axiom-api` runs min 1 / max 2 tasks with 512 CPU / 1024 MB. `doc-processing` runs min 1 / max 2 tasks with 512 CPU / 1024 MB.
+**Dev and demo-stage overrides:** `axiom-api` runs min 1 / max 2 tasks with 512 CPU / 1024 MB. `doc-processing` runs min 1 / max 2 tasks with 512 CPU / 1024 MB. `provenance-signer` runs min 1 / max 2 tasks with 256 CPU / 512 MB.
+
+**Isolation rationale for `provenance-signer`:** kept as a dedicated ECS service with its own task role so that `kms:Sign` on the provenance-signing key is restricted to a narrow, minimal-dependency container. A signing-specific blast radius simplifies ISO 42001 and SOC 2 evidence-integrity claims. Internal callers reach the signer over ECS Service Connect at `http://provenance-signer:8090` within `sg-ecs`.
 
 **Task definition configuration (all services):**
 - Fargate platform version: `LATEST`
@@ -283,8 +289,10 @@ Single target group pointing to the Axiom API ECS service. All routing (REST and
 
 | Service | Permissions |
 |---|---|
-| `axiom-api` | Secrets Manager read (DB creds, JWT keys, OAuth secrets, SES creds), S3 read/write to `evidence` and `archive` buckets, S3 write to `reports`, SES `SendEmail`, Bedrock `InvokeModel` (Haiku + Sonnet), Step Functions `StartExecution`, KMS `Decrypt`/`GenerateDataKey` (HIPAA key) |
+| `axiom-api` | Secrets Manager read (DB creds, JWT keys, OAuth secrets, SES creds), S3 read/write to `evidence` and `archive` buckets, S3 write to `reports`, S3 read to `scf-catalog`, SES `SendEmail`, Bedrock `InvokeModel` (Haiku + Sonnet), Step Functions `StartExecution`, KMS `Decrypt`/`GenerateDataKey` (HIPAA key), KMS `Verify` + `GetPublicKey` (provenance-signing key — verification only) |
 | `doc-processing` | None (stateless — receives files via HTTP, returns extracted text) |
+| `provenance-signer` | KMS `Sign` + `GetPublicKey` on `axiom-{env}-provenance-signing` (no other KMS permissions). S3 read on `evidence` (to hash and sign in place), S3 write of sidecar `.sig` and manifest objects to `evidence` and `reports` with `object-lock-mode = COMPLIANCE`. CloudWatch Logs write. No Bedrock, no RDS access. |
+| `scf-import` (scheduled job, runs on `axiom-api` task role or a dedicated short-lived Fargate task) | S3 read on `scf-catalog` bucket, RDS write access via `axiom-svc` credentials (ingests `CommonControl`, `FrameworkRequirement`, and STRM edges). Triggered by EventBridge schedule (quarterly aligned with SCF releases, configurable). |
 
 ### ECS Deployment Configuration
 
@@ -292,7 +300,7 @@ Single target group pointing to the Axiom API ECS service. All routing (REST and
 - **Minimum healthy percent:** 100% (never drop below current task count during deploy)
 - **Maximum percent:** 200% (new tasks start before old tasks drain)
 - **Circuit breaker:** enabled with automatic rollback — if new tasks fail health checks, ECS rolls back to the previous task definition
-- **Deployment order:** `doc-processing` first (no dependencies), then `axiom-api`
+- **Deployment order:** `doc-processing` and `provenance-signer` first (no intra-cluster dependencies), then `axiom-api`
 
 ### Step Functions
 
@@ -310,15 +318,15 @@ Not provisioned at demo stage — engagement lifecycle transitions managed manua
 ### Bedrock
 
 Model access enabled in `us-east-1`:
-- `anthropic.claude-haiku-4-5` — control mapping (Feature 2), trial balance account mapping (Feature 3), evidence link suggestion (Feature 5), anomaly detection (Feature 7)
-- `anthropic.claude-sonnet-4-6` — document completeness review (Feature 1), workpaper narrative drafts (Feature 4), risk category suggestion (Feature 6), report section drafts (Feature 8)
+- `anthropic.claude-haiku-4-5` — evidence-to-control mapping (Feature 2), framework version migration (Feature 3), evidence link suggestion (Feature 5), drift detection / continuous assurance (Feature 7)
+- `anthropic.claude-sonnet-4-6` — document completeness review (Feature 1), workpaper / audit-file narrative drafts (Feature 4), gap analysis and risk reasoning (Feature 6), findings triage and management-response drafting (Feature 8)
 
 Traffic routes through the Bedrock VPC endpoint. The `axiom-api` task role grants access to both models — all AI features run within the single binary. Model selection per feature is enforced at the application layer (the `internal/ai` package routes each feature to its designated model).
 
 | Model | Features |
 |---|---|
-| Haiku | Control mapping (2), TB account mapping (3), evidence link suggestion (5), anomaly detection (7) |
-| Sonnet | Completeness review (1), workpaper drafts (4), risk category (6), report section drafts (8) |
+| Haiku | Evidence-to-control mapping (2), framework version migration (3), evidence link suggestion (5), drift detection (7) |
+| Sonnet | Completeness review (1), workpaper drafts (4), gap analysis (6), findings triage + management-response drafting (8) |
 
 On-demand pricing at launch. Monitor `InvocationLatency` and `ThrottlingCount` CloudWatch metrics. If throttling exceeds 5% of requests, request a quota increase or evaluate provisioned throughput.
 
@@ -416,6 +424,7 @@ Not provisioned at demo stage — acceptable risk with zero customers. Enabled w
 |---|---|---|
 | `/axiom/{env}/axiom-api` | ECS awslogs | 7d / 30d / 365d |
 | `/axiom/{env}/doc-processing` | ECS awslogs | 7d / 30d / 365d |
+| `/axiom/{env}/provenance-signer` | ECS awslogs | 7d / 30d / 365d |
 | `/axiom/{env}/pgbouncer` | ECS sidecar awslogs | 7d / 30d / 365d |
 | `/axiom/{env}/waf/cloudfront` | WAF logging | 7d / 30d / 365d |
 | `/axiom/{env}/waf/alb` | WAF logging | 7d / 30d / 365d |
@@ -445,6 +454,14 @@ All log groups encrypted with the environment's `axiom-{env}-default` KMS key. A
 | `river_job_queue_depth` | `Axiom/{env}` | job_type |
 | `bedrock_invocation_duration_seconds` | `Axiom/{env}` | model, operation |
 | `bedrock_invocation_tokens` | `Axiom/{env}` | model, operation, token_type |
+| `ai_mapping_suggestion_latency_seconds` | `Axiom/{env}` | framework, control_family |
+| `ai_gap_analysis_duration_seconds` | `Axiom/{env}` | framework |
+| `ai_drift_detection_rate` | `Axiom/{env}` | framework, control_family |
+| `ai_findings_triage_throughput` | `Axiom/{env}` | framework, severity |
+| `ai_decision_created_total` | `Axiom/{env}` | context_type, framework, hitl_state |
+| `provenance_sign_duration_seconds` | `Axiom/{env}` | artifact_type |
+| `provenance_sign_failures_total` | `Axiom/{env}` | artifact_type, error_class |
+| `scf_import_records_processed` | `Axiom/{env}` | source (`scf` / `oscal` / `aicpa` / `cis`), operation |
 
 ### CloudWatch Dashboards
 
@@ -453,8 +470,11 @@ Provisioned via Terraform as JSON definitions:
 | Dashboard | Contents |
 |---|---|
 | `Axiom-{env}-Overview` | Request rate, error rate, p50/p95/p99 latency by route group (module). ECS task count. RDS connections and CPU. ALB healthy host count. Active WebSocket connections. |
-| `Axiom-{env}-AI` | Bedrock invocation latency, token consumption, throttle rate by model and feature. River AI job queue depth and processing time by job type. AIDecision creation rate by context_type. |
-| `Axiom-{env}-Data` | RDS CPU, free storage, read/write IOPS, active connections. PgBouncer pool utilization. S3 bucket size and request count. |
+| `Axiom-{env}-AI` | Bedrock invocation latency, token consumption, throttle rate by model and feature. River AI job queue depth and processing time by job type. Mapping suggestion latency (by framework). Gap analysis duration (by framework). Drift detection rate (by framework/control family). Findings triage throughput (by severity). |
+| `Axiom-{env}-AIDecision` | **ISO 42001 observability surface.** AIDecision creation rate by `context_type`, `framework`, and HITL state (`suggested`, `accepted`, `overridden`, `rejected`). Override/acceptance ratio over time. Backlog of `suggested` decisions awaiting human review. Per-user reviewer throughput. Per-model decision counts (audit trail of which Claude version made each suggestion). |
+| `Axiom-{env}-Provenance` | Provenance signing rate (artifacts/min), signing latency p50/p95/p99, signing failure count by `error_class`. Object Lock writes to evidence and reports buckets. KMS `Sign` call rate and error rate on the provenance-signing key. Verification failures (signed artifacts that fail re-verification). |
+| `Axiom-{env}-Crosswalk` | SCF import job status and record count by source (SCF/OSCAL/AICPA/CIS). Count of `CommonControl` and STRM edges by framework and version. Partial-satisfaction coverage distribution. Framework-version migration job throughput. |
+| `Axiom-{env}-Data` | RDS CPU, free storage, read/write IOPS, active connections. PgBouncer pool utilization. S3 bucket size and request count (including `scf-catalog` bucket). |
 | `Axiom-{env}-Security` | WAF blocked requests by rule. Authentication failures. SES bounce/complaint rate. |
 
 Dashboards are not provisioned at demo stage. Enabled when the full observability workspace is activated.
@@ -468,9 +488,12 @@ Dashboards are not provisioned at demo stage. Enabled when the full observabilit
 | `{env}-rds-cpu-high` | RDS CPU > 80% for 10 min | SNS → ops email |
 | `{env}-rds-storage-low` | Free storage < 20% of allocated | SNS → ops email |
 | `{env}-rds-connections-high` | Connections > 80% of max | SNS → ops email |
-| `{env}-ecs-cpu-high-{service}` | Service avg CPU > 80% for 10 min (axiom-api, doc-processing) | SNS → ops email |
-| `{env}-river-dlq-not-empty` | River DLQ depth > 0 | SNS → ops email |
+| `{env}-ecs-cpu-high-{service}` | Service avg CPU > 80% for 10 min (axiom-api, doc-processing, provenance-signer) | SNS → ops email |
+| `{env}-river-dlq-not-empty` | River DLQ depth > 0 (any worker: `evidence_control_mapping`, `gap_analysis`, `drift_detection`, `framework_migration`, `scf_import`, `management_response_drafter`, `findings_triage`, `provenance.sign`, `auditcore.document-extract`, `reporting.render`) | SNS → ops email |
 | `{env}-bedrock-throttle-high` | Bedrock throttle > 5% of invocations in 5 min | SNS → ops email |
+| `{env}-provenance-sign-failures` | `provenance_sign_failures_total` > 0 in 5 min (any failure is investigated — signing is on the audit-integrity path) | SNS → ops email + PagerDuty (prod) |
+| `{env}-scf-import-failure` | Scheduled `scf_import` job has no successful completion in 48 hours | SNS → ops email |
+| `{env}-aidecision-backlog-high` | Backlog of `suggested` AIDecision rows older than SLA threshold (ISO 42001 HITL compliance) | SNS → ops email |
 | `{env}-ses-bounce-high` | Bounce rate > 5% in 1 hour | SNS → ops email |
 | `{env}-waf-blocked-spike` | WAF blocked > 100 in 5 min | SNS → ops email |
 | `{env}-stepfunctions-failed` | `ExecutionsFailed` > 0 | SNS → ops email |
@@ -492,7 +515,9 @@ OpenTelemetry Go SDK in the `platform` package with AWS X-Ray exporter. Within t
 **X-Ray groups:**
 - `high-latency` — response time > 2 seconds
 - `errors` — fault or error status
-- `ai-operations` — requests hitting Bedrock endpoints
+- `ai-operations` — requests hitting Bedrock endpoints (annotated with `ai_feature` and `framework`)
+- `provenance-signing` — spans that call the provenance-signer service or KMS `Sign` (annotated with `artifact_type`)
+- `crosswalk` — requests touching `CommonControl` / STRM edge resolution (annotated with `framework` and `framework_version`)
 
 Not enabled at demo stage.
 
@@ -507,7 +532,7 @@ Enabled at the Organization level from the management account:
 | KMS data events | Enabled (tracks decrypt calls against HIPAA keys) |
 | Log file integrity validation | Enabled |
 | Log encryption | `axiom-cloudtrail` KMS key |
-| Retention | 365 days in CloudTrail. S3 lifecycle: Glacier after 90 days, retained 7 years (SOC 2, PCAOB). |
+| Retention | 365 days in CloudTrail. S3 lifecycle: Glacier after 90 days, retained 7 years (SOC 2 Type 2 historical trail requirements, ISO 27001 evidence retention, ISO 42001 decision-audit requirements, HIPAA §164.316(b)(2) 6-year minimum). |
 
 ---
 
@@ -521,6 +546,7 @@ One repository per service in the tooling account:
 |---|---|
 | `axiom/axiom-api` | Go binary (modular monolith) |
 | `axiom/doc-processing` | Python + Tesseract |
+| `axiom/provenance-signer` | Go binary (isolated signing service) |
 | `axiom/pgbouncer` | PgBouncer with config |
 
 **Configuration:**
@@ -529,7 +555,7 @@ One repository per service in the tooling account:
 - Immutable image tags — a pushed tag cannot be overwritten
 - Cross-account pull access: IAM policies allow dev, staging, and prod execution roles to pull
 
-Demo stage provisions all 3 repositories: `axiom-api`, `doc-processing`, `pgbouncer`.
+Demo stage provisions all 4 repositories: `axiom-api`, `doc-processing`, `provenance-signer`, `pgbouncer`.
 
 ### GitHub Actions OIDC Federation
 
@@ -673,11 +699,14 @@ Workspaces share outputs via **SSM Parameter Store** in each workload account. T
 | `data` | `/axiom/{env}/s3-evidence-bucket-arn` | `compute` |
 | `data` | `/axiom/{env}/s3-archive-bucket-arn` | `compute` |
 | `data` | `/axiom/{env}/s3-reports-bucket-arn` | `compute` |
+| `data` | `/axiom/{env}/s3-scf-catalog-bucket-arn` | `compute` |
 | `data` | `/axiom/{env}/kms-hipaa-key-arn` | `compute` |
+| `data` | `/axiom/{env}/kms-provenance-signing-key-arn` | `compute` |
 | `compute` | `/axiom/{env}/alb-dns-name` | `dns-cdn` |
 | `compute` | `/axiom/{env}/alb-hosted-zone-id` | `dns-cdn` |
 | `cicd` | `/axiom/ecr-repo-axiom-api-url` | `compute` (all envs) |
 | `cicd` | `/axiom/ecr-repo-doc-processing-url` | `compute` (all envs) |
+| `cicd` | `/axiom/ecr-repo-provenance-signer-url` | `compute` (all envs) |
 | `cicd` | `/axiom/ecr-repo-pgbouncer-url` | `compute` (all envs) |
 
 SSM parameters are typed as `String`, encrypted with the account's default KMS key.
@@ -698,6 +727,8 @@ ecs_axiom_api_min     = 2
 ecs_axiom_api_max     = 8
 ecs_doc_processing_min = 1
 ecs_doc_processing_max = 4
+ecs_provenance_signer_min = 2
+ecs_provenance_signer_max = 4
 log_retention_days    = 365
 single_nat            = false
 enable_s3_replication = true
@@ -723,6 +754,8 @@ ecs_axiom_api_min        = 1
 ecs_axiom_api_max        = 2
 ecs_doc_processing_min   = 1
 ecs_doc_processing_max   = 2
+ecs_provenance_signer_min = 1
+ecs_provenance_signer_max = 2
 enable_step_functions    = false
 enable_waf               = false
 enable_guardduty         = false
@@ -810,6 +843,8 @@ Not enabled at demo stage.
 **Role naming convention:**
 - `axiom-{env}-axiom-api-task-role` — Axiom API ECS task role
 - `axiom-{env}-doc-processing-task-role` — Document Processing ECS task role
+- `axiom-{env}-provenance-signer-task-role` — Provenance signer ECS task role (isolated KMS `Sign` permission on the provenance-signing key)
+- `axiom-{env}-scf-import-role` — Scheduled SCF/OSCAL/AICPA/CIS catalog import (S3 read on `scf-catalog`, RDS write via Secrets Manager credentials)
 - `axiom-{env}-ecs-execution-role` — shared execution role
 - `axiom-ci-{env}` — GitHub Actions deployment role
 - `axiom-{env}-migration-role` — database migration task role
@@ -832,7 +867,7 @@ Two workload accounts (dev + staging), 2 services each, single AZ, no security c
 
 | Category | Service | Dev | Staging | Tooling/Mgmt | Total |
 |---|---|---|---|---|---|
-| Compute | ECS Fargate (2 svc × 1-2 tasks) | $35-55 | $35-55 | — | $70-110 |
+| Compute | ECS Fargate (3 svc × 1-2 tasks — axiom-api, doc-processing, provenance-signer) | $45-75 | $45-75 | — | $90-150 |
 | Database | RDS db.t4g.medium, Single-AZ | $55-65 | $55-65 | — | $110-130 |
 | Networking | NAT Gateway (×1) | $35-45 | $35-45 | — | $70-90 |
 | Networking | VPC Endpoints (×4, 1 AZ) | $30 | $30 | — | $60 |
@@ -854,7 +889,7 @@ Two workload accounts (dev + staging), 2 services each, single AZ, no security c
 
 | Category | Service | Est. monthly (prod) |
 |---|---|---|
-| Compute | ECS Fargate (2 svc, 2-4 tasks avg) | $150-250 |
+| Compute | ECS Fargate (3 svc — axiom-api, doc-processing, provenance-signer — 2-4 tasks avg per service) | $200-320 |
 | Database | RDS db.r7g.xlarge, Multi-AZ, 200 GB | $550-600 |
 | Networking | NAT Gateways (×2) | $70-90 |
 | Networking | VPC Endpoints (×8 interface, 2 AZs) | $120 |
@@ -871,7 +906,7 @@ Two workload accounts (dev + staging), 2 services each, single AZ, no security c
 | Observability | CloudTrail | $10-20 |
 | Config | AWS Config | $10-20 |
 | Workflow | Step Functions | $1 |
-| AI | Bedrock (on-demand) | $100-250 |
+| AI | Bedrock (on-demand) — compliance workload: ~$3-8 per engagement across frameworks (evidence-to-control mapping, gap analysis, drift detection, findings triage, management-response drafting). Population not financial-audit-sized. | $100-250 |
 | Email | SES | $5-10 |
 | Secrets | Secrets Manager | $3-5 |
 | Registry | ECR | $2-5 |
@@ -895,7 +930,7 @@ Two workload accounts (dev + staging), 2 services each, single AZ, no security c
 
 - **Biggest cost driver:** RDS instance size. `db.r7g.2xlarge` doubles the RDS line. Aurora becomes competitive when read replicas are needed.
 - **ECS scales linearly:** ~$30-60/month per additional Fargate task. With 2 services instead of 7, the Fargate baseline is significantly lower.
-- **Bedrock scales with engagements:** 500 engagements/month → $1,000-2,500/month, still trivial relative to subscription revenue.
+- **Bedrock scales with engagements:** compliance engagements cost ~$3-8 each in AI inference (per `ai-architecture-design.md`). 500 engagements/month → $1,500-4,000/month, still trivial relative to subscription revenue.
 - **NAT Gateway data charges:** evidence file volumes could surprise. S3 gateway endpoint (free) already mitigates the largest NAT traffic source.
 - **Savings plans:** after 3+ months stable, Fargate Savings Plans (1-year no-upfront, 20-30% savings) and RDS Reserved Instances (1-year partial-upfront, 30-40% savings).
 
