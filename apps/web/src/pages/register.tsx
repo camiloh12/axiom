@@ -4,10 +4,13 @@ import { useAuth } from '../hooks/use-auth'
 import './auth.css'
 
 const AUDIT_TYPES = [
-  { value: 'FinancialAudit', label: 'Financial audits' },
   { value: 'SOC2', label: 'SOC 2' },
+  { value: 'SOC1', label: 'SOC 1' },
   { value: 'ISO27001', label: 'ISO 27001' },
-  { value: 'InternalAudit', label: 'Internal audits' },
+  { value: 'ISO27701', label: 'ISO 27701' },
+  { value: 'ISO42001', label: 'ISO 42001' },
+  { value: 'HIPAA', label: 'HIPAA' },
+  { value: 'PCI_DSS', label: 'PCI DSS' },
 ] as const
 
 const STAFF_RANGES = ['1-10', '11-20', '21-40', '41-60', '60+'] as const
