@@ -64,10 +64,11 @@ jobs:
         with:
           go-version-file: apps/axiom-api/go.mod
           cache-dependency-path: apps/axiom-api/go.sum
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: apps/axiom-api
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+      - name: Run golangci-lint
+        working-directory: apps/axiom-api
+        run: golangci-lint run --path-prefix=apps/axiom-api
       - name: gofmt check
         working-directory: apps/axiom-api
         run: |

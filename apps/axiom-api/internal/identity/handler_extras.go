@@ -2,6 +2,7 @@ package identity
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"strconv"
 
@@ -365,7 +366,7 @@ func parsePagination(r *http.Request) (int32, int32) {
 		}
 	}
 	if v := r.URL.Query().Get("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= math.MaxInt32 {
 			offset = int32(n)
 		}
 	}
