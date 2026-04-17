@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
 )
 
 func testKeyPair(t *testing.T) (*rsa.PrivateKey, *rsa.PublicKey) {

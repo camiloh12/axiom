@@ -7,9 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
 func TestWriteJSON_SetsStatusAndBody(t *testing.T) {

@@ -88,7 +88,8 @@
       "Bash(taskkill //F //PID 11420 //PID 39804)",
       "Bash(go install *)",
       "Bash(go vet *)",
-      "Bash(gofmt -l .)"
+      "Bash(gofmt -l .)",
+      "Bash(/c/Users/camil/go/bin/goimports *)"
     ]
   }
 }

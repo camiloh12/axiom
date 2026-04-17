@@ -7,11 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/gateway"
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/gateway"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
 )
 
 func setup(t *testing.T) (*identity.JWTIssuer, *gateway.Middleware) {

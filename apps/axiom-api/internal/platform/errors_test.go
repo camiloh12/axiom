@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
 func TestAppError_Error(t *testing.T) {

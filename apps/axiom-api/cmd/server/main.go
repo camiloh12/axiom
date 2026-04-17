@@ -9,12 +9,13 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/gateway"
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/gateway"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
 func main() {

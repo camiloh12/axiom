@@ -7,11 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
 func setupHandler(t *testing.T) http.Handler {

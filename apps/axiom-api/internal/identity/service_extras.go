@@ -9,12 +9,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity/queries"
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity/queries"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
 type ClientDTO struct {
