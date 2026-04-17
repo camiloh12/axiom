@@ -52,6 +52,32 @@ curl -s http://localhost:3000/api/healthz    # expect: {"status":"ok"}
 
 Open `http://localhost:3000`. Unauthenticated, you should be redirected to `/login`.
 
+### Sample test data
+
+Use these values when walking through the flows below. They're consistent with what the automated tests assume and keep Mailhog/psql lookups predictable.
+
+| Field | Value |
+|---|---|
+| Firm name | `Northwind Audit Partners` |
+| Admin display name | `Ada Lovelace` |
+| Admin email | `ada@northwind.test` |
+| Admin password | `Correct-Horse-9` |
+| Country | `US` |
+| Staff count | `11–50` |
+| Audit types | `Financial`, `SOC 2` |
+| Timezone (settings) | `America/New_York` |
+| Billing email (settings) | `billing@northwind.test` |
+| Staff invitee email | `staff@northwind.test` |
+| Staff invitee role | `Staff` |
+| Staff display name (on accept) | `Grace Hopper` |
+| Staff password (on accept) | `Battery-Staple-7` |
+| Client name | `TechCorp` |
+| Client industry | `SaaS` |
+| Client primary contact | `controller@techcorp.test` |
+| Second client (empty optional fields) | `Globex Holdings` |
+
+> Emails use the `.test` TLD by design — it's RFC 2606 reserved, so nothing ever leaves the machine even if email delivery gets wired up later.
+
 ### Register flow (`/register`)
 
 - **Step 1 card:** firm name, your name, work email, password (min 8 chars).
@@ -76,7 +102,7 @@ Open `http://localhost:3000`. Unauthenticated, you should be redirected to `/log
 
 ### Users (`/users`)
 
-- Invite form: enter `staff@test.com`, pick `Staff`, click "Send invitation".
+- Invite form: enter `staff@northwind.test`, pick `Staff`, click "Send invitation".
 - Green banner: **"Invitation sent. Magic link token: {long hex string}"**. Copy that token.
 - In the "Pending invitations" section, the row appears with a `Sent` status pill and a Cancel button.
 
@@ -94,8 +120,8 @@ Open `http://localhost:3000`. Unauthenticated, you should be redirected to `/log
 
 ### Clients (`/clients`)
 
-- Add Client form: name is required (empty → red alert). Create "TechCorp" → appears in the table.
-- Industry and primary contact email are optional; empty values render as `—` in the table.
+- Add Client form: name is required (empty → red alert). Create `TechCorp` with industry `SaaS` and contact `controller@techcorp.test` → appears in the table.
+- Industry and primary contact email are optional; add `Globex Holdings` with both fields blank → empty values render as `—` in the table.
 
 ### Logout
 
