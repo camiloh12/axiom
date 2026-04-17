@@ -32,14 +32,14 @@ export default function AcceptInvitationPage() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!token) {
-      setLoadError('Missing invitation token.')
-      return
-    }
+    if (!token) return
     publicFetch<Invitation>(`/invitations/validate/${token}`)
       .then(setInvitation)
       .catch(() => setLoadError('This invitation is invalid or has expired.'))
   }, [token])
+
+  // Render the "missing token" state directly rather than setting state in an effect.
+  const missingToken = !token
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -68,13 +68,13 @@ export default function AcceptInvitationPage() {
     }
   }
 
-  if (loadError) {
+  if (missingToken || loadError) {
     return (
       <div className="auth-shell">
         <div className="auth-card">
           <header className="auth-header">
             <h1>Invitation unavailable</h1>
-            <p>{loadError}</p>
+            <p>{loadError ?? 'Missing invitation token.'}</p>
           </header>
         </div>
       </div>

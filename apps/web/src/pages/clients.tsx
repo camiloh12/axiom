@@ -27,7 +27,8 @@ export default function ClientsPage() {
     }
   }
 
-  useEffect(() => { reload() }, [])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- setState is awaited inside reload(), not synchronous
+  useEffect(() => { void reload() }, [])
 
   async function onCreate(e: FormEvent) {
     e.preventDefault()
