@@ -9,6 +9,13 @@
 
 ---
 
+## Cross-Cutting Methodology
+
+Two methodologies apply to every phase and are defined before the phase-by-phase plan:
+
+- **Test-Driven Development** — every unit of behavior is written test-first. See "Cross-Cutting Methodology: Test-Driven Development" below.
+- **Per-Phase Manual Testing Instructions** — every phase ends by producing a `docs/superpowers/testing/<plan-filename>.md` walkthrough. See "Cross-Cutting Methodology: Per-Phase Manual Testing Instructions" below.
+
 ## Table of Contents
 
 1. [Local-First Architecture](#1-local-first-architecture)
@@ -94,6 +101,60 @@ Coverage thresholds are enforced by CI after Phase 1 — the baseline is capture
 Each phase description below lists a "Testable Outcome." These are the acceptance criteria at the phase level — **they must be exercised by automated tests**, not only by manual browser walkthroughs. When a phase says "Staff submits workpaper → Manager reviews → Partner signs off," that entire flow has a corresponding integration test that drives it through the service layer, plus the relevant unit tests for each guard and sign-off rule it exercises.
 
 The Phase 9 compliance validation explicitly requires automated integration tests walking the full SOC 2 and PCAOB lifecycles. That is the final backstop: by the end of Phase 9, every regulatory guard, immutability rule, and sign-off hierarchy is covered by an automated test.
+
+---
+
+## Cross-Cutting Methodology: Per-Phase Manual Testing Instructions
+
+**Every phase plan ends with a task that writes manual testing instructions to `docs/superpowers/testing/<phase-plan-filename>.md`.** Automated tests verify behavior; this document verifies the *experience* — a human running the stack end-to-end in a browser or shell, confirming the phase's Testable Outcome is actually shippable.
+
+### Why it exists
+
+- **Testable Outcome rows** (see §2 Phase Overview) are acceptance criteria at the phase level. They need to be exercised, not just asserted.
+- **CI proves the code compiles and tests pass.** It does not prove that a new user can sign up, that the buttons are labeled, or that an invitation link actually lands somewhere useful.
+- **Reviewers and the user need a script.** A consistent format per phase means anyone can pick up the branch, run through the document, and either sign off or file a regression.
+- **Gaps become visible.** Writing the walkthrough often exposes rough edges (missing copy, silent failures, unhandled empty states) that automated tests wouldn't catch.
+
+### Location and naming
+
+- Path: `docs/superpowers/testing/<same-filename-as-the-plan>.md`.
+- Example: plan `docs/superpowers/plans/phase-0-and-1-scaffold-and-identity.md` → testing doc `docs/superpowers/testing/phase-0-and-1-scaffold-and-identity.md`.
+- One file per plan. Phases with sub-phases that share a plan share a testing doc.
+
+### Required structure
+
+Every testing doc must have these sections, in this order:
+
+1. **Header** — phase scope, link to the plan file, one-sentence purpose.
+2. **Start the stack** — exact commands to bring up every service the phase depends on (Docker services, backend, frontend, any phase-specific tools). Include expected log lines so the reader knows what "ready" looks like. Include a smoke curl or equivalent.
+3. **Browser walkthrough — the happy path** — numbered or sub-headed flows matching the Testable Outcome rows for the phase. Each flow states what to do and what to expect visually (copy, state transitions, styling landmarks tied to `.impeccable.md` tokens where relevant).
+4. **Targeted edge cases** — a table of `Case | Expected`. Cover at minimum: wrong credentials / bad input, role-gated endpoints attempted by the wrong role, stale-session recovery, backend-down resilience on the frontend.
+5. **Data-layer spot checks** — SQL or CLI commands that verify invariants the UI can't show directly: RLS isolation (register two firms, confirm zero leakage), audit-log append-only guarantees, immutability rules, AI decision records, etc. Link to the corresponding automated test so the manual check is a backup, not the primary guarantee.
+6. **Integration placeholders** — services that are wired in this phase but whose full behavior ships later (e.g., Mailhog when email isn't wired yet). Explicitly call out what's expected to be empty/no-op.
+7. **Known gaps** — bulleted list of things that are *deliberately* absent in this phase. Prevents false-positive regression reports.
+8. **Reporting regressions** — one-line note that mismatches with §§2–5 are real regressions and should be fixed (with a new automated test) before merging.
+
+Sections 2–5 are mandatory. Sections 1, 6, 7, 8 are mandatory but can be short. Additional sections may be added as the phase requires (e.g., AWS deployment smoke tests in Phase 10, AI feature walkthroughs in Phase 7).
+
+### Plan-level requirements
+
+Every phase plan must include, as its penultimate or final task (after the impeccable validation pass where applicable):
+
+> ### Task N: Manual testing instructions
+>
+> Write `docs/superpowers/testing/<plan-filename>.md` covering the Testable Outcome for this phase. Follow the structure defined in "Cross-Cutting Methodology: Per-Phase Manual Testing Instructions" in `docs/superpowers/specs/implementation-plan-design.md`. Commit under a `docs:` prefix.
+
+The testing doc is produced **after** the phase's features work end-to-end. Drafting it sooner risks the doc describing intent instead of reality.
+
+### Relationship to automated tests
+
+- **Automated tests remain the contract.** If a manual walkthrough step fails, the fix is (a) fix the code, and (b) add an automated test that would have caught it. The testing doc is a *human-readable map* of what's been built, not a replacement for CI.
+- **Don't duplicate.** If a flow is already exhaustively covered by integration or RTL tests, the manual step can be one line ("Register → Login → Dashboard loads") rather than a blow-by-blow.
+- **Keep it current.** When a phase changes a flow covered by an earlier phase's testing doc, amend that earlier doc in the same PR. Stale testing docs mislead reviewers.
+
+### Example
+
+The Phase 0/1 testing document at `docs/superpowers/testing/phase-0-and-1-scaffold-and-identity.md` is the reference implementation of this structure.
 
 ---
 
