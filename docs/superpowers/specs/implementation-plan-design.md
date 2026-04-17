@@ -5,9 +5,16 @@
 **Developer context:** Solo engineer + AI coding agent, beginner-comfortable with Go and React
 **Key constraint:** Delay AWS spending as long as possible — everything runs locally until Phase 10
 
-**Git workflow:** Each phase is built on its own branch (`phase-N-description`). All commits go to that branch and are pushed to remote. The user creates a PR to master, reviews, and merges. At the start of the next phase, return to master, pull, verify the merge, then create a new branch.
+**Git workflow:** Each phase is built on its own branch (`feature/phase-N-description`). All commits go to that branch and are pushed to remote. The user creates a PR to master, reviews, and merges. At the start of the next phase, return to master, pull, verify the merge, then create a new branch.
 
 ---
+
+## Cross-Cutting Methodology
+
+Two methodologies apply to every phase and are defined before the phase-by-phase plan:
+
+- **Test-Driven Development** — every unit of behavior is written test-first. See "Cross-Cutting Methodology: Test-Driven Development" below.
+- **Per-Phase Manual Testing Instructions** — every phase ends by producing a `docs/superpowers/testing/<plan-filename>.md` walkthrough. See "Cross-Cutting Methodology: Per-Phase Manual Testing Instructions" below.
 
 ## Table of Contents
 
@@ -42,6 +49,112 @@ The entire application runs on a developer laptop until Phase 10. No AWS account
 | River (jobs) | Same — River runs on Postgres | No change needed |
 
 **Cost of Phases 0–9: $0/month** plus ~$5–10 one-time Anthropic API credit when AI features are built in Phase 7.
+
+---
+
+## Cross-Cutting Methodology: Test-Driven Development
+
+**Every phase is built test-first.** This is not optional — it applies to every task in every phase from Phase 0 onward. The CI pipeline (set up in Phase 0) blocks any PR whose tests don't pass, which makes TDD the path of least resistance.
+
+### The loop
+
+For every unit of behavior (a service method, a handler, a React hook, a SQL query, a React component with logic):
+
+1. **Red** — write the failing test first. The test names the behavior in terms of inputs and expected outputs, not implementation details. Run it and confirm it fails for the right reason (not a compile error masking the actual assertion).
+2. **Green** — write the minimum implementation that makes the test pass. Resist adding "while I'm here" code.
+3. **Refactor** — with the test locking behavior in place, clean up names, extract helpers, remove duplication. Re-run the test after each change.
+
+Skipping the red step is the most common failure mode — writing a test *after* the code already works means the test has never actually demonstrated it can fail. If you catch yourself doing this, delete the code, re-run the test to see it fail, then re-implement.
+
+### What counts as a test
+
+| Layer | Test type | Example |
+|---|---|---|
+| Pure functions, domain logic | Go unit tests (`_test.go`, no DB) | JWT signing, slug generation, state machine guards, Levenshtein ratios |
+| Service methods (DB-touching) | Integration tests with a real Postgres test database | `RegisterFirm`, `CreateEngagement`, `AdvanceToFieldwork` |
+| HTTP handlers | `httptest.NewRecorder` tests covering status codes, body shape, auth failures | `POST /api/v1/auth/register`, `GET /api/v1/engagements/:id` |
+| River workers | Worker unit tests with fake AI/storage/email clients | `ai-completeness-check`, `document-extract`, `notification-deliver` |
+| RLS policies | Multi-tenant isolation tests (two firms, assert zero leakage) | One per new RLS-guarded table |
+| React hooks & logic | Vitest + React Testing Library | `useAuth`, form validation, AI modification-ratio display |
+| React components | RTL render + interaction assertions | Login form submits, engagement wizard advances steps |
+| End-to-end journey | Playwright against running dev stack (from Phase 2 onward) | "Staff completes review → Partner signs off" |
+
+### What does not need a test
+
+- Auto-generated code (sqlc output, openapi-typescript output, oapi-codegen interfaces) — tested transitively through the service/handler tests that consume it.
+- Trivial struct literals, constants, and config parsing with no branching.
+- Third-party library behavior (Chi router, pgx, React Router) — test the integration, not the dependency.
+
+Use judgment: if a mistake in the code would be caught by a compiler, a linter, or an integration test one layer up, a dedicated test adds noise without signal.
+
+### Coverage expectations
+
+- **Business logic packages** (`identity`, `auditcore`, `trialbalance`, `workpaper`, `reporting`, `ai`, state machine guards, AI content tracking): target **≥85% line coverage**. Every public method has at least one happy-path and one error-path test.
+- **Gateway, platform infrastructure**: target **≥70%**. Middleware gets direct tests (auth, role checks, RLS isolation).
+- **UI components**: target **≥60%**. Focus tests on components with logic; trivial layout components can be covered by journey/E2E tests.
+- **No coverage threshold on generated code, main.go wiring, or migration SQL files.**
+
+Coverage thresholds are enforced by CI after Phase 1 — the baseline is captured from the Phase 1 codebase, and no subsequent PR may regress it. The CI workflow defined in Phase 0 uploads `coverage.out` as an artifact; the threshold gate is wired in once real business logic exists.
+
+### How this shows up in each phase
+
+Each phase description below lists a "Testable Outcome." These are the acceptance criteria at the phase level — **they must be exercised by automated tests**, not only by manual browser walkthroughs. When a phase says "Staff submits workpaper → Manager reviews → Partner signs off," that entire flow has a corresponding integration test that drives it through the service layer, plus the relevant unit tests for each guard and sign-off rule it exercises.
+
+The Phase 9 compliance validation explicitly requires automated integration tests walking the full SOC 2 and PCAOB lifecycles. That is the final backstop: by the end of Phase 9, every regulatory guard, immutability rule, and sign-off hierarchy is covered by an automated test.
+
+---
+
+## Cross-Cutting Methodology: Per-Phase Manual Testing Instructions
+
+**Every phase plan ends with a task that writes manual testing instructions to `docs/superpowers/testing/<phase-plan-filename>.md`.** Automated tests verify behavior; this document verifies the *experience* — a human running the stack end-to-end in a browser or shell, confirming the phase's Testable Outcome is actually shippable.
+
+### Why it exists
+
+- **Testable Outcome rows** (see §2 Phase Overview) are acceptance criteria at the phase level. They need to be exercised, not just asserted.
+- **CI proves the code compiles and tests pass.** It does not prove that a new user can sign up, that the buttons are labeled, or that an invitation link actually lands somewhere useful.
+- **Reviewers and the user need a script.** A consistent format per phase means anyone can pick up the branch, run through the document, and either sign off or file a regression.
+- **Gaps become visible.** Writing the walkthrough often exposes rough edges (missing copy, silent failures, unhandled empty states) that automated tests wouldn't catch.
+
+### Location and naming
+
+- Path: `docs/superpowers/testing/<same-filename-as-the-plan>.md`.
+- Example: plan `docs/superpowers/plans/phase-0-and-1-scaffold-and-identity.md` → testing doc `docs/superpowers/testing/phase-0-and-1-scaffold-and-identity.md`.
+- One file per plan. Phases with sub-phases that share a plan share a testing doc.
+
+### Required structure
+
+Every testing doc must have these sections, in this order:
+
+1. **Header** — phase scope, link to the plan file, one-sentence purpose.
+2. **Start the stack** — exact commands to bring up every service the phase depends on (Docker services, backend, frontend, any phase-specific tools). Include expected log lines so the reader knows what "ready" looks like. Include a smoke curl or equivalent.
+3. **Browser walkthrough — the happy path** — numbered or sub-headed flows matching the Testable Outcome rows for the phase. Each flow states what to do and what to expect visually (copy, state transitions, styling landmarks tied to `.impeccable.md` tokens where relevant).
+4. **Targeted edge cases** — a table of `Case | Expected`. Cover at minimum: wrong credentials / bad input, role-gated endpoints attempted by the wrong role, stale-session recovery, backend-down resilience on the frontend.
+5. **Data-layer spot checks** — SQL or CLI commands that verify invariants the UI can't show directly: RLS isolation (register two firms, confirm zero leakage), audit-log append-only guarantees, immutability rules, AI decision records, etc. Link to the corresponding automated test so the manual check is a backup, not the primary guarantee.
+6. **Integration placeholders** — services that are wired in this phase but whose full behavior ships later (e.g., Mailhog when email isn't wired yet). Explicitly call out what's expected to be empty/no-op.
+7. **Known gaps** — bulleted list of things that are *deliberately* absent in this phase. Prevents false-positive regression reports.
+8. **Reporting regressions** — one-line note that mismatches with §§2–5 are real regressions and should be fixed (with a new automated test) before merging.
+
+Sections 2–5 are mandatory. Sections 1, 6, 7, 8 are mandatory but can be short. Additional sections may be added as the phase requires (e.g., AWS deployment smoke tests in Phase 10, AI feature walkthroughs in Phase 7).
+
+### Plan-level requirements
+
+Every phase plan must include, as its penultimate or final task (after the impeccable validation pass where applicable):
+
+> ### Task N: Manual testing instructions
+>
+> Write `docs/superpowers/testing/<plan-filename>.md` covering the Testable Outcome for this phase. Follow the structure defined in "Cross-Cutting Methodology: Per-Phase Manual Testing Instructions" in `docs/superpowers/specs/implementation-plan-design.md`. Commit under a `docs:` prefix.
+
+The testing doc is produced **after** the phase's features work end-to-end. Drafting it sooner risks the doc describing intent instead of reality.
+
+### Relationship to automated tests
+
+- **Automated tests remain the contract.** If a manual walkthrough step fails, the fix is (a) fix the code, and (b) add an automated test that would have caught it. The testing doc is a *human-readable map* of what's been built, not a replacement for CI.
+- **Don't duplicate.** If a flow is already exhaustively covered by integration or RTL tests, the manual step can be one line ("Register → Login → Dashboard loads") rather than a blow-by-blow.
+- **Keep it current.** When a phase changes a flow covered by an earlier phase's testing doc, amend that earlier doc in the same PR. Stale testing docs mislead reviewers.
+
+### Example
+
+The Phase 0/1 testing document at `docs/superpowers/testing/phase-0-and-1-scaffold-and-identity.md` is the reference implementation of this structure.
 
 ---
 
@@ -129,6 +242,40 @@ turbo.json
 ### Testable Outcome
 
 Run `docker compose up -d`, `go run ./cmd/server`, and `npm run dev` — browser shows "Axiom" with a green "API connected" indicator.
+
+### Continuous Integration
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every pull request targeting `master`. All jobs must pass before merge. Jobs run in parallel where possible; Turborepo `--filter` scopes work to affected packages.
+
+**Build & compile:**
+- `go build ./...` across the Go module (fails on any compile error)
+- `tsc --noEmit` for the React app (strict TypeScript compile check)
+- `npm run build` via Turborepo (full production build of `apps/web`)
+- OpenAPI codegen check: regenerate Go + TS clients from `packages/openapi/*.yaml`, fail if working tree dirty (enforces committed specs match generated code)
+
+**Unit tests (TDD-enforced — see Cross-Cutting Methodology):**
+- `go test ./... -race -count=1` with the race detector enabled
+- `npm test` (Vitest) for the React app
+- Coverage report uploaded as a job artifact. Hard thresholds activate in Phase 1: ≥85% on business-logic packages, ≥70% on platform/gateway, ≥60% on UI components. PRs that regress a package's coverage are blocked.
+- Every task that adds a service method, handler, worker, RLS policy, or component-with-logic lands with its tests in the same commit or an earlier commit in the same PR — never in a follow-up
+
+**Linting & formatting:**
+- `golangci-lint run` (config at `.golangci.yml` — starts with the default linter set: `errcheck`, `govet`, `staticcheck`, `unused`, `gosimple`, `ineffassign`)
+- `gofmt -l .` (fails if any file is not formatted)
+- `eslint` on `apps/web/src`
+- `prettier --check` on the web workspace
+- `actionlint` on `.github/workflows/*.yml` (catches workflow syntax errors)
+- `hadolint` on all `Dockerfile`s
+
+**Security & vulnerability scanning** (all free for public/private repos on GitHub):
+- **`govulncheck ./...`** — Go's official vulnerability scanner, cross-references the Go vuln DB against imported packages and actual call paths
+- **`npm audit --audit-level=high`** — flags high/critical npm advisories
+- **CodeQL** — GitHub's static analysis for Go and JavaScript/TypeScript; scheduled weekly plus on PR, results surface in the Security tab
+- **Dependabot** — enabled via `.github/dependabot.yml` for Go modules, npm, GitHub Actions, and Docker base images; opens PRs for updates
+- **`gitleaks`** — scans the diff for accidentally committed secrets (API keys, JWT secrets, AWS credentials)
+- **Trivy** — filesystem scan for known CVEs in dependencies and (later) container images
+
+**Status checks required for merge:** build, unit-tests, lint, govulncheck, codeql, gitleaks. Dependabot and Trivy scheduled scans report findings but don't block PRs.
 
 ---
 

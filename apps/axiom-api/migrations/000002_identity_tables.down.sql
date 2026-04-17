@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS invitations;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS clients;
+DROP TABLE IF EXISTS firms;
+DROP FUNCTION IF EXISTS current_firm_id();

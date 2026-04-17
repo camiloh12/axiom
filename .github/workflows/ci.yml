@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+
+jobs:
+  go-build-test:
+    name: Go build & test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: axiom_db
+          POSTGRES_USER: axiom_svc
+          POSTGRES_PASSWORD: localdev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U axiom_svc -d axiom_db"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/axiom-api/go.mod
+          cache-dependency-path: apps/axiom-api/go.sum
+      - name: Install migrate
+        run: go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+      - name: Run migrations
+        run: migrate -path apps/axiom-api/migrations -database "postgres://axiom_svc:localdev@localhost:5432/axiom_db?sslmode=disable" up
+      - name: Build
+        working-directory: apps/axiom-api
+        run: go build ./...
+      - name: Test (with race detector)
+        working-directory: apps/axiom-api
+        run: go test ./... -race -count=1 -coverprofile=coverage.out
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: apps/axiom-api/coverage.out
+
+  go-lint:
+    name: Go lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/axiom-api/go.mod
+          cache-dependency-path: apps/axiom-api/go.sum
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+      - name: Run golangci-lint
+        working-directory: apps/axiom-api
+        run: golangci-lint run --path-prefix=apps/axiom-api
+      - name: gofmt check
+        working-directory: apps/axiom-api
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "gofmt found unformatted files:"
+            gofmt -l .
+            exit 1
+          fi
+
+  go-vuln:
+    name: Go vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/axiom-api/go.mod
+          cache-dependency-path: apps/axiom-api/go.sum
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        working-directory: apps/axiom-api
+        run: govulncheck ./...
+
+  web-build-test:
+    name: Web build, test, lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Codegen (verify specs match generated code)
+        run: |
+          npm run codegen
+          if ! git diff --exit-code apps/web/src/api/generated/; then
+            echo "::error::Generated TypeScript types are out of sync with OpenAPI specs."
+            echo "Run 'npm run codegen' and commit the result."
+            exit 1
+          fi
+      - name: Type check
+        working-directory: apps/web
+        run: npx tsc --noEmit
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+      - name: Test
+        working-directory: apps/web
+        run: npm test -- --run
+      - name: Build
+        run: npm run build
+      - name: npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: false
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [go, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  gitleaks:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  trivy:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+  workflow-lint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
