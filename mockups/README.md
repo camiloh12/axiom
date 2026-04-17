@@ -1,6 +1,6 @@
 # Axiom UI Mockups
 
-High-fidelity HTML mockups for every key screen across all 10 Axiom user journeys.
+High-fidelity HTML mockups for every key screen across the Axiom user journeys.
 
 ## Viewing
 
@@ -13,16 +13,15 @@ mockups/
 ├── journey-01-firm-setup/          # 9 screens — FirmAdmin onboarding flow
 ├── journey-02-staff-onboarding/    # 5 screens — Staff invitation and setup
 ├── journey-03-engagement-scoping/  # 7 screens — Partner creates engagement
-├── journey-04-trial-balance/       # 7 screens — TB import and analysis
 ├── journey-05-control-testing/     # 7 screens — Staff tests controls
 ├── journey-06-workpaper-review/    # 5 screens — Manager review workflow
 ├── journey-07-document-requests/   # 4 screens — Document request lifecycle
 ├── journey-08-client-hub/          # 6 screens — Client-facing portal (no sidebar)
 ├── journey-09-reporting/           # 6 screens — Report generation and archive
-└── journey-10-eqr/                 # 6 screens — EQR read-only review
+└── journey-10-eqr/                 # 6 screens — Engagement quality review
 ```
 
-**Total: 62 screens across 10 journeys.**
+**Total: 55 screens across 9 journeys.** `journey-04-*` was removed during the compliance pivot (see `docs/specs/compliance-pivot-findings.md`); the replacement "Cross-Framework Evidence Mapping" flow (Journey 4 in `docs/user-journeys/all-journeys.md`) is served by `journey-03-engagement-scoping/04-ai-control-mapping.html` plus new screens still to be built — see "Pivot audit" below. Journey 11 (Multi-Framework Integrated Engagement) and Journey 12 (Continuous Assurance) have no mockups yet.
 
 ## Design System
 
@@ -78,21 +77,9 @@ All screens use consistent, realistic sample data:
 | 02 | [02-engagement-details.html](journey-03-engagement-scoping/02-engagement-details.html) | Client details with rollforward option |
 | 03 | [03-team-assignment.html](journey-03-engagement-scoping/03-team-assignment.html) | Team role assignment |
 | 04 | [04-ai-control-mapping.html](journey-03-engagement-scoping/04-ai-control-mapping.html) | AI control mapping with cross-framework display |
-| 05 | [05-client-acceptance.html](journey-03-engagement-scoping/05-client-acceptance.html) | SQMS 1 client acceptance checklist |
+| 05 | [05-client-acceptance.html](journey-03-engagement-scoping/05-client-acceptance.html) | Client acceptance checklist |
 | 06 | [06-eqr-assignment.html](journey-03-engagement-scoping/06-eqr-assignment.html) | EQR reviewer assignment |
 | 07 | [07-begin-fieldwork.html](journey-03-engagement-scoping/07-begin-fieldwork.html) | Fieldwork readiness checklist |
-
-### Journey 4 — Trial Balance (Staff: Emily Park)
-
-| # | File | Screen |
-|---|------|--------|
-| 01 | [01-tb-import.html](journey-04-trial-balance/01-tb-import.html) | Trial balance import with drag-and-drop |
-| 02 | [02-column-mapping.html](journey-04-trial-balance/02-column-mapping.html) | Column mapping with AI profile detection |
-| 03 | [03-ai-account-mapping.html](journey-04-trial-balance/03-ai-account-mapping.html) | AI account-to-FS-line mapping grid |
-| 04 | [04-lead-schedules.html](journey-04-trial-balance/04-lead-schedules.html) | Lead schedules with materiality calculator |
-| 05 | [05-adjustments.html](journey-04-trial-balance/05-adjustments.html) | Adjustments with unadjusted/adjusted comparison |
-| 06 | [06-analytics.html](journey-04-trial-balance/06-analytics.html) | Ratio analytics and AI anomaly flags |
-| 07 | [07-sampling.html](journey-04-trial-balance/07-sampling.html) | Statistical sampling configuration |
 
 ### Journey 5 — Control Testing (Staff: Emily Park)
 
@@ -157,3 +144,51 @@ All screens use consistent, realistic sample data:
 | 04 | [04-testing-review.html](journey-10-eqr/04-testing-review.html) | Testing sufficiency review |
 | 05 | [05-findings.html](journey-10-eqr/05-findings.html) | EQR findings form |
 | 06 | [06-eqr-signoff.html](journey-10-eqr/06-eqr-signoff.html) | Immutable EQR sign-off |
+
+## Pivot audit (outstanding mockup work)
+
+Following the compliance pivot (see `docs/specs/compliance-pivot-findings.md`), the following mockup work remains:
+
+### Screens needing content updates
+
+| Screen | Update |
+|---|---|
+| `journey-01-firm-setup/05-methodology-templates.html` | Replace any GAAS / Financial Audit template options with the compliance roster: SOC 2, ISO 27001, ISO 27701, ISO 42001, HIPAA, PCI DSS, SOC 1. |
+| `journey-01-firm-setup/06-create-engagement.html` | Engagement-type selector — remove financial audit options; same roster as above. |
+| `journey-03-engagement-scoping/01-new-engagement-type.html` | Same engagement-type roster update. |
+| `journey-03-engagement-scoping/04-ai-control-mapping.html` | Extend to show STRM relationship types (equivalent-to / subset-of / intersects-with), cross-framework coverage %, and partial-satisfaction gap lists. |
+| `journey-09-reporting/*` | Report-type selector should cover SOC 2 Type 1/2, ISO 27001/27701/42001 certificate support letters, PCI ROC/AOC, HIPAA attestation — not financial-audit opinions. |
+| `journey-10-eqr/*` | Generalize "EQR" language for non-SOC engagements; for ISO work the equivalent is firm-level internal QA, not PCAOB-style EQR. |
+
+### New screens required for Journey 11 (Multi-Framework Integrated Engagement)
+
+Create `mockups/journey-11-multi-framework/` with at minimum:
+- `01-scope-selector.html` — pick multiple frameworks for one engagement (SOC 2 + ISO 27001 + ISO 27701)
+- `02-shared-control-library.html` — CommonControl view with multi-framework satisfies edges
+- `03-sampling-window-reconciliation.html` — align Type 2 window with ISO surveillance
+- `04-integrated-coverage-dashboard.html` — per-framework coverage % with gap list
+- `05-separate-but-linked-reports.html` — issue SOC 2 opinion + ISO readiness letter from the same engagement
+
+### New screens required for Journey 12 (Continuous Assurance)
+
+Create `mockups/journey-12-continuous-assurance/` with at minimum:
+- `01-drift-alert.html` — auditee notification that a monitored config drifted
+- `02-auto-retest-result.html` — re-test output with diff against prior evidence
+- `03-risk-register-update.html` — automated risk register entry with AIDecision trail
+- `04-management-response-draft.html` — agent-drafted management response with edit gate
+- `05-auditor-material-change-notification.html` — auditor-side view of material drift
+
+### Client Hub extension (Journey 8 → auditee GRC workspace)
+
+Existing `journey-08-client-hub/` screens (6) cover the request/upload flow. Add:
+- `07-continuous-monitoring-dashboard.html` — live control health for the auditee
+- `08-evidence-freshness.html` — staleness indicator per control, broken down by framework
+- `09-policy-library.html` — auditee policy authoring + version history
+- `10-connector-status.html` — cloud/identity/dev tool connector health
+
+### Cross-cutting new screens
+
+- `shared/provenance-viewer.html` — cryptographic AIDecision chain for any evidence item or AI output (post-March-2026 trust differentiator)
+- `shared/framework-migration-wizard.html` — AI-assisted remapping when framework versions update (e.g., ISO 27001:2013 → :2022)
+
+This work is scoped for a future UI phase and not addressed in the current spec cascade.

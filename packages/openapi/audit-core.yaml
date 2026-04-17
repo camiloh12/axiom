@@ -8,8 +8,8 @@ info:
     controls, evidence, document requests, AI decisions, and the append-only audit log.
 
     This spec covers the Audit Core module within the Axiom API modular monolith. All
-    endpoints are served by a single Go binary alongside other modules (identity, trial
-    balance, workpaper, reporting).
+    endpoints are served by a single Go binary alongside other modules (identity,
+    frameworks, workpaper, reporting, provenance).
 
     ## Authentication
     Most endpoints require three context values injected by the gateway middleware after
@@ -32,18 +32,6 @@ info:
     `FirmAdmin | Partner | Manager | Staff | EQReviewer | ClientAdmin | ClientUser | ViewOnly`
 
 tags:
-  - name: Frameworks
-    description: |
-      Read-only reference data for audit frameworks (e.g. SOC 2, ISO 27001). Framework
-      definitions are global — they are not scoped to a firm. Accessible by all
-      authenticated users.
-
-  - name: ControlObjectiveLibrary
-    description: |
-      Read-only library of reusable control objectives that can be referenced when
-      scaffolding engagement controls. Objectives may carry cross-framework mappings.
-      Accessible by all authenticated firm users.
-
   - name: Engagements
     description: |
       Engagements represent a single audit project for a client under a defined framework.
@@ -58,8 +46,10 @@ tags:
 
   - name: EngagementFrameworks
     description: |
-      An engagement may be mapped to one or more audit frameworks. Frameworks can be added
-      during Planning; evidence satisfaction is tracked per framework.
+      An engagement may be mapped to one or more frameworks (SOC 2, ISO 27001, ISO 27701,
+      ISO 42001, HIPAA, PCI DSS, SOC 1). Frameworks can be added during Planning;
+      cross-framework coverage is computed by the Frameworks module via `CommonControl`
+      and `EvidenceItemSupports` edges.
 
   - name: ClientAcceptance
     description: |
@@ -81,25 +71,43 @@ tags:
 
   - name: Controls
     description: |
-      Controls represent individual regulatory requirements being tested within an engagement.
-      Each control carries a status (`NotStarted | InProgress | Complete | Exception`), an
-      assigned auditor, and links to test procedures and evidence.
+      Engagement-scoped instances of `CommonControl` nodes being tested within an
+      engagement. Each control carries a status (`NotStarted | InProgress | Complete |
+      Exception | NotApplicable`), an assigned auditor, and links to test procedures.
 
   - name: TestProcedures
     description: |
-      Test procedures describe the specific audit steps performed to evaluate a control.
-      They are nested under controls and link to supporting evidence items.
+      Test procedures describe the specific compliance-testing steps performed to
+      evaluate a control (inquiry, observation, inspection, reperformance, analytics).
+      They are nested under controls and carry engagement-scoped evidence associations.
 
   - name: Evidence
     description: |
-      Evidence items are uploaded documents (PDFs, spreadsheets, images, etc.) tied to a
-      client. They are uploaded once and can be linked to multiple controls or procedures
-      across engagements. Supports multipart upload.
+      Evidence items are uploaded artifacts (PDFs, spreadsheets, images, connector
+      payloads, signed screenshots, DOM snapshots) tied to a client. They are uploaded
+      once and can be reused across engagements. The Frameworks module attaches
+      `EvidenceItemSupports` edges from evidence items to `CommonControl` nodes for
+      cross-framework coverage.
 
-  - name: EvidenceLinks
+  - name: Findings
     description: |
-      A link associates a piece of evidence with a specific control or test procedure within
-      an engagement. Creating a link may trigger cross-framework satisfaction logic.
+      Control findings — exceptions, deficiencies, or deviations identified during
+      compliance testing. Drive the remediation lifecycle (`ManagementResponse`,
+      `CorrectiveActionPlan`). AI-assisted severity triage is recorded via `AIDecision`
+      (`context_type = FindingsTriage`).
+
+  - name: ManagementResponses
+    description: |
+      Client-side management responses to findings. May be AI-drafted via the
+      `auditcore.ai-management-response-drafter` worker; every draft is logged as an
+      `AIDecision` (`context_type = ManagementResponseDraft`) and requires human
+      approval before external side-effects fire.
+
+  - name: CorrectiveActionPlans
+    description: |
+      Remediation commitments linked to findings and management responses. Support
+      round-tripping to external ticketing systems (Jira/Linear/GitHub) with signed
+      closure evidence.
 
   - name: DocumentRequests
     description: |
@@ -134,8 +142,8 @@ tags:
     description: |
       **Internal module endpoints — not exposed to the frontend.** In the modular monolith,
       these are called directly via the audit core module's Go service interface by other
-      modules (trial balance, workpaper, reporting). The OpenAPI definitions are retained
-      for documentation and as the contract for future service extraction.
+      modules (frameworks, workpaper, reporting, provenance). The OpenAPI definitions are
+      retained for documentation and as the contract for future service extraction.
 
   - name: AuditLog
     description: |
@@ -152,211 +160,8 @@ tags:
 paths:
 
   # ---------------------------------------------------------------------------
-  # Frameworks
+  # Framework catalog and common-control endpoints live in `frameworks.yaml`.
   # ---------------------------------------------------------------------------
-
-  /api/v1/frameworks:
-    get:
-      operationId: listFrameworks
-      summary: List audit frameworks
-      description: |
-        Returns all audit frameworks known to the system (e.g. SOC 2 Type 2, ISO 27001,
-        ISO 42001). This list is global — it is NOT filtered by firm. Deprecated frameworks
-        are excluded by default.
-
-        **Access:** All authenticated firm users.
-      tags:
-        - Frameworks
-      parameters:
-        - $ref: './common.yaml#/components/parameters/X-User-Id'
-        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
-        - $ref: './common.yaml#/components/parameters/X-User-Role'
-        - name: governing_body
-          in: query
-          required: false
-          description: Filter by governing body (e.g. `AICPA`, `ISO`, `PCAOB`).
-          schema:
-            type: string
-        - name: include_deprecated
-          in: query
-          required: false
-          description: When `true`, include deprecated frameworks in the response.
-          schema:
-            type: boolean
-            default: false
-      responses:
-        '200':
-          description: Array of frameworks. Not paginated — the full list is returned.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FrameworkListResponse'
-        '401':
-          $ref: './common.yaml#/components/responses/Unauthorized'
-        '500':
-          $ref: './common.yaml#/components/responses/InternalServerError'
-
-  /api/v1/frameworks/{frameworkId}:
-    get:
-      operationId: getFramework
-      summary: Get a framework
-      description: |
-        Returns full detail for a single audit framework including its description,
-        governing body, version, and effective date.
-
-        **Access:** All authenticated firm users.
-      tags:
-        - Frameworks
-      parameters:
-        - $ref: './common.yaml#/components/parameters/X-User-Id'
-        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
-        - $ref: './common.yaml#/components/parameters/X-User-Role'
-        - name: frameworkId
-          in: path
-          required: true
-          description: UUID of the framework.
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Framework detail.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FrameworkResponse'
-        '401':
-          $ref: './common.yaml#/components/responses/Unauthorized'
-        '404':
-          $ref: './common.yaml#/components/responses/NotFound'
-        '500':
-          $ref: './common.yaml#/components/responses/InternalServerError'
-
-  /api/v1/frameworks/{frameworkId}/requirements:
-    get:
-      operationId: listFrameworkRequirements
-      summary: List requirements for a framework
-      description: |
-        Returns the ordered list of requirements (criteria) for the specified framework.
-        Requirements are returned in display order as defined by the governing body.
-
-        **Access:** All authenticated firm users.
-      tags:
-        - Frameworks
-      parameters:
-        - $ref: './common.yaml#/components/parameters/X-User-Id'
-        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
-        - $ref: './common.yaml#/components/parameters/X-User-Role'
-        - name: frameworkId
-          in: path
-          required: true
-          description: UUID of the framework.
-          schema:
-            type: string
-            format: uuid
-        - name: category
-          in: query
-          required: false
-          description: |
-            Filter by requirement category (e.g. `CC` for Common Criteria in SOC 2,
-            `A` for Availability).
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Ordered array of framework requirements.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FrameworkRequirementListResponse'
-        '401':
-          $ref: './common.yaml#/components/responses/Unauthorized'
-        '404':
-          $ref: './common.yaml#/components/responses/NotFound'
-        '500':
-          $ref: './common.yaml#/components/responses/InternalServerError'
-
-  # ---------------------------------------------------------------------------
-  # Control Objective Library
-  # ---------------------------------------------------------------------------
-
-  /api/v1/control-objective-library:
-    get:
-      operationId: listControlObjectives
-      summary: List control objectives from the library
-      description: |
-        Returns paginated control objectives from the firm-level library. Each objective
-        may include cross-framework mappings. Used when scaffolding controls for a new
-        engagement.
-
-        **Access:** All authenticated firm users.
-      tags:
-        - ControlObjectiveLibrary
-      parameters:
-        - $ref: './common.yaml#/components/parameters/X-User-Id'
-        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
-        - $ref: './common.yaml#/components/parameters/X-User-Role'
-        - $ref: './common.yaml#/components/parameters/CursorParam'
-        - $ref: './common.yaml#/components/parameters/LimitParam'
-        - name: search
-          in: query
-          required: false
-          description: Full-text search over objective title and description.
-          schema:
-            type: string
-        - name: tags
-          in: query
-          required: false
-          description: Comma-separated list of tags to filter by (AND logic).
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Paginated list of control objectives.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ControlObjectiveListResponse'
-        '401':
-          $ref: './common.yaml#/components/responses/Unauthorized'
-        '500':
-          $ref: './common.yaml#/components/responses/InternalServerError'
-
-  /api/v1/control-objective-library/{objectiveId}:
-    get:
-      operationId: getControlObjective
-      summary: Get a control objective
-      description: |
-        Returns a single control objective with full detail including cross-framework
-        requirement mappings.
-
-        **Access:** All authenticated firm users.
-      tags:
-        - ControlObjectiveLibrary
-      parameters:
-        - $ref: './common.yaml#/components/parameters/X-User-Id'
-        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
-        - $ref: './common.yaml#/components/parameters/X-User-Role'
-        - name: objectiveId
-          in: path
-          required: true
-          description: UUID of the control objective.
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Control objective with framework mappings.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ControlObjectiveResponse'
-        '401':
-          $ref: './common.yaml#/components/responses/Unauthorized'
-        '404':
-          $ref: './common.yaml#/components/responses/NotFound'
-        '500':
-          $ref: './common.yaml#/components/responses/InternalServerError'
 
   # ---------------------------------------------------------------------------
   # Engagements
@@ -403,7 +208,7 @@ paths:
         - name: engagement_type
           in: query
           required: false
-          description: Filter by engagement type (e.g. `SOC2`, `ISO27001`, `Financial`).
+          description: Filter by engagement type (e.g. `SOC2`, `ISO27001`, `ISO42001`, `PCI_DSS`, `HIPAA`).
           schema:
             type: string
       responses:
@@ -1762,6 +1567,344 @@ paths:
           $ref: './common.yaml#/components/responses/InternalServerError'
 
   # ---------------------------------------------------------------------------
+  # Findings, Management Responses, Corrective Action Plans
+  # ---------------------------------------------------------------------------
+
+  /api/v1/engagements/{engagementId}/findings:
+    get:
+      operationId: listFindings
+      summary: List findings for an engagement
+      description: |
+        Returns paginated findings (exceptions, deficiencies, deviations) raised during
+        compliance testing. Filterable by status and severity. AI-assisted severity triage
+        is recorded as an `AIDecision` (`context_type = FindingsTriage`) referenced on
+        each finding.
+
+        **Access:** All firm users with RLS access to this engagement.
+      tags: [Findings]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - $ref: './common.yaml#/components/parameters/CursorParam'
+        - $ref: './common.yaml#/components/parameters/LimitParam'
+        - name: engagementId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/FindingLifecycleStatus'
+        - name: severity
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/FindingSeverity'
+      responses:
+        '200':
+          description: Paginated findings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FindingListResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    post:
+      operationId: createFinding
+      summary: Create a finding
+      description: |
+        Creates a finding tied to a control and/or test procedure. A human always
+        authors the finding; AI may pre-populate the severity field through
+        `ai_decision_id` (`context_type = FindingsTriage`).
+
+        **Access:** `Partner`, `Manager`, `Staff` (engagement team).
+      tags: [Findings]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: engagementId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFindingRequest'
+      responses:
+        '201':
+          description: Finding created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/findings/{findingId}:
+    get:
+      operationId: getFinding
+      tags: [Findings]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: findingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Finding detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    patch:
+      operationId: updateFinding
+      tags: [Findings]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: findingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFindingRequest'
+      responses:
+        '200':
+          description: Finding updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/findings/{findingId}/management-response:
+    get:
+      operationId: getManagementResponse
+      tags: [ManagementResponses]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: findingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Management response for this finding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagementResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    put:
+      operationId: upsertManagementResponse
+      summary: Create or update the management response for a finding
+      description: |
+        Creates or updates the management response attached to a finding. AI may author a
+        draft via the `auditcore.ai-management-response-drafter` worker; the draft is
+        recorded as an `AIDecision` (`context_type = ManagementResponseDraft`) and must
+        be confirmed by a human before external side-effects (ticket creation, email)
+        fire.
+
+        **Access:** `ClientAdmin` (response authorship), `Partner`/`Manager` (review).
+      tags: [ManagementResponses]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: findingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertManagementResponseRequest'
+      responses:
+        '200':
+          description: Management response created/updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagementResponse'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/findings/{findingId}/corrective-action-plans:
+    get:
+      operationId: listCorrectiveActionPlans
+      tags: [CorrectiveActionPlans]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: findingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Corrective action plans for this finding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrectiveActionPlanListResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    post:
+      operationId: createCorrectiveActionPlan
+      tags: [CorrectiveActionPlans]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: findingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCorrectiveActionPlanRequest'
+      responses:
+        '201':
+          description: Corrective action plan created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrectiveActionPlan'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/corrective-action-plans/{capId}:
+    patch:
+      operationId: updateCorrectiveActionPlan
+      tags: [CorrectiveActionPlans]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: capId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCorrectiveActionPlanRequest'
+      responses:
+        '200':
+          description: Corrective action plan updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrectiveActionPlan'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
   # Evidence
   # ---------------------------------------------------------------------------
 
@@ -1965,159 +2108,9 @@ paths:
           $ref: './common.yaml#/components/responses/InternalServerError'
 
   # ---------------------------------------------------------------------------
-  # Evidence Links
+  # Evidence → CommonControl mappings are owned by the Frameworks module
+  # (`EvidenceItemSupports`). See `frameworks.yaml` for the endpoints.
   # ---------------------------------------------------------------------------
-
-  /api/v1/engagements/{engagementId}/evidence-links:
-    get:
-      operationId: listEvidenceLinks
-      summary: List evidence links for an engagement
-      description: |
-        Returns a paginated list of evidence links within this engagement. Filter by
-        `control_id` or `test_procedure_id` to narrow results.
-
-        **Access:** All firm users with RLS access to this engagement.
-      tags:
-        - EvidenceLinks
-      parameters:
-        - $ref: './common.yaml#/components/parameters/X-User-Id'
-        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
-        - $ref: './common.yaml#/components/parameters/X-User-Role'
-        - $ref: './common.yaml#/components/parameters/CursorParam'
-        - $ref: './common.yaml#/components/parameters/LimitParam'
-        - name: engagementId
-          in: path
-          required: true
-          description: UUID of the engagement.
-          schema:
-            type: string
-            format: uuid
-        - name: control_id
-          in: query
-          required: false
-          description: Filter to links associated with a specific control.
-          schema:
-            type: string
-            format: uuid
-        - name: test_procedure_id
-          in: query
-          required: false
-          description: Filter to links associated with a specific test procedure.
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Paginated list of evidence links.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EvidenceLinkListResponse'
-        '401':
-          $ref: './common.yaml#/components/responses/Unauthorized'
-        '404':
-          $ref: './common.yaml#/components/responses/NotFound'
-        '500':
-          $ref: './common.yaml#/components/responses/InternalServerError'
-
-    post:
-      operationId: createEvidenceLink
-      summary: Link evidence to a control or test procedure
-      description: |
-        Associates an evidence item with a control or test procedure in this engagement.
-        The evidence item must belong to the same client as the engagement.
-
-        After linking, the service runs cross-framework satisfaction logic: if the linked
-        control maps to requirements across multiple frameworks, other controls satisfying
-        the same requirement may be automatically marked as satisfied. The response includes
-        a `cross_framework_satisfied` array of control IDs that were updated.
-
-        **Access:** `Partner`, `Manager`, `Staff` (engagement team).
-      tags:
-        - EvidenceLinks
-      parameters:
-        - $ref: './common.yaml#/components/parameters/X-User-Id'
-        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
-        - $ref: './common.yaml#/components/parameters/X-User-Role'
-        - name: engagementId
-          in: path
-          required: true
-          description: UUID of the engagement.
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateEvidenceLinkRequest'
-      responses:
-        '201':
-          description: Evidence link created, with cross-framework satisfaction results.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EvidenceLinkResponse'
-        '400':
-          $ref: './common.yaml#/components/responses/BadRequest'
-        '401':
-          $ref: './common.yaml#/components/responses/Unauthorized'
-        '403':
-          $ref: './common.yaml#/components/responses/Forbidden'
-        '404':
-          $ref: './common.yaml#/components/responses/NotFound'
-        '409':
-          $ref: './common.yaml#/components/responses/Conflict'
-        '422':
-          $ref: './common.yaml#/components/responses/UnprocessableEntity'
-        '500':
-          $ref: './common.yaml#/components/responses/InternalServerError'
-
-  /api/v1/engagements/{engagementId}/evidence-links/{linkId}:
-    delete:
-      operationId: deleteEvidenceLink
-      summary: Remove an evidence link
-      description: |
-        Removes the association between an evidence item and a control or test procedure.
-        Deletion is not permitted after the engagement has been `Finalized` or `Archived`,
-        as the audit trail must remain intact. Returns `422` if attempted on a finalized
-        engagement.
-
-        **Access:** `Partner`, `Manager`, `Staff` (engagement team).
-      tags:
-        - EvidenceLinks
-      parameters:
-        - $ref: './common.yaml#/components/parameters/X-User-Id'
-        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
-        - $ref: './common.yaml#/components/parameters/X-User-Role'
-        - name: engagementId
-          in: path
-          required: true
-          description: UUID of the engagement.
-          schema:
-            type: string
-            format: uuid
-        - name: linkId
-          in: path
-          required: true
-          description: UUID of the evidence link.
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: Evidence link removed. No content returned.
-        '401':
-          $ref: './common.yaml#/components/responses/Unauthorized'
-        '403':
-          $ref: './common.yaml#/components/responses/Forbidden'
-        '404':
-          $ref: './common.yaml#/components/responses/NotFound'
-        '422':
-          $ref: './common.yaml#/components/responses/UnprocessableEntity'
-        '500':
-          $ref: './common.yaml#/components/responses/InternalServerError'
 
   # ---------------------------------------------------------------------------
   # Document Requests
@@ -2949,10 +2942,11 @@ paths:
       summary: List AI decisions for an engagement
       description: |
         Returns a paginated list of AI decisions made within this engagement. Decisions
-        are recorded for every AI inference (document completeness review, control mapping,
-        trial balance account mapping, evidence link suggestion, risk category suggestion,
-        workpaper narrative draft, anomaly detection, report section draft) to satisfy
-        ISO 42001 human-in-the-loop and explainability requirements.
+        are recorded for every AI inference (document completeness review, evidence →
+        CommonControl mapping, cross-framework gap analysis, framework version migration,
+        findings triage, drift-triggered re-testing, management-response drafting,
+        workpaper narrative draft, report section draft) to satisfy ISO 42001
+        human-in-the-loop and explainability requirements.
 
         **Access:** All firm users with RLS access to this engagement.
       tags:
@@ -3094,30 +3088,33 @@ paths:
       operationId: createAIDecisionInternal
       summary: Create an AI decision record (internal service-to-service)
       description: |
-        **Internal module endpoint.** Used by the trial balance, workpaper, and reporting
-        modules to create `AIDecision` records in `axiom_db` after executing AI features
-        (Features 3, 4, 7, 8). In the monolith, called via Go service interface
-        (`http://audit-core/internal/ai-decisions`).
+        **Internal module endpoint.** Used by the frameworks, workpaper, reporting, and
+        provenance modules to create `AIDecision` records in `axiom_db` after executing
+        AI features. In the monolith, called via Go service interface
+        (`auditcore.AIDecisionService.Create`); this OpenAPI contract is retained for
+        future service extraction.
 
         Authentication: internal service header (`X-Internal-Service`), not JWT. Requests
         without a valid internal service header are rejected with 403.
 
         The calling service provides the full AIDecision payload. Audit Core persists the
         record and returns the generated `id` so the caller can reference it (e.g.,
-        `trial_balance_accounts.ai_decision_id`).
+        `evidence_item_supports.ai_decision_id`).
       tags:
         - Internal
       parameters:
         - name: X-Internal-Service
           in: header
           required: true
-          description: Identifier of the calling service (e.g., `trial-balance`, `workpaper`, `reporting`).
+          description: Identifier of the calling service.
           schema:
             type: string
             enum:
-              - trial-balance
+              - frameworks
               - workpaper
               - reporting
+              - provenance
+              - ai
       requestBody:
         required: true
         content:
@@ -3387,14 +3384,15 @@ components:
 
     EngagementType:
       type: string
-      description: The regulatory or assurance framework category for the engagement.
+      description: The compliance or assurance framework category for the engagement.
       enum:
-        - FinancialAudit_Private
-        - FinancialAudit_Public
         - SOC1
         - SOC2
         - ISO27001
+        - ISO27701
+        - ISO42001
         - HIPAA
+        - PCI_DSS
         - AgreedUponProcedures
         - Advisory
       examples:
@@ -3450,11 +3448,15 @@ components:
 
     SamplingMethod:
       type: string
-      description: The statistical method used to select the sample from the population.
+      description: |
+        The method used to select samples from the population for compliance testing.
+        Used for sample-based frameworks (SOC 2 Type 2, ISO surveillance). For
+        prescriptive population-level checks (PCI DSS ASV scans, log-stream assertions),
+        sampling fields remain null and `population_size` reflects the full population.
       enum:
         - Systematic
         - Random
-        - MonetaryUnit
+        - Judgmental
       examples:
         - Random
 
@@ -3556,18 +3558,23 @@ components:
       type: string
       description: |
         The type of AI-assisted analysis or generation that produced this decision.
-        Maps to the eight AI features defined in the AI Architecture Design spec.
+        Maps to the AI features defined in the AI Architecture Design spec.
       enum:
         - ControlMapping
         - RiskCategorySuggestion
-        - TrialBalanceMapping
         - DocumentCompleteness
         - EvidenceLinkSuggestion
+        - EvidenceControlMapping
+        - GapAnalysis
+        - FrameworkMigration
+        - FindingsTriage
+        - DriftRetest
+        - ManagementResponseDraft
         - WorkpaperDraft
         - ReportSectionDraft
         - AnomalyDetection
       examples:
-        - EvidenceLinkSuggestion
+        - EvidenceControlMapping
 
     AIReviewAction:
       type: string
@@ -3630,161 +3637,9 @@ components:
     # Framework & Library
     # -------------------------------------------------------------------------
 
-    Framework:
-      type: object
-      description: A regulatory or assurance framework (e.g., SOC 2, ISO 27001) that defines the requirements for an engagement.
-      required:
-        - id
-        - name
-        - version
-        - effective_date
-        - governing_body
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for the framework.
-          examples:
-            - "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-        name:
-          type: string
-          description: Full name of the framework.
-          examples:
-            - "SOC 2 Type II"
-        version:
-          type: string
-          description: Version or edition of the framework.
-          examples:
-            - "2017"
-        effective_date:
-          type: string
-          format: date
-          description: Date from which this framework version is effective.
-          examples:
-            - "2017-09-01"
-        deprecated_at:
-          type:
-            - string
-            - "null"
-          format: date
-          description: Date on which this framework version was superseded or retired. Null if still current.
-          examples:
-            - null
-        governing_body:
-          type: string
-          description: The standards body or organization that owns this framework.
-          examples:
-            - "AICPA"
-
-    FrameworkRequirement:
-      type: object
-      description: An individual requirement or criterion within a framework (e.g., CC6.1 in SOC 2).
-      required:
-        - id
-        - framework_id
-        - identifier
-        - title
-        - description
-        - category
-        - sort_order
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for this requirement.
-          examples:
-            - "b2c3d4e5-f6a7-8901-bcde-f12345678901"
-        framework_id:
-          type: string
-          format: uuid
-          description: The framework this requirement belongs to.
-          examples:
-            - "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-        identifier:
-          type: string
-          description: The short code used to reference this requirement within its framework.
-          examples:
-            - "CC6.1"
-        title:
-          type: string
-          description: Brief title of the requirement.
-          examples:
-            - "Logical and Physical Access Controls"
-        description:
-          type: string
-          description: Full text of the requirement as stated by the governing body.
-          examples:
-            - "The entity implements logical access security software, infrastructure, and architectures over protected information assets..."
-        category:
-          type: string
-          description: The grouping or domain category within the framework.
-          examples:
-            - "Common Criteria"
-        sort_order:
-          type: integer
-          description: Display ordering within the framework for consistent presentation.
-          examples:
-            - 61
-
-    ControlObjectiveLibraryItem:
-      type: object
-      description: A reusable control objective from the firm's library, independent of any specific framework.
-      required:
-        - id
-        - name
-        - description
-        - tags
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for this library item.
-          examples:
-            - "c3d4e5f6-a7b8-9012-cdef-123456789012"
-        name:
-          type: string
-          description: Short name of the control objective.
-          examples:
-            - "Multi-Factor Authentication Enforcement"
-        description:
-          type: string
-          description: Detailed description of what this control objective covers.
-          examples:
-            - "Ensure all privileged and user accounts require MFA for system access."
-        tags:
-          type: array
-          description: Searchable tags for categorization and discovery.
-          items:
-            type: string
-          examples:
-            - ["access-control", "authentication", "identity"]
-
-    ControlObjectiveLibraryMapping:
-      type: object
-      description: Maps a library control objective to a specific framework requirement, enabling reuse across frameworks.
-      required:
-        - id
-        - library_objective_id
-        - framework_requirement_id
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for this mapping.
-          examples:
-            - "d4e5f6a7-b8c9-0123-defa-234567890123"
-        library_objective_id:
-          type: string
-          format: uuid
-          description: The control objective library item being mapped.
-          examples:
-            - "c3d4e5f6-a7b8-9012-cdef-123456789012"
-        framework_requirement_id:
-          type: string
-          format: uuid
-          description: The framework requirement this objective satisfies.
-          examples:
-            - "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+    # Framework / FrameworkRequirement / ControlObjectiveLibrary* schemas moved to
+    # frameworks.yaml — see Framework, FrameworkVersion, FrameworkRequirement,
+    # CommonControl, CommonControlSatisfies.
 
     # -------------------------------------------------------------------------
     # Engagement
@@ -3879,7 +3734,11 @@ components:
             - string
             - "null"
           format: date
-          description: Target date for completing file assembly. Null if not set.
+          description: |
+            Computed: `report_issued_at` + framework-specific assembly window
+            (SOC: 60 days per AICPA SSAE 21; ISO CB assessment: per CB policy;
+            PCI ROC: per QSA policy; HIPAA: per HHS/OCR guidance). Null until
+            report issuance.
           examples:
             - "2026-03-31"
         retention_deadline:
@@ -3887,7 +3746,10 @@ components:
             - string
             - "null"
           format: date
-          description: Date after which the engagement file may be destroyed per retention policy. Null until set.
+          description: |
+            Computed: `report_issued_at` + framework-specific retention
+            (SOC/ISO: 5 yrs; HIPAA: 6 yrs; PCI: 3 yrs per PCI DSS 12.10.1).
+            Null until report issuance.
           examples:
             - "2032-12-31"
         finalized_at:
@@ -4248,6 +4110,360 @@ components:
             - "2026-01-06T14:00:00Z"
 
     # -------------------------------------------------------------------------
+    # Findings (control deficiencies and remediation lifecycle)
+    # -------------------------------------------------------------------------
+
+    FindingLifecycleStatus:
+      type: string
+      description: |
+        Lifecycle status of a compliance finding. Distinct from `FindingStatus`
+        (which applies to EQR findings).
+      enum:
+        - Open
+        - InRemediation
+        - PendingVerification
+        - Closed
+        - Accepted
+
+    Finding:
+      type: object
+      description: |
+        A compliance finding — exception, deficiency, or deviation identified during
+        control testing. Drives the remediation lifecycle via `ManagementResponse` and
+        `CorrectiveActionPlan`.
+      required:
+        - id
+        - engagement_id
+        - title
+        - description
+        - severity
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        engagement_id:
+          type: string
+          format: uuid
+        control_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        test_procedure_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          $ref: '#/components/schemas/FindingSeverity'
+        status:
+          $ref: '#/components/schemas/FindingLifecycleStatus'
+        framework_requirement_ids:
+          type: array
+          description: Framework requirements impacted by this finding (cross-framework surface).
+          items:
+            type: string
+            format: uuid
+        ai_decision_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: AIDecision that proposed the severity classification (context_type = FindingsTriage).
+        raised_by_id:
+          type: string
+          format: uuid
+        raised_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    ManagementResponseStatus:
+      type: string
+      enum:
+        - Draft
+        - Submitted
+        - Accepted
+        - Rejected
+
+    ManagementResponse:
+      type: object
+      description: |
+        Client-side management response to a finding. May be AI-drafted via
+        `auditcore.ai-management-response-drafter`; the draft is logged as an AIDecision
+        (`context_type = ManagementResponseDraft`) and requires human approval.
+      required:
+        - id
+        - finding_id
+        - response_text
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        finding_id:
+          type: string
+          format: uuid
+        response_text:
+          type: string
+        owner_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: The client-side owner of the response (ClientAdmin).
+        target_resolution_date:
+          type:
+            - string
+            - "null"
+          format: date
+        status:
+          $ref: '#/components/schemas/ManagementResponseStatus'
+        ai_decision_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: AIDecision that produced the draft (context_type = ManagementResponseDraft).
+        submitted_by_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        submitted_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CorrectiveActionPlanStatus:
+      type: string
+      enum:
+        - Planned
+        - InProgress
+        - Blocked
+        - Complete
+        - Verified
+        - Cancelled
+
+    CorrectiveActionPlan:
+      type: object
+      description: |
+        A remediation commitment linked to a finding and optionally a management response.
+        Supports round-tripping to external ticketing systems (Jira/Linear/GitHub) via
+        `external_ticket_url`.
+      required:
+        - id
+        - finding_id
+        - title
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        finding_id:
+          type: string
+          format: uuid
+        management_response_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        title:
+          type: string
+        description:
+          type:
+            - string
+            - "null"
+        owner_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        target_date:
+          type:
+            - string
+            - "null"
+          format: date
+        status:
+          $ref: '#/components/schemas/CorrectiveActionPlanStatus'
+        external_ticket_url:
+          type:
+            - string
+            - "null"
+          format: uri
+          description: URL of the linked external ticket (Jira, Linear, GitHub).
+        verified_by_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        verified_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    CreateFindingRequest:
+      type: object
+      required:
+        - title
+        - description
+        - severity
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          $ref: '#/components/schemas/FindingSeverity'
+        control_id:
+          type: string
+          format: uuid
+        test_procedure_id:
+          type: string
+          format: uuid
+        framework_requirement_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        ai_decision_id:
+          type: string
+          format: uuid
+          description: If the severity suggestion came from AI triage, pass the AIDecision ID to mark it as accepted.
+
+    UpdateFindingRequest:
+      type: object
+      minProperties: 1
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          $ref: '#/components/schemas/FindingSeverity'
+        status:
+          $ref: '#/components/schemas/FindingLifecycleStatus'
+
+    UpsertManagementResponseRequest:
+      type: object
+      required:
+        - response_text
+      properties:
+        response_text:
+          type: string
+        owner_id:
+          type: string
+          format: uuid
+        target_resolution_date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/ManagementResponseStatus'
+        ai_decision_id:
+          type: string
+          format: uuid
+          description: If the draft came from AI, pass the AIDecision ID to mark it accepted.
+
+    CreateCorrectiveActionPlanRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        owner_id:
+          type: string
+          format: uuid
+        target_date:
+          type: string
+          format: date
+        management_response_id:
+          type: string
+          format: uuid
+        external_ticket_url:
+          type: string
+          format: uri
+
+    UpdateCorrectiveActionPlanRequest:
+      type: object
+      minProperties: 1
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        owner_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        target_date:
+          type:
+            - string
+            - "null"
+          format: date
+        status:
+          $ref: '#/components/schemas/CorrectiveActionPlanStatus'
+        external_ticket_url:
+          type:
+            - string
+            - "null"
+          format: uri
+        verified_by_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+        verified_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+
+    FindingListResponse:
+      type: object
+      required:
+        - findings
+        - pagination
+      properties:
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Finding'
+        pagination:
+          $ref: './common.yaml#/components/schemas/Pagination'
+
+    CorrectiveActionPlanListResponse:
+      type: object
+      required:
+        - corrective_action_plans
+      properties:
+        corrective_action_plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/CorrectiveActionPlan'
+
+    # -------------------------------------------------------------------------
     # Controls
     # -------------------------------------------------------------------------
 
@@ -4328,27 +4544,28 @@ components:
       allOf:
         - $ref: '#/components/schemas/Control'
         - type: object
-          description: Control with fully resolved test procedures, evidence links, and mapped framework requirements.
+          description: |
+            Control with fully resolved test procedures. Framework requirements satisfied
+            by this control are computed cross-framework via the Frameworks module
+            (`CommonControl` → `CommonControlSatisfies` → `FrameworkRequirement`) and
+            exposed through `GET /engagements/{id}/coverage` in `frameworks.yaml`.
           required:
             - test_procedures
-            - evidence_links
-            - framework_requirements
           properties:
             test_procedures:
               type: array
               description: All test procedures designed to test this control.
               items:
                 $ref: '#/components/schemas/TestProcedure'
-            evidence_links:
-              type: array
-              description: All evidence items linked to test procedures under this control.
-              items:
-                $ref: '#/components/schemas/EvidenceLink'
-            framework_requirements:
-              type: array
-              description: Framework requirements satisfied by this control, resolved via the control objective library mappings.
-              items:
-                $ref: '#/components/schemas/FrameworkRequirement'
+            common_control_id:
+              type:
+                - string
+                - "null"
+              format: uuid
+              description: |
+                UUID of the `CommonControl` this engagement control instantiates. Null
+                when the firm defines an engagement control without a common-control
+                pivot (discouraged — disables cross-framework reuse).
 
     # -------------------------------------------------------------------------
     # Test Procedures
@@ -4568,81 +4785,7 @@ components:
           examples:
             - false
 
-    EvidenceLink:
-      type: object
-      description: Association between an evidence item and a test procedure, optionally suggested by AI.
-      required:
-        - id
-        - evidence_item_id
-        - test_procedure_id
-        - linked_by_id
-        - linked_at
-        - ai_suggested
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for this evidence link.
-          examples:
-            - "e8f9a0b1-c2d3-4567-efab-678901234567"
-        evidence_item_id:
-          type: string
-          format: uuid
-          description: The evidence item being linked.
-          examples:
-            - "d7e8f9a0-b1c2-3456-defa-567890123456"
-        test_procedure_id:
-          type: string
-          format: uuid
-          description: The test procedure this evidence supports.
-          examples:
-            - "c6d7e8f9-a0b1-2345-cdef-456789012345"
-        linked_by_id:
-          type: string
-          format: uuid
-          description: The user who created this link (or system if AI-initiated and auto-accepted).
-          examples:
-            - "c9d0e1f2-a3b4-5678-cdef-789012345678"
-        linked_at:
-          type: string
-          format: date-time
-          description: Timestamp when the link was established.
-          examples:
-            - "2025-06-16T09:00:00Z"
-        notes:
-          type:
-            - string
-            - "null"
-          description: Optional notes explaining why this evidence satisfies the procedure.
-          examples:
-            - "Pages 4-7 show the full access provisioning log for the sample period."
-        ai_suggested:
-          type: boolean
-          description: Whether this link was originally suggested by the AI evidence suggestion system.
-          examples:
-            - false
-        ai_decision_id:
-          type:
-            - string
-            - "null"
-          format: uuid
-          description: The AI decision that produced this suggestion, if ai_suggested is true.
-          examples:
-            - null
-
-    EvidenceLinkWithSatisfaction:
-      allOf:
-        - $ref: '#/components/schemas/EvidenceLink'
-        - type: object
-          description: Evidence link extended with the framework requirements it satisfies via the linked procedure's control.
-          required:
-            - satisfied_framework_requirements
-          properties:
-            satisfied_framework_requirements:
-              type: array
-              description: Framework requirements satisfied by the linked test procedure's control, through which this evidence provides coverage.
-              items:
-                $ref: '#/components/schemas/FrameworkRequirement'
+    # EvidenceLink removed — replaced by EvidenceItemSupports in frameworks.yaml.
 
     DownloadUrlResponse:
       type: object
@@ -5603,42 +5746,7 @@ components:
           examples:
             - null
 
-    CreateEvidenceLinkRequest:
-      type: object
-      description: Request body for linking an evidence item to a test procedure.
-      required:
-        - evidence_item_id
-        - test_procedure_id
-      properties:
-        evidence_item_id:
-          type: string
-          format: uuid
-          description: The evidence item to link.
-          examples:
-            - "d7e8f9a0-b1c2-3456-defa-567890123456"
-        test_procedure_id:
-          type: string
-          format: uuid
-          description: The test procedure this evidence supports.
-          examples:
-            - "c6d7e8f9-a0b1-2345-cdef-456789012345"
-        notes:
-          type: string
-          description: Optional notes explaining the relevance of this evidence to the procedure.
-          examples:
-            - "Pages 4-7 contain the access provisioning log for the full sample period."
-        ai_suggested:
-          type: boolean
-          description: Whether this link was originally suggested by AI. Defaults to false.
-          default: false
-          examples:
-            - false
-        ai_decision_id:
-          type: string
-          format: uuid
-          description: The AI decision that produced this suggestion, if ai_suggested is true.
-          examples:
-            - null
+    # CreateEvidenceLinkRequest removed — see EvidenceItemSupports in frameworks.yaml.
 
     CreateDocumentRequestRequest:
       type: object
@@ -5800,9 +5908,9 @@ components:
     CreateAIDecisionInternalRequest:
       type: object
       description: |
-        Request body for cross-module AI decision creation. Used by the trial balance,
-        workpaper, and reporting modules to persist AI decision records in axiom_db
-        after executing AI features.
+        Request body for cross-module AI decision creation. Used by the frameworks,
+        workpaper, reporting, and provenance modules to persist AI decision records
+        in axiom_db after executing AI features.
       required:
         - firm_id
         - context_type
@@ -5826,12 +5934,15 @@ components:
         context_id:
           type: string
           format: uuid
-          description: UUID of the entity being analyzed (e.g., trial_balance_account, workpaper, report).
+          description: UUID of the entity being analyzed (e.g., evidence_item, common_control, workpaper, report, finding).
         context_table:
           type: string
           description: Database table name of the entity identified by context_id.
           examples:
-            - trial_balance_accounts
+            - evidence_items
+            - common_controls
+            - evidence_item_supports
+            - findings
             - workpapers
             - reports
         model_id:
@@ -5874,31 +5985,7 @@ components:
     # List Response Wrappers
     # -------------------------------------------------------------------------
 
-    FrameworkListResponse:
-      type: object
-      required:
-        - frameworks
-        - pagination
-      properties:
-        frameworks:
-          type: array
-          items:
-            $ref: '#/components/schemas/Framework'
-        pagination:
-          $ref: './common.yaml#/components/schemas/Pagination'
-
-    FrameworkRequirementListResponse:
-      type: object
-      required:
-        - requirements
-        - pagination
-      properties:
-        requirements:
-          type: array
-          items:
-            $ref: '#/components/schemas/FrameworkRequirement'
-        pagination:
-          $ref: './common.yaml#/components/schemas/Pagination'
+    # FrameworkListResponse / FrameworkRequirementListResponse moved to frameworks.yaml.
 
     EngagementListResponse:
       type: object
@@ -5952,18 +6039,7 @@ components:
         pagination:
           $ref: './common.yaml#/components/schemas/Pagination'
 
-    ControlObjectiveListResponse:
-      type: object
-      required:
-        - objectives
-        - pagination
-      properties:
-        objectives:
-          type: array
-          items:
-            $ref: '#/components/schemas/ControlObjectiveLibraryMapping'
-        pagination:
-          $ref: './common.yaml#/components/schemas/Pagination'
+    # ControlObjectiveListResponse moved to frameworks.yaml (replaced by CommonControlListResponse).
 
     TestProcedureListResponse:
       type: object
@@ -5991,18 +6067,7 @@ components:
         pagination:
           $ref: './common.yaml#/components/schemas/Pagination'
 
-    EvidenceLinkListResponse:
-      type: object
-      required:
-        - links
-        - pagination
-      properties:
-        links:
-          type: array
-          items:
-            $ref: '#/components/schemas/EvidenceLinkWithSatisfaction'
-        pagination:
-          $ref: './common.yaml#/components/schemas/Pagination'
+    # EvidenceLinkListResponse removed — see EvidenceItemSupports endpoints in frameworks.yaml.
 
     DocumentRequestListResponse:
       type: object
@@ -6086,9 +6151,7 @@ components:
     # Single-Item Response Wrappers
     # -------------------------------------------------------------------------
 
-    FrameworkResponse:
-      allOf:
-        - $ref: '#/components/schemas/Framework'
+    # FrameworkResponse moved to frameworks.yaml.
 
     EngagementResponse:
       allOf:
@@ -6106,9 +6169,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/ControlDetail'
 
-    ControlObjectiveResponse:
-      allOf:
-        - $ref: '#/components/schemas/ControlObjectiveLibraryMapping'
+    # ControlObjectiveResponse moved to frameworks.yaml (replaced by CommonControl endpoints).
 
     TestProcedureDetailResponse:
       allOf:
@@ -6118,9 +6179,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/EvidenceItem'
 
-    EvidenceLinkResponse:
-      allOf:
-        - $ref: '#/components/schemas/EvidenceLink'
+    # EvidenceLinkResponse removed — see EvidenceItemSupports endpoints in frameworks.yaml.
 
     EvidenceDownloadUrlResponse:
       type: object

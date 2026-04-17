@@ -128,7 +128,7 @@ paths:
       operationId: createReport
       description: |
         Creates a new report record in **Draft** status and enqueues a River background job to
-        assemble report data from Audit Core, Trial Balance, and Workpaper services.
+        assemble report data from the Audit Core, Frameworks, Workpaper, and Provenance modules.
 
         Returns **202 Accepted** immediately. Poll `GET /api/v1/reports/{reportId}` to track
         generation progress via the `status` field and `generated_at` timestamp.
@@ -681,7 +681,8 @@ paths:
       operationId: createEngagementExport
       description: |
         Enqueues an async River job to produce a full export archive for the engagement,
-        including all reports, workpapers, evidence, and trial balance data.
+        including all reports, workpapers, evidence, findings, and cross-framework
+        coverage data.
 
         Returns **202 Accepted** with an `export_id`. Poll
         `GET /api/v1/exports/{exportId}` to check status and retrieve the download URL once
@@ -773,13 +774,18 @@ components:
 
     ReportType:
       type: string
-      description: The type of audit report being produced.
+      description: The type of compliance/assurance report being produced.
       enum:
-        - SOC2Type1
-        - SOC2Type2
         - SOC1Type1
         - SOC1Type2
-        - FinancialAuditOpinion
+        - SOC2Type1
+        - SOC2Type2
+        - ISO27001Certification
+        - ISO27701Certification
+        - ISO42001Certification
+        - HIPAAReport
+        - PCIDSS_ROC
+        - PCIDSS_AOC
         - AgreedUponProcedures
         - ManagementLetter
 
@@ -1114,9 +1120,13 @@ components:
           type: boolean
           description: Whether to include evidence files in the export archive.
           default: true
-        include_trial_balance:
+        include_findings:
           type: boolean
-          description: Whether to include trial balance data in the export archive.
+          description: Whether to include findings, management responses, and corrective action plans in the export archive.
+          default: true
+        include_coverage:
+          type: boolean
+          description: Whether to include cross-framework coverage reports in the export archive.
           default: true
 
     # ---- Response bodies ----------------------------------------------------

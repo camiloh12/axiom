@@ -30,7 +30,7 @@ func TestRegisterFirm(t *testing.T) {
 		Password:   "securepassword123",
 		Country:    "US",
 		StaffCount: "21-40",
-		AuditTypes: []string{"FinancialAudit", "SOC2"},
+		AuditTypes: []string{"ISO27001", "SOC2"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Acme CPAs", result.Firm.Name)

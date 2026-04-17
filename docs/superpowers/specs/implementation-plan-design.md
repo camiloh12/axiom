@@ -25,7 +25,7 @@ Two methodologies apply to every phase and are defined before the phase-by-phase
 5. [Phase 2 — Frameworks, Templates & Engagement Creation](#5-phase-2--frameworks-templates--engagement-creation)
 6. [Phase 3 — Evidence & Document Requests](#6-phase-3--evidence--document-requests)
 7. [Phase 4 — Workpapers & Review Workflow](#7-phase-4--workpapers--review-workflow)
-8. [Phase 5 — Trial Balance](#8-phase-5--trial-balance)
+8. [Phase 5 — Cross-Framework Mapping Core](#8-phase-5--cross-framework-mapping-core)
 9. [Phase 6 — Reporting & Engagement Lifecycle](#9-phase-6--reporting--engagement-lifecycle)
 10. [Phase 7 — AI Features](#10-phase-7--ai-features)
 11. [Phase 8 — Real-Time Collaboration & Notifications](#11-phase-8--real-time-collaboration--notifications)
@@ -89,7 +89,7 @@ Use judgment: if a mistake in the code would be caught by a compiler, a linter, 
 
 ### Coverage expectations
 
-- **Business logic packages** (`identity`, `auditcore`, `trialbalance`, `workpaper`, `reporting`, `ai`, state machine guards, AI content tracking): target **≥85% line coverage**. Every public method has at least one happy-path and one error-path test.
+- **Business logic packages** (`identity`, `auditcore`, `frameworks`, `provenance`, `workpaper`, `reporting`, `ai`, state machine guards, AI content tracking): target **≥85% line coverage**. Every public method has at least one happy-path and one error-path test.
 - **Gateway, platform infrastructure**: target **≥70%**. Middleware gets direct tests (auth, role checks, RLS isolation).
 - **UI components**: target **≥60%**. Focus tests on components with logic; trivial layout components can be covered by journey/E2E tests.
 - **No coverage threshold on generated code, main.go wiring, or migration SQL files.**
@@ -100,7 +100,7 @@ Coverage thresholds are enforced by CI after Phase 1 — the baseline is capture
 
 Each phase description below lists a "Testable Outcome." These are the acceptance criteria at the phase level — **they must be exercised by automated tests**, not only by manual browser walkthroughs. When a phase says "Staff submits workpaper → Manager reviews → Partner signs off," that entire flow has a corresponding integration test that drives it through the service layer, plus the relevant unit tests for each guard and sign-off rule it exercises.
 
-The Phase 9 compliance validation explicitly requires automated integration tests walking the full SOC 2 and PCAOB lifecycles. That is the final backstop: by the end of Phase 9, every regulatory guard, immutability rule, and sign-off hierarchy is covered by an automated test.
+The Phase 9 compliance validation explicitly requires automated integration tests walking (1) a multi-framework integrated engagement (SOC 2 + ISO 27001 + ISO 27701) and (2) a continuous-assurance / drift-triggered re-testing lifecycle. That is the final backstop: by the end of Phase 9, every regulatory guard, immutability rule, and sign-off hierarchy is covered by an automated test.
 
 ---
 
@@ -167,14 +167,16 @@ The Phase 0/1 testing document at `docs/superpowers/testing/phase-0-and-1-scaffo
 | 2 | Frameworks, templates, engagements | Create engagement from template → scope → advance to Fieldwork | 3 |
 | 3 | Evidence & document requests + PDF service | Send doc requests → client uploads → auditor reviews → link evidence | 7, 8 |
 | 4 | Workpapers & review workflow | Write workpaper → submit → review notes → resolve → sign off | 5, 6 |
-| 5 | Trial balance | Import CSV → map accounts → adjustments → analytics | 4 |
+| 5 | Cross-framework mapping core | Import SCF catalog → CommonControl ↔ FrameworkRequirement edges (STRM) → evidence supports common controls → gap coverage query | 4, 11 |
 | 6 | Reporting & engagement lifecycle | Generate report → issue → finalize → archive | 9 |
-| 7 | AI features (all 8) | Every AI feature works end-to-end with real Claude models | All |
+| 7 | AI features (all 11) | Every AI feature works end-to-end with real Claude models | All |
 | 8 | Real-time collaboration & notifications | Co-edit workpapers, receive in-app + email notifications | All |
-| 9 | EQR & compliance hardening | Full regulatory workflow, immutable audit trail, all gates | 10 |
+| 9 | EQR & compliance hardening | Full regulatory workflow, immutable audit trail, all gates | 10, 11, 12 |
 | 10 | AWS infrastructure & deployment | Application running on AWS, accessible via browser | — |
 
 AI features are a separate phase rather than woven into each module. Rationale: getting the CRUD workflows right first gives a stable foundation. The database schema includes `ai_decision_id` columns and `ai_content_metadata` fields from the start — so the data model is AI-ready from Phase 2 onward. For a solo developer learning Go, keeping AI complexity out of the initial builds reduces cognitive load.
+
+**Provenance (`internal/provenance`) is cross-cutting.** Cryptographic signing primitives (content hashes, signing envelopes, `ProvenanceRecord` table) land in Phase 6 alongside reporting — reports are the first artifact class that requires WORM Object Lock. AI outputs get their own provenance chain in Phase 7 (signed prompt/response pairs referenced from each `AIDecision`). The S3 Object Lock wiring itself is deferred to Phase 10 (AWS-only capability); Phases 6–9 store signed envelopes and simulated WORM copies on the local filesystem.
 
 ---
 
@@ -207,7 +209,8 @@ apps/
       gateway/                  — (placeholder)
       identity/                 — (placeholder)
       auditcore/                — (placeholder)
-      trialbalance/             — (placeholder)
+      frameworks/               — (placeholder — built in Phase 5)
+      provenance/               — (placeholder — cross-cutting, seeded in Phase 6)
       workpaper/                — (placeholder)
       reporting/                — (placeholder)
       ai/                       — (placeholder)
@@ -390,12 +393,19 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every pull request 
 **Seed data scripts** (run via migrations or a seed command):
 - SOC 2 TSC 2017 framework with all Trust Services Criteria (CC1–CC9, A1, PI1, C1, P1)
 - ISO 27001:2022 framework with Annex A controls (A.5–A.8)
+- ISO 27701:2019 framework with privacy extension controls
+- ISO 42001:2023 framework with AI management system controls
 - HIPAA Security Rule framework with relevant sections
-- GAAS (AU-C) framework with key assertions
+- PCI DSS v4.0.1 framework with all 12 requirements
 - Pre-built methodology templates:
   - "SOC 2 Type II Standard" — ~50 controls, ~80 test procedures, ~80 document request templates
-  - "GAAS Financial Audit Standard" — ~30 controls, ~60 test procedures
-- Control objective library entries with cross-framework mappings
+  - "ISO 27001:2022 Standard" — ~60 controls, ~90 test procedures
+  - "ISO 27701:2019 Standard" — ~40 controls, ~60 test procedures (designed to stack on top of ISO 27001)
+  - "ISO 42001:2023 Standard" — ~35 controls, ~55 test procedures (AI management system)
+  - "HIPAA Security Rule Standard" — ~45 controls, ~70 test procedures
+  - "PCI DSS v4.0.1 Standard" — ~55 controls, ~100 test procedures
+  - "SOC 1 Type II Standard" — optional; service-organization-focused
+- Control objective library entries with cross-framework mappings (the full `CommonControl` catalog lands in Phase 5)
 
 **Identity module additions:**
 - Methodology template CRUD: list (including system-provided), activate/deactivate, view contents
@@ -660,101 +670,109 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
 
 ---
 
-## 8. Phase 5 — Trial Balance
+## 8. Phase 5 — Cross-Framework Mapping Core
 
-**Goal:** Auditors can import trial balances from CSV/Excel, map accounts to financial statement line items, manage adjustments, and run population analysis queries.
+**Goal:** Stand up the cross-framework intelligence layer — the common-control catalog, framework-requirement crosswalks, NIST STRM-encoded satisfaction edges, evidence-to-common-control edges, and gap coverage queries. This is the foundation that makes multi-framework engagements (SOC 2 + ISO 27001 + ISO 27701) and the AI mapping/gap/migration features in Phase 7 tractable.
 
-**Journeys covered:** 4 (Trial Balance)
+**Journeys covered:** 4 (Cross-Framework Evidence Mapping), 11 (Multi-Framework Integrated Engagement — scoping portion)
 
 ### Backend
 
-**Migrations:**
-- Enum types: `account_type`, `mapping_status`, `adjustment_type`
-- `trial_balances`
-- `trial_balance_accounts` (with generated `net_balance` column)
-- `trial_balance_adjustments` (with check constraint: waived requires reason)
-- `column_mapping_profiles`
+**Migrations — system reference tables (no RLS, shared across all firms):**
+- Enum types: `strm_relationship` (`equivalent-to | subset-of | superset-of | intersects-with | no-relationship`), `satisfies_source` (`SCF | OSCAL | AICPA | CIS | Firm`)
+- `common_controls` — the unified control catalog, platform-seeded
+- `common_control_versions` — versioned catalog entries with effective-dated windows
+- `common_control_satisfies` — directed, labeled edges `CommonControl → FrameworkRequirement`. Columns: `strm_relationship`, `strength_score` (0–1), `coverage_pct`, `source`, `effective_from`, `effective_until`
+- `framework_versions` — versioned framework entries (PCI 3.2/4.0, ISO 27001:2013/2022, etc.) with effective-dated windows
 
-**Trial Balance module** (`internal/trialbalance`):
-- **CSV/Excel import:**
-  - Accept uploaded file (CSV or XLSX)
-  - Parse with configurable column mapping (which columns are account_number, account_name, debit, credit)
-  - Validate: total debits = total credits (flag non-zero difference)
-  - Create TrialBalance + TrialBalanceAccount records in one transaction
-  - Save column mapping as a ColumnMappingProfile for reuse
-- **Column mapping profile CRUD:** list per firm, create, load
-- **Account mapping:**
-  - Manual: set `mapped_fs_line_item` on individual accounts, status → Confirmed
-  - Bulk confirm: select multiple accounts, set the same FS line item
-  - Override: change a previously set mapping, status → Overridden
-  - (AI mapping in Phase 7 sets status to AISuggested)
-- **Adjustment management:**
-  - Propose adjustment: Staff creates with amount, description, type (Proposed)
-  - Approve: Manager/Partner approves → type changes to Passed
-  - Waive: with mandatory reason → type changes to Waived
-  - Cumulative waived tracking against materiality threshold
-- **Population analysis** (SQL queries, results returned as JSON):
-  - Gap testing: find missing account numbers in a sequence
-  - Duplicate detection: accounts with identical names or numbers
-  - Threshold filtering: accounts above/below a specified amount
-  - Benford's law: distribution of leading digits vs. expected
-  - Period-over-period variance: compare current vs. prior year balances (requires prior engagement with TB)
-- **Lead schedule generation:** group accounts by `mapped_fs_line_item`, sum balances, include adjustments
+**Migrations — firm/engagement scope (RLS via firm_id):**
+- `firm_common_controls` — firm-scoped extensions to the common-control catalog
+- `evidence_item_supports` — directed edges `EvidenceItem → CommonControl`. Columns: `coverage_pct`, `period_start`, `period_end`, `strm_relationship` (for partial satisfaction tagging), `freshness_tolerance_days` (framework-specific — ASV scan 90d, pen test 1y, background check 1y, etc.)
+- `controls.common_control_id` — new column, real foreign key to `common_controls` (auditcore and frameworks share the database, so referential integrity holds)
+
+**Frameworks module** (`internal/frameworks`) — first implementation:
+- **SCF catalog import:**
+  - Read SCF CSV/JSON release bundle from `apps/axiom-api/seeds/scf/`
+  - Import 1,400+ `CommonControl` entries with STRM-encoded `CommonControlSatisfies` edges to platform-seeded `FrameworkRequirement` rows (SOC 2, ISO 27001/27701/42001, HIPAA, PCI DSS, SOC 1)
+  - Layer OSCAL NIST-family catalogs on top (for future FedRAMP alignment)
+  - Layer AICPA official SOC-2-to-anything mappings
+  - Layer CIS Controls v8.1 mappings as secondary cross-check
+  - Deterministic upsert — re-running a refresh produces a diff, not duplicates
+- **CommonControl CRUD:**
+  - List (filterable by source, framework coverage, effective date)
+  - Get with all outgoing `CommonControlSatisfies` edges grouped by framework version
+  - Create/update firm-scoped `firm_common_controls` (RLS enforced)
+- **CommonControlSatisfies edge management:**
+  - List edges for a CommonControl
+  - Firm override: firms may add, weaken, or suppress platform edges with a documented reason (stored in audit log)
+  - Partial-coverage display logic: coverage_pct < 100 surfaces as "partial" in all consumer surfaces (never shown as green checkmark per product spec)
+- **EvidenceItemSupports management:**
+  - Create edge linking an `EvidenceItem` to one or more `CommonControl`s with a coverage percentage and period window
+  - Freshness check: given an engagement's framework mix, compute whether each evidence item is within tolerance for each supported control
+  - Auto-expire: nightly job marks edges as stale when `period_end + freshness_tolerance_days < today`
+- **Gap coverage query** (the feature that feeds Phase 7 Cross-Framework Gap Analysis):
+  - Input: engagement id, framework version
+  - Walk: each `FrameworkRequirement` → incoming `CommonControlSatisfies` edges → engagement's `Control.common_control_id` links → `EvidenceItemSupports` edges → active `EvidenceItem`s
+  - Output per requirement: `coverage_pct` (weighted by STRM strength × evidence coverage), list of supporting common controls, list of supporting evidence items, staleness flags
+- **Framework version migration helpers:**
+  - Given `from_framework_version_id` and `to_framework_version_id`, produce a diff: added requirements, removed requirements, renumbered requirements
+  - Propose edge remapping for firm-accepted `CommonControlSatisfies` edges that reference the superseded version
+  - (AI-assisted proposal lands in Phase 7 — this phase ships the deterministic diff only)
+
+**Auditcore integration** (additions to `internal/auditcore`):
+- Engagement scoping: when creating an engagement, load the framework's `FrameworkVersion` effective at the engagement start date
+- Control scaffolding: each template control now carries an optional `common_control_id` — engagements created from templates inherit the mapping
+- Engagement detail page exposes a "Coverage" tab (UI below) that renders the gap coverage query
+
+**Audit log** — new entries:
+- `common_control.firm_override.created`
+- `common_control_satisfies.firm_override.created`
+- `evidence_item_supports.created`
+- `evidence_item_supports.expired`
+- `framework_version.migration_diff.computed`
 
 **API endpoints:**
-- `POST /api/v1/engagements/:id/trial-balance/import` — upload + import
-- `GET /api/v1/engagements/:id/trial-balance` — get TB with accounts
-- `PATCH /api/v1/trial-balance-accounts/:id` — update mapping
-- `POST /api/v1/trial-balance-accounts/bulk-map` — bulk update mappings
-- `GET /api/v1/firms/me/column-mapping-profiles` — list profiles
-- `POST /api/v1/firms/me/column-mapping-profiles` — save profile
-- `POST /api/v1/trial-balances/:id/adjustments` — propose adjustment
-- `POST /api/v1/adjustments/:id/approve` — approve
-- `POST /api/v1/adjustments/:id/waive` — waive with reason
-- `GET /api/v1/trial-balances/:id/analytics/gap-test` — gap testing
-- `GET /api/v1/trial-balances/:id/analytics/duplicates` — duplicate detection
-- `GET /api/v1/trial-balances/:id/analytics/benfords` — Benford's law
-- `GET /api/v1/trial-balances/:id/analytics/variance` — period-over-period
-- `GET /api/v1/trial-balances/:id/lead-schedules` — grouped by FS line item
+- `GET /api/v1/common-controls` — list (filterable)
+- `GET /api/v1/common-controls/:id` — detail with satisfies edges
+- `POST /api/v1/firms/me/common-controls` — firm-scoped control
+- `POST /api/v1/firms/me/common-control-satisfies` — firm override edge
+- `POST /api/v1/evidence/:id/supports` — create `EvidenceItemSupports` edge
+- `DELETE /api/v1/evidence-supports/:id` — remove edge
+- `GET /api/v1/engagements/:id/coverage` — gap coverage query (per framework version in engagement)
+- `GET /api/v1/engagements/:id/coverage/stale` — stale evidence report
+- `GET /api/v1/framework-versions/:from/migration-diff/:to` — deterministic diff
+- `POST /api/v1/admin/scf-import` — trigger SCF catalog refresh (FirmAdmin only; idempotent)
 
 ### Frontend
 
-- **Trial balance import wizard:**
-  1. Upload CSV/XLSX file
-  2. Column mapping UI: preview first 5 rows, assign columns to fields (account_number, account_name, debit, credit) — or load a saved profile
-  3. Validation summary (total debits, total credits, difference)
-  4. Confirm import
-- **Spreadsheet view** (AG Grid Community + HyperFormula):
-  - All accounts with balances in a spreadsheet-like grid
-  - Columns: account number, name, type, debit, credit, net balance, mapped FS line item, mapping status
-  - Inline editing for mapped_fs_line_item (dropdown with standard FS line items)
-  - Color coding by mapping status: red (Unmapped), yellow (AISuggested — Phase 7), green (Confirmed), blue (Overridden)
-  - Sort and filter on any column
-  - Row selection for bulk mapping
-  - Cell-level comments (for notes on specific accounts)
-  - Balance totals in footer row
-- **Adjustment panel:**
-  - List of proposed/passed/waived adjustments
-  - Create adjustment form (select account, amount, description)
-  - Approve/waive actions with permission checks
-  - Cumulative waived amount vs. materiality indicator
-- **Analytics dashboard:**
-  - Tab-based layout: Gap Test, Duplicates, Benford's, Variance
-  - Results displayed as tables with flags
-  - Benford's law: bar chart comparing actual vs. expected distribution
-  - Variance: table with accounts sorted by absolute variance percentage
-- **Lead schedules:** Grouped view of accounts by FS line item with subtotals
+- **CommonControl browser** (new top-level nav under "Library"):
+  - Table of common controls with columns: id, title, source (SCF/OSCAL/AICPA/CIS/Firm), framework coverage summary (icons per framework with count of satisfies edges)
+  - Detail drawer: full description, every outgoing STRM edge grouped by framework version, strength bars
+  - Firm override action (add, weaken, suppress) with required reason field
+- **Engagement coverage tab:**
+  - Per-framework coverage matrix: rows are `FrameworkRequirement`s, columns are `coverage_pct` / supporting evidence count / staleness flag
+  - Never shows a green checkmark when coverage < 100 — always a percent bar with the gap list expandable
+  - Filter to "partial only" and "zero coverage" to prioritize remediation
+- **Evidence detail enhancement:**
+  - New "Supports" panel: list of `CommonControl`s this evidence is linked to, with coverage percent and period window
+  - Add/remove edge actions
+- **Framework version migration UI:**
+  - "Migration" tab on a framework page: pick from-version and to-version → see added/removed/renumbered requirements
+  - Firm-accepted edges that reference the superseded version are flagged for review
+- **SCF import admin:**
+  - FirmAdmin settings: "Refresh SCF catalog" button with diff preview (additions, edge changes, removals)
 
 ### Testable Outcome
 
-1. Staff uploads CSV trial balance (200 accounts) → column mapping → import succeeds
-2. Validation: debits = credits confirmed (or difference flagged)
-3. Staff maps accounts to FS line items in the AG Grid (inline dropdown)
-4. Staff proposes adjustment: "Depreciation under-recorded, $5,000" → Manager approves
-5. Run Benford's law analysis → chart shows distribution, flags anomalous digits
-6. Run gap test → finds missing sequence numbers
-7. View lead schedule → accounts grouped by FS line item with adjustment-adjusted balances
-8. Save column mapping profile → reuse on next import
+1. Admin triggers SCF catalog import → 1,400+ CommonControl rows with STRM-encoded edges land in database
+2. Partner creates engagement with primary framework SOC 2 + secondary frameworks ISO 27001 + ISO 27701 → scaffolded controls carry `common_control_id` references
+3. Staff uploads evidence → creates `EvidenceItemSupports` edge to two common controls, one full coverage one 40%
+4. Engagement coverage tab: SOC 2 CC6.1 shows 100% coverage; ISO 27001 A.5.16 shows 40% partial with gap list
+5. Staff links additional evidence → partial coverage climbs to 90%, still shown as "partial" not green
+6. Period elapses past freshness tolerance → nightly job marks edge stale → coverage drops automatically
+7. Admin views framework version migration from ISO 27001:2013 → 2022 → sees added/removed/renumbered diff deterministically
+8. Firm override on a CommonControlSatisfies edge with weaker strength score → audit log records the override with reason
+9. RLS: firm A's `firm_common_controls` invisible to firm B
 
 ---
 
@@ -767,18 +785,19 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
 ### Backend
 
 **Migrations:**
-- Enum types: `report_type`, `report_status`
+- Enum types: `report_type` (`SOC1_TypeII`, `SOC2_TypeI`, `SOC2_TypeII`, `ISO27001_CertificateSupportLetter`, `ISO27701_CertificateSupportLetter`, `ISO42001_CertificateSupportLetter`, `PCIDSS_ROC`, `PCIDSS_AOC`, `HIPAA_Attestation`, `AgreedUponProcedures`, `Advisory`), `report_status`
 - `reports` (with ai_content_metadata jsonb — populated in Phase 7)
 - `report_versions` (with ai_content_metadata jsonb — populated in Phase 7)
+- `provenance_records` (`content_hash`, `signature`, `signing_key_id`, `signed_at`, `worm_reference` nullable until Phase 10)
 
 **Reporting module** (`internal/reporting`):
 - Report creation: select report type, linked to engagement
 - Report content: jsonb (same ProseMirror format as workpapers), section-based
 - Report generation via River job (`reporting.report-generate`):
   - Reads engagement data from auditcore (controls, test results, exceptions, evidence stats)
-  - Reads trial balance data from trialbalance (if financial audit)
+  - Reads coverage data from frameworks (per-framework gap analysis, supporting evidence counts)
   - Reads workpaper summaries from workpaper module
-  - Renders report sections using Go html/template
+  - Renders report sections using Go html/template, branched by `report_type`
   - Stores rendered content in report record
 - Report status lifecycle:
   - Draft → ClientReview (share with client for factual review)
@@ -786,10 +805,18 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
   - FirmReview → Issued (Partner signs off — triggers finalization cascade)
   - Issued → Archived (system, after assembly deadline)
 - Report issuance triggers:
-  - Compute `assembly_deadline` on engagement (report_issued_at + 60 days AICPA, + 45 days PCAOB)
-  - Compute `retention_deadline` on engagement (+ 5 years AICPA/SOC/ISO, + 7 years PCAOB, + 6 years HIPAA)
+  - Compute `assembly_deadline` on engagement (report_issued_at + 60 days AICPA for SOC reports)
+  - Compute `retention_deadline` on engagement (+ 5 years SOC/ISO, + 6 years HIPAA, + 3 years PCI DSS per PCI SSC guidance)
   - Set `engagement.report_issued_at`
 - Version history on each save
+
+**Provenance module** (`internal/provenance`) — first implementation (cross-cutting primitive):
+- `ProvenanceSigner` Go interface with content-hash (SHA-256) + ed25519 signing envelope
+- Local implementation: signing key loaded from dev secret; KMS implementation swapped in Phase 10
+- Sign-on-finalize hook: when a report transitions to Issued, compute content hash, sign envelope, persist `ProvenanceRecord` row
+- `provenance.sign-evidence` River worker (scaffolded now, wired to evidence uploads fully in Phase 7)
+- Verification function: given a `ProvenanceRecord`, recompute hash and verify signature; expose via `GET /api/v1/provenance/:id/verify`
+- WORM Object Lock is deferred to Phase 10 — until then, the `worm_reference` column stores the local path to the frozen copy
 
 **Full engagement state machine** (in `internal/auditcore`):
 
@@ -843,7 +870,7 @@ All transitions implemented with guards:
 
 - **Report editor:**
   - Same TipTap editor as workpapers, section-based
-  - Report type indicator (SOC 2 Type II, Financial Audit Opinion, etc.)
+  - Report type indicator (SOC 2 Type II, ISO 27001 Certificate Support Letter, PCI DSS ROC/AOC, HIPAA Attestation, etc.)
   - "Generate Report" button → triggers River job → content populated when complete
   - Status workflow actions (submit for client review, firm review, issue)
 - **Engagement lifecycle dashboard:**
@@ -867,30 +894,34 @@ All transitions implemented with guards:
 1. Partner creates a SOC 2 Type II report → triggers report generation → content populated
 2. Partner edits report → submits for client review → firm review → issues
 3. Issuance computes assembly_deadline (60 days) and retention_deadline (5 years)
-4. Engagement advances: Fieldwork → Review → Reporting → Finalized
-5. Finalized: all workpapers locked, content read-only
-6. Test each guard: try to advance without meeting conditions → blocked with explanation
-7. Test reverse path: Partner reverses Review → Fieldwork with reason
-8. Create addendum on finalized workpaper → new version with `is_addendum = true`
-9. Simulate archive → engagement becomes fully read-only
+4. On issuance, a `ProvenanceRecord` is created with content hash + signature; verification endpoint returns valid
+5. Engagement advances: Fieldwork → Review → Reporting → Finalized
+6. Finalized: all workpapers locked, content read-only
+7. Test each guard: try to advance without meeting conditions → blocked with explanation
+8. Test reverse path: Partner reverses Review → Fieldwork with reason
+9. Create addendum on finalized workpaper → new version with `is_addendum = true`
+10. Simulate archive → engagement becomes fully read-only
+11. Create a HIPAA Attestation report → retention_deadline = 6 years; create an ISO 27001 Certificate Support Letter → 5 years
 
 ---
 
 ## 10. Phase 7 — AI Features
 
-**Goal:** Implement all eight AI features using real Claude models (via Anthropic API directly), integrate AIDecision tracking, and add AI content tracking to workpapers and reports.
+**Goal:** Implement all eleven AI features using real Claude models (via Anthropic API directly), integrate AIDecision tracking, add AI content tracking to workpapers and reports, and wire cryptographic provenance into every AI output.
 
-**Journeys covered:** All (AI touches every journey)
+**Journeys covered:** All (AI touches every journey) — notably Journey 11 (Multi-Framework Integrated Engagement) and Journey 12 (Continuous Assurance / Drift-Triggered Re-Testing) are AI-native
 
 ### Backend
 
 **Migrations:**
 - `evidence_embeddings` (pgvector)
 - `framework_requirement_embeddings` (pgvector)
-- `control_objective_library_embeddings` (pgvector)
+- `common_control_embeddings` (pgvector)
+- `policy_library_embeddings` (pgvector)
 - `firm_control_objective_embeddings` (pgvector)
+- `ai_decision_provenance` — links `AIDecision` records to prompt hash, model identifier, provider request id, and output hash (part of the AIDecision audit chain)
 
-Note: `ai_decisions` table was created in Phase 2. This phase adds the embedding tables and populates `ai_decisions` via AI features.
+Note: `ai_decisions` table was created in Phase 2. This phase adds the embedding tables and populates `ai_decisions` via AI features. Every AIDecision produced in this phase carries a signed `ai_decision_provenance` row via the `internal/provenance` primitives built in Phase 6.
 
 **AI module** (`internal/ai`):
 ```go
@@ -912,42 +943,44 @@ type AIClient interface {
 
 **Embedding pipeline:**
 - Generate embeddings for all framework requirements (one-time seed)
-- Generate embeddings for control objective library entries (one-time seed)
-- Generate embeddings for firm control objectives (on create/update)
+- Generate embeddings for all common controls (one-time seed, re-run on SCF catalog refresh)
+- Generate embeddings for firm control objectives and firm-scoped common controls (on create/update)
 - Generate embeddings for evidence items (on extraction complete)
+- Generate embeddings for firm policy library entries (on create/update)
 - pgvector similarity queries for retrieval
+
+All eleven features create `AIDecision` records (where they don't live in Tier 1), sign the prompt/response envelope via `internal/provenance`, and expose review surfaces as described in `docs/specs/ai-architecture-design.md §4`.
 
 **Feature 1 — Document Completeness Review:**
 - River worker: `auditcore.ai-completeness-check`
 - Trigger: after document extraction completes (chains from `document-extract` worker)
 - Input: DocumentRequest details + extracted text + control/procedure context + framework requirements
-- Model: Claude Sonnet
+- Model: Claude Haiku
 - Output: AIDecision with completeness assessment, confidence score, gap explanation
 - Human review: Accept / Modify / Reject actions on the document request review screen
 
-**Feature 2 — Control Mapping:**
-- River worker: `auditcore.ai-batch-control-mapping`
-- Trigger: new engagement created (enqueued during engagement scaffolding)
-- Input: FirmControlObjective descriptions + all FrameworkRequirements for engaged frameworks + library entries as few-shot context
+**Feature 2 — Evidence → CommonControl Mapping Suggestion:**
+- River worker: `frameworks.evidence-control-mapping`
+- Trigger: evidence extraction complete, or manual "Suggest mappings" action on an evidence item
+- Input: evidence extracted text + evidence metadata + candidate `CommonControl`s retrieved via pgvector (top-k from `common_control_embeddings`) + policy library snippets
 - Model: Claude Haiku
-- Process: embed objective → retrieve similar library entries → score against requirements → threshold at 0.75
-- Output: AIDecision per proposed mapping
-- Human review: bulk confirm/reject in engagement scoping UI
+- Output: ranked `EvidenceItemSupports` edge proposals with coverage percentage and STRM relationship tag; each proposal is an `AIDecision`
+- Human review: accept/modify/reject per proposed edge in the evidence detail "Supports" panel
 
-**Feature 3 — Trial Balance Account Mapping:**
-- River worker: `trialbalance.ai-account-mapping`
-- Trigger: trial balance import complete
-- Input: account number, name, balances + prior year mappings (if rollforward)
-- Model: Claude Haiku (few-shot classification)
-- Output: sets `mapping_status = AISuggested` + `ai_decision_id` on each account
-- Human review: confirm/override in AG Grid
+**Feature 3 — Cross-Framework Gap Analysis:**
+- River worker: `frameworks.gap-analysis`
+- Trigger: scheduled nightly per active engagement + on-demand from the engagement coverage tab
+- Input: engagement's framework versions + current coverage query output + supporting evidence + prior gap analyses
+- Model: Claude Sonnet (reasoning), Claude Haiku (routing/classification)
+- Output: ranked gap list per framework version with remediation suggestions; each remediation suggestion is an `AIDecision`
+- Human review: auditor accepts a remediation suggestion to convert it into a document request or a test procedure
 
 **Feature 4 — Workpaper Narrative Draft:**
 - River worker: `workpaper.ai-workpaper-draft`
 - Trigger: auditor clicks "Generate AI Draft" on a workpaper
-- Input: control description, test procedure, linked evidence text, exceptions, prior year workpaper, firm template
+- Input: control description, test procedure, linked evidence text with provenance references, exceptions, prior year workpaper, firm template
 - Model: Claude Sonnet
-- Output: draft content inserted into workpaper with AI content tracking metadata
+- Output: draft content inserted into workpaper with AI content tracking metadata; cited evidence's provenance tags propagate onto the `WorkpaperVersion`
 - Human review: mandatory editing before submit for review (gate logic below)
 
 **Feature 5 — Evidence Link Suggestion:**
@@ -959,30 +992,58 @@ type AIClient interface {
 - Output: ranked evidence suggestions with confidence and explanation
 - Human review: accept/reject per suggestion
 
-**Feature 6 — Risk Category Suggestion:**
+**Feature 6 — Risk Category Suggestion for Client Acceptance:**
 - River worker: `auditcore.ai-risk-category-suggestion`
 - Trigger: partner opens client acceptance form
-- Input: client industry, engagement type, prior year acceptance + exceptions
+- Input: client industry, engagement type, engaged frameworks, prior year acceptance + exceptions
 - Model: Claude Sonnet
 - Output: suggested risk categories in sidebar (not pre-populated in form)
 - Human review: partner selects from suggestions or writes manually
 
-**Feature 7 — Trial Balance Anomaly Detection:**
-- River worker: `trialbalance.ai-anomaly-detection`
-- Trigger: nightly (River periodic job) + once after initial import
-- Input: current year balances, prior year balances, account mappings, materiality thresholds
-- Model: Claude Haiku
-- Output: anomaly flags per account (type, magnitude, description)
-- Tier: Tier 1 for nonissuer (informational), Tier 2 for PCAOB (creates AIDecision)
-- Human review: PCAOB only — auditor acknowledges each flag
+**Feature 7 — Framework Version Migration Assistance:**
+- River worker: `frameworks.framework-migration`
+- Trigger: admin initiates a framework version migration (e.g., ISO 27001:2013 → 2022, PCI 3.2 → 4.0)
+- Input: the deterministic migration diff from Phase 5 + the firm-accepted `CommonControlSatisfies` edges that reference the superseded version
+- Model: Claude Sonnet
+- Output: proposed edge remapping per affected CommonControl → FrameworkRequirement pair; each proposal is an `AIDecision`
+- Human review: bulk confirm/reject in the migration UI (per-proposal STRM relationship dropdown)
 
-**Feature 8 — Report Section Draft:**
+**Feature 8 — Findings Triage & Severity Reasoning:**
+- River worker: `auditcore.ai-findings-triage`
+- Trigger: new finding created, or an existing finding is edited
+- Input: finding description, affected common controls, affected framework requirements across the engagement, similar prior findings retrieved via embeddings
+- Model: Claude Sonnet
+- Output: proposed severity classification, cross-framework impact surface (which `FrameworkRequirement`s this finding touches), suggested remediation owner
+- Human review: reviewer accepts/modifies severity; cross-framework impact surface feeds directly into the report
+
+**Feature 9 — Drift-Triggered Re-Testing:**
+- River worker: `frameworks.drift-detection` (Haiku) with escalation to `auditcore.ai-findings-triage` (Sonnet) when severity classification is required
+- Trigger: connector-sourced config changes (cloud providers, identity providers, dev tools, HRIS) compared against the config state represented by previously accepted evidence
+- Input: current connector state snapshot + previously accepted evidence's captured state + applicable common controls and freshness tolerances
+- Model: Claude Haiku for drift classification; Claude Sonnet when drift crosses a severity threshold
+- Output: when drift exceeds threshold, enqueue a re-test job (new document request or re-execution of the test procedure), create an `AIDecision`
+- Human review: auditor accepts the re-test enqueue; Tier 1 informational drift below threshold is logged but not elevated
+
+**Feature 10 — Agentic Management-Response Drafting:**
+- River worker: `auditcore.ai-management-response-drafter`
+- Trigger: reviewer marks a finding "Awaiting management response," or the client explicitly requests a draft
+- Input: finding content + affected controls + firm policy library + prior similar management responses + (optionally) the client's existing ticketing system issue
+- Model: Claude Sonnet
+- Output: drafted management response; agentic loop may open/tie to a Jira, Linear, or GitHub issue and round-trip closure evidence back to the finding
+- Human review: client approves or edits before the response is attached to the finding; every step in the agentic loop creates a separate `AIDecision`
+
+**Feature 11 — Report Section Draft:**
 - River worker: `reporting.ai-report-section-draft`
 - Trigger: partner clicks "Generate AI Draft" on a report section
-- Input: report type, engagement-wide data, prior year report, firm template
+- Input: report type, engagement-wide data (controls, findings with triaged severities, coverage results), prior year report, firm template
 - Model: Claude Sonnet
-- Output: draft section with AI content tracking
+- Output: draft section with AI content tracking; cited artifacts' provenance tags propagate onto the `ReportVersion`
 - Human review: mandatory editing before report issuance
+
+**Provenance workers** (from `internal/provenance`, wired in this phase to the AI surface):
+- `provenance.sign-evidence` — sign every evidence artifact on ingestion; writes `ProvenanceRecord` with content hash, signature, and (in Phase 10) WORM reference
+- `provenance.sign-ai-output` — sign every AI prompt/response pair; writes `ai_decision_provenance` row linked from each `AIDecision`
+- `provenance.verify-chain` — scheduled verification sweep over recent `AIDecision`s and cited evidence; any broken chain is surfaced for auditor review
 
 **AI Content Tracking:**
 - `ai_content_metadata` jsonb on WorkpaperVersion and ReportVersion:
@@ -1017,8 +1078,12 @@ type AIClient interface {
 ### Frontend
 
 - **Document request review:** AI completeness assessment panel with confidence score, gap explanation, Accept/Modify/Reject buttons
-- **Engagement scoping:** control mapping suggestions table — proposed framework links with confidence, bulk confirm/reject
-- **Trial balance AG Grid:** account mapping status column now shows AISuggested (yellow) with one-click confirm, anomaly flag indicators on rows
+- **Evidence detail "Supports" panel:** AI-suggested `CommonControl` mappings with STRM relationship, coverage percentage, and explanation — accept/modify/reject per edge
+- **Engagement coverage tab:** Cross-framework gap analysis results with remediation suggestions — accept a suggestion to open a document request or queue a test procedure
+- **Framework migration UI:** AI-proposed edge remappings alongside the deterministic diff (from Phase 5) — bulk confirm/reject
+- **Findings detail:** AI triage panel with proposed severity, cross-framework impact surface, suggested remediation owner — accept/modify
+- **Drift monitor:** live feed of connector-detected drift with "Re-test required" flags that enqueue re-test jobs on acceptance
+- **Management response drafter:** agentic panel on finding detail — drafts response, opens/ties ticketing-system issue, shows round-tripped closure evidence
 - **Workpaper editor:**
   - "Generate AI Draft" button
   - Per-section AI indicators (badge showing "AI-generated" with modification ratio)
@@ -1028,20 +1093,24 @@ type AIClient interface {
 - **Client acceptance form:** risk category suggestions in a sidebar panel
 - **Report editor:** "Generate AI Draft" per section, same AI tracking indicators as workpapers
 - **AI Decision queue:** engagement-level view of all pending AI decisions, filterable by type
-- **AI audit trail:** table showing all AI decisions for an engagement (context, model, action taken, by whom)
+- **AI audit trail:** table showing all AI decisions for an engagement (context, model, action taken, by whom, signed prompt/response hash)
+- **Provenance verification badge:** on evidence, AIDecision, and finalized reports — green when signed and hash verified, red when chain is broken
 
 ### Testable Outcome
 
 1. Upload document → AI completeness review runs → auditor sees assessment → accepts
-2. Create engagement → AI proposes control-to-framework mappings → partner confirms in bulk
-3. Import trial balance → AI maps accounts → staff confirms high-confidence, reviews low-confidence
-4. Request AI workpaper draft → draft appears with AI section indicators → edit sections → modification ratio updates → submit succeeds
-5. Open evidence linking → AI suggests top-3 evidence items → accept suggestions
-6. Open client acceptance → AI risk categories appear in sidebar → partner selects relevant ones
-7. Nightly anomaly detection flags 3 accounts → staff sees flags in AG Grid
-8. Request AI report section → draft inserted → must edit before issuing
-9. AI Decision queue shows all pending decisions → review and clear
-10. For a PCAOB engagement: anomaly flags create AIDecision records requiring acknowledgment
+2. On evidence detail, AI proposes three `EvidenceItemSupports` edges with STRM relationships and coverage percentages → auditor accepts two, modifies one
+3. Engagement coverage tab: AI gap analysis produces a ranked gap list for SOC 2 + ISO 27001 + ISO 27701 with remediation suggestions → auditor converts one into a document request
+4. Admin initiates ISO 27001:2013 → 2022 migration → AI proposes edge remappings → admin bulk-confirms
+5. Request AI workpaper draft → draft appears with AI section indicators → edit sections → modification ratio updates → submit succeeds
+6. Open evidence linking → AI suggests top-3 evidence items → accept suggestions
+7. Open client acceptance → AI risk categories appear in sidebar → partner selects relevant ones
+8. Reviewer creates a finding → AI proposes Severity=High with cross-framework impact surface touching SOC 2 CC6.1 and ISO 27001 A.8.3 → reviewer accepts
+9. Connector reports config drift that exceeds threshold → AI classifies and elevates severity → re-test is enqueued → auditor accepts
+10. Client requests management response draft → agentic drafter writes response, opens Jira issue, round-trips closure evidence → client approves final response
+11. Request AI report section → draft inserted → must edit before issuing
+12. AI Decision queue shows all pending decisions → review and clear
+13. Verify provenance: click verify on a signed AIDecision → hash recomputed, signature valid → green badge. Tamper the output row in DB → verification fails with "chain broken"
 
 ---
 
@@ -1193,9 +1262,20 @@ type AIClient interface {
   8. Assembly deadline passes → Archived
 - Verify every guard: attempt to skip steps → confirm blocked
 - Verify immutability: attempt to modify after finalization → confirm prevented
-- Walk a PCAOB Financial Audit engagement:
-  - Same flow + verify AI anomaly detection creates AIDecision records
-  - Verify sampling documentation requirements on test procedures
+- Walk a **Multi-Framework Integrated Engagement** (Journey 11 — SOC 2 Type II + ISO 27001 + ISO 27701 against the same scope):
+  - Engagement scoped with one primary + two secondary frameworks sharing a common set of CommonControls
+  - Evidence uploaded once → `EvidenceItemSupports` edges satisfy requirements across all three framework versions
+  - Coverage tab shows independent per-framework percentages — verify partial coverage never renders as green
+  - AI gap analysis produces three ranked gap lists; remediation on a common control closes gaps in multiple frameworks simultaneously
+  - Findings triage surfaces cross-framework impact; a single management response drafted once and attached to every affected framework
+  - Three reports issued (SOC 2 Type II + two ISO Certificate Support Letters) from the same engagement
+- Walk a **Continuous Assurance / Drift-Triggered Re-Testing lifecycle** (Journey 12):
+  - Engagement in Fieldwork with connectors wired
+  - Connector reports config drift that invalidates previously accepted evidence
+  - Drift detection classifies drift → re-test enqueued → freshness re-computation updates coverage
+  - Severity threshold crossed → AI findings triage escalates → management response drafter opens a ticketing-system issue and round-trips closure evidence
+  - Report content auto-refreshes to reflect re-tested coverage before issuance
+- Verify provenance chain end-to-end: every evidence artifact and AIDecision in the above walks has a valid `ProvenanceRecord`; tampering any row breaks the chain and surfaces as an auditor-facing alert
 
 **API endpoints:**
 - `POST /api/v1/engagements/:id/eqr` — assign EQR reviewer
@@ -1246,6 +1326,9 @@ type AIClient interface {
 8. Audit trail: all actions visible with timestamps and actors
 9. Attempt to delete audit log entry via SQL → blocked by PostgreSQL RULE
 10. Full SOC 2 lifecycle walkthrough (automated test): firm setup through archive, every guard verified
+11. Full Multi-Framework Integrated Engagement walkthrough (SOC 2 + ISO 27001 + ISO 27701): evidence reused across frameworks, three reports issued from one engagement
+12. Full Continuous Assurance / Drift-Triggered Re-Testing walkthrough: connector drift → AI classification → re-test → finding → management response round-trip
+13. Provenance chain verification across the three walkthroughs: no broken chains; deliberate tamper is detected and alerted
 
 ---
 

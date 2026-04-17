@@ -10,22 +10,21 @@
 
 1. [Bounded Context Map](#1-bounded-context-map)
 2. [Context 1: Firm Identity](#2-context-1-firm-identity)
-3. [Context 2: Regulatory Framework](#3-context-2-regulatory-framework)
+3. [Context 2: Regulatory Framework & Common Controls](#3-context-2-regulatory-framework--common-controls)
 4. [Context 3: Firm Methodology](#4-context-3-firm-methodology)
 5. [Context 4: Audit Core](#5-context-4-audit-core)
-6. [Context 5: Trial Balance & Analytics](#6-context-5-trial-balance--analytics)
-7. [Context 6: Workpaper Authoring](#7-context-6-workpaper-authoring)
-8. [Context 7: Reporting & Archival](#8-context-7-reporting--archival)
-9. [Cross-Cutting Concerns](#9-cross-cutting-concerns)
-10. [Data Model](#10-data-model)
-11. [Multi-Tenancy and Isolation](#11-multi-tenancy-and-isolation)
-12. [Journey-to-Entity Traceability](#12-journey-to-entity-traceability)
+6. [Context 5: Workpaper Authoring](#6-context-5-workpaper-authoring)
+7. [Context 6: Reporting & Archival](#7-context-6-reporting--archival)
+8. [Cross-Cutting Concerns](#8-cross-cutting-concerns)
+9. [Data Model](#9-data-model)
+10. [Multi-Tenancy and Isolation](#10-multi-tenancy-and-isolation)
+11. [Journey-to-Entity Traceability](#11-journey-to-entity-traceability)
 
 ---
 
 ## 1. Bounded Context Map
 
-Seven bounded contexts and three cross-cutting concerns, derived from the coupling patterns observed across all 10 user journeys.
+Six bounded contexts and three cross-cutting concerns, derived from the coupling patterns observed across the compliance and assurance user journeys.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -33,12 +32,15 @@ Seven bounded contexts and three cross-cutting concerns, derived from the coupli
 │                                                                     │
 │  ┌──────────────┐   ┌──────────────────┐   ┌───────────────────┐   │
 │  │ 1. FIRM      │   │ 2. REGULATORY    │   │ 3. FIRM           │   │
-│  │    IDENTITY  │   │    FRAMEWORK     │   │    METHODOLOGY    │   │
-│  │              │   │    (shared ref)  │   │                   │   │
+│  │    IDENTITY  │   │    FRAMEWORK &   │   │    METHODOLOGY    │   │
+│  │              │   │    COMMON CTRLS  │   │                   │   │
 │  │ Firm         │   │ Framework        │   │ MethodologyTmpl   │   │
-│  │ User         │   │ FrameworkReq     │   │ FirmControlObj    │   │
-│  │ Client       │   │ CtrlObjLibrary   │   │ + mappings        │   │
-│  │ Invitation   │   │ + mappings       │   │ + template items  │   │
+│  │ User         │   │ FrameworkVersion │   │ FirmControlObj    │   │
+│  │ Client       │   │ FrameworkReq     │   │ + mappings        │   │
+│  │ Invitation   │   │ CommonControl    │   │ + template items  │   │
+│  │              │   │ CtrlObjLibrary   │   │                   │   │
+│  │              │   │ CommonCtrlSats   │   │                   │   │
+│  │              │   │ (STRM edges)     │   │                   │   │
 │  └──────┬───────┘   └────────┬─────────┘   └────────┬──────────┘   │
 │         │                    │                       │              │
 │         ▼                    ▼                       ▼              │
@@ -48,23 +50,22 @@ Seven bounded contexts and three cross-cutting concerns, derived from the coupli
 │  │                                                              │   │
 │  │  Engagement ──► Control ──► TestProcedure                    │   │
 │  │  EngagementTeamMember      EvidenceItem ──► EvidenceLink     │   │
-│  │  EngagementFramework       DocumentRequest                   │   │
-│  │  ClientAcceptance          ClientHubToken                    │   │
-│  │  EngagementQualityReview   DelegationToken                   │   │
-│  │  EQRFinding                                                  │   │
+│  │  EngagementFramework         + EvidenceItemSupports edges    │   │
+│  │  ClientAcceptance          DocumentRequest                   │   │
+│  │  EngagementQualityReview   ClientHubToken                    │   │
+│  │  EQRFinding                DelegationToken                   │   │
 │  └──────────────────────┬───────────────────────────────────────┘   │
 │                         │                                           │
-│         ┌───────────────┼───────────────┐                          │
-│         ▼               ▼               ▼                          │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐               │
-│  │ 5. TRIAL     │ │ 6. WORKPAPER │ │ 7. REPORTING │               │
-│  │    BALANCE   │ │    AUTHORING │ │              │               │
-│  │              │ │              │ │ Report       │               │
-│  │ TrialBalance │ │ Workpaper    │ │ ReportVer    │               │
-│  │ TB Account   │ │ WP Version   │ │              │               │
-│  │ TB Adjustment│ │ ReviewNote   │ │              │               │
-│  │ ColMapProfile│ │              │ │              │               │
-│  └──────────────┘ └──────────────┘ └──────────────┘               │
+│                 ┌───────┴────────┐                                  │
+│                 ▼                ▼                                  │
+│         ┌──────────────┐ ┌──────────────┐                           │
+│         │ 5. WORKPAPER │ │ 6. REPORTING │                           │
+│         │    AUTHORING │ │              │                           │
+│         │              │ │ Report       │                           │
+│         │ Workpaper    │ │ ReportVer    │                           │
+│         │ WP Version   │ │              │                           │
+│         │ ReviewNote   │ │              │                           │
+│         └──────────────┘ └──────────────┘                           │
 │                                                                     │
 │  ═══════════════════ CROSS-CUTTING ═══════════════════════════     │
 │  AIDecision (all AI outputs)                                       │
@@ -78,16 +79,24 @@ Seven bounded contexts and three cross-cutting concerns, derived from the coupli
 **Context 4 (Audit Core) is deliberately large.** The evidence chain requires ACID transactions across its entities:
 
 ```
-EvidenceItem → EvidenceLink → TestProcedure → Control
-  → FirmControlObjective → FirmControlObjectiveMapping
-    → FrameworkRequirement (SOC 2 CC6.1)
-    → FrameworkRequirement (ISO 27001 A.8.3)
-    → FrameworkRequirement (HIPAA §164.312(a)(1))
+EvidenceItem ──► EvidenceItemSupports ──► CommonControl
+                                             │
+                                             ├──► CommonControlSatisfies ──► FrameworkRequirement (SOC 2 CC6.1)
+                                             ├──► CommonControlSatisfies ──► FrameworkRequirement (ISO 27001 A.5.15)
+                                             └──► CommonControlSatisfies ──► FrameworkRequirement (HIPAA §164.312(a)(1))
+
+EvidenceItem ──► EvidenceLink ──► TestProcedure ──► Control
+                                                      │
+                                                      └──► FirmControlObjective
+                                                              │
+                                                              └──► FirmControlObjectiveMapping ──► FrameworkRequirement
 ```
+
+The `CommonControl` node is the pivot: it decouples "what a control does" (the semantic intent, platform-seeded from SCF / OSCAL / AICPA / CIS catalogs) from "how a firm tests it" (FirmControlObjective) and "how a framework expresses it" (FrameworkRequirement). STRM-encoded edges (`CommonControlSatisfies`) capture partial-satisfaction, strength, and effective dating. Evidence is supported against CommonControls directly (enabling cross-framework reuse) and linked through TestProcedures during engagement execution (preserving audit trail).
 
 Splitting this chain across contexts would force distributed transactions or eventual consistency on operations that must be atomic (e.g., accepting a document request must atomically create an EvidenceLink and update DocumentRequest.status).
 
-**Contexts 5, 6, 7 are separate** because they have distinct scaling profiles (TB is spreadsheet-intensive, Workpaper has real-time collaborative editing via WebSocket, Reporting is async generation) and communicate with Audit Core via plain UUID references rather than foreign keys.
+**Contexts 5 and 6 are separate** because they have distinct scaling profiles (Workpaper has real-time collaborative editing via WebSocket, Reporting is async generation) and communicate with Audit Core via plain UUID references rather than foreign keys.
 
 ### Aggregates within Audit Core
 
@@ -103,10 +112,9 @@ Splitting this chain across contexts would force distributed transactions or eve
 | Bounded Context | Database | Module | Isolation |
 |---|---|---|---|
 | 1: Firm Identity + 3: Firm Methodology | `axiom_db` | `internal/identity` | RLS (`firm_id`) |
-| 2: Regulatory Framework + 4: Audit Core + cross-cutting | `axiom_db` | `internal/auditcore` | RLS (`firm_id`) |
-| 5: Trial Balance | `axiom_db` | `internal/trialbalance` | RLS (`firm_id`) |
-| 6: Workpaper Authoring | `axiom_db` | `internal/workpaper` | RLS (`firm_id`) |
-| 7: Reporting | `axiom_db` | `internal/reporting` | RLS (`firm_id`) |
+| 2: Regulatory Framework & Common Controls + 4: Audit Core + cross-cutting | `axiom_db` | `internal/auditcore` (+ `internal/controlmapping` for CommonControl graph) | RLS (`firm_id`) on tenant tables; system reference tables are read-only |
+| 5: Workpaper Authoring | `axiom_db` | `internal/workpaper` | RLS (`firm_id`) |
+| 6: Reporting | `axiom_db` | `internal/reporting` | RLS (`firm_id`) |
 
 All bounded contexts share a single database (`axiom_db`) with RLS on all tenant-scoped tables. Each module owns specific tables and accesses them via its own sqlc queries. Cross-module data is accessed through Go service interfaces, preserving clean boundaries for future service extraction.
 
@@ -134,7 +142,7 @@ The root tenant entity. All firm-owned data across the system carries a firm_id 
 | subscription_tier | enum | Growth, Scale, Enterprise |
 | country | text | US or Canada at launch |
 | staff_count_range | text | From intake form: 1–10, 11–20, 21–40, 41–60, 60+ |
-| primary_audit_types | jsonb | Multi-select from intake: FinancialAudit, SOC2, ISO27001, HIPAA |
+| primary_audit_types | jsonb | Multi-select from intake: SOC2, SOC1, ISO27001, ISO27701, ISO42001, HIPAA, PCI_DSS |
 | settings | jsonb | General firm configuration |
 | created_at | timestamptz | |
 
@@ -208,41 +216,107 @@ Magic link mechanism for onboarding staff.
 
 ---
 
-## 3. Context 2: Regulatory Framework
+## 3. Context 2: Regulatory Framework & Common Controls
 
-**Purpose:** External regulatory knowledge base. Not tenant-scoped — shared read-only reference data across all firms.
-**Journeys:** 3 (Engagement Scoping), 5 (Control Testing).
+**Purpose:** External regulatory knowledge base and Axiom's internal common-control catalog — the cross-framework mapping core. Framework/requirement reference data is not tenant-scoped (shared read-only across all firms). CommonControls are platform-seeded but firms can adapt them via firm-specific rows.
+
+The data model is a **control-centric directed labeled graph modeled in PostgreSQL with junction tables** (node tables + edge tables carrying NIST STRM relationship vocabulary and effective dating). No graph database. Semantic search over requirement text is powered by pgvector embeddings.
+
+**Journeys:** 3 (Engagement Scoping), 5 (Control Testing), new cross-framework mapping and multi-framework integrated engagement journeys.
 
 ### Framework (Aggregate Root)
 
-A specific version of a standards framework. ISO 27001:2013 and ISO 27001:2022 are separate rows.
+A named standards framework. One row per framework family: SOC 2, ISO 27001, ISO 27701, ISO 42001, HIPAA, PCI DSS, SOC 1.
 
 | Attribute | Type | Description |
 |---|---|---|
 | id | uuid | |
-| name | text | e.g., "SOC 2", "ISO 27001", "HIPAA" |
-| version | text | e.g., "TSC 2017", "2022" |
-| effective_date | date | |
-| deprecated_at | date | Nullable |
-| governing_body | text | AICPA, ISO, HHS, PCAOB |
+| name | text | e.g., "SOC 2", "ISO 27001", "ISO 27701", "ISO 42001", "HIPAA", "PCI DSS", "SOC 1" |
+| governing_body | text | AICPA, ISO, HHS, PCI SSC |
+| description | text | |
 
-### FrameworkRequirement
+### FrameworkVersion
 
-A single criterion or control within a framework.
+A specific published version of a framework. ISO 27001:2013 and ISO 27001:2022 are separate rows; PCI DSS 4.0 and 4.0.1 are separate rows.
 
 | Attribute | Type | Description |
 |---|---|---|
 | id | uuid | |
 | framework_id | uuid | FK → Framework |
-| identifier | text | e.g., "CC6.1", "A.8.3", "§164.312(a)(1)" |
+| version | text | e.g., "2022", "TSC 2017 (rev. 2022)", "4.0.1" |
+| valid_from | date | When this version took effect |
+| valid_to | date | Nullable — when superseded |
+| published_at | date | |
+
+**Invariants:**
+- `(framework_id, version)` is unique.
+- Version churn is expected (PCI 3.2→4.0, ISO 27001:2013→2022, NIST CSF 1.1→2.0). Mappings reference `framework_requirement_id`, so requirement-level effective dating cascades into cross-framework edges.
+
+### FrameworkRequirement
+
+A single criterion, control, or specification within a framework version.
+
+| Attribute | Type | Description |
+|---|---|---|
+| id | uuid | |
+| framework_version_id | uuid | FK → FrameworkVersion |
+| requirement_code | text | e.g., "CC6.1", "A.5.15", "8.3.1", "§164.312(a)(1)" |
 | title | text | |
 | description | text | |
-| category | text | Grouping within framework |
+| requirement_type | enum | criterion, control, specification |
+| category | text | Grouping within framework (e.g., "Access Control", "Trust Services Criterion: Security") |
 | sort_order | integer | Display ordering |
+
+**Indexes:** pgvector embedding on `description` for semantic search, maintained in `framework_requirement_embeddings`.
+
+### CommonControl (Aggregate Root) — the pivot node
+
+Axiom's internal common-control catalog. Every `CommonControl` represents a semantic control intent ("Access to production systems is restricted to authorized personnel") that can map to many framework requirements via STRM-encoded edges. Platform-seeded from SCF (primary), OSCAL (NIST family), AICPA official mappings, and CIS Controls v8.1. Firms may add or adapt their own.
+
+| Attribute | Type | Description |
+|---|---|---|
+| id | uuid | |
+| firm_id | uuid | Nullable — NULL means platform-seeded (visible to all firms); populated for firm-specific adaptations |
+| code | text | Axiom-assigned identifier, e.g., "CC-AC-01" |
+| name | text | |
+| description | text | |
+| category | text | e.g., Access Control, Encryption, Logging, Governance, Risk Management, AI Governance |
+| source | enum | platform_seed, scf_import, oscal_import, aicpa_mapping, cis_mapping, firm_custom |
+| created_at | timestamptz | |
+| deprecated_at | timestamptz | Nullable — effective dating for catalog evolution |
+
+**Invariants:**
+- Platform-seeded rows (`firm_id IS NULL`) are read-only for firms; Axiom maintains them via quarterly catalog updates.
+- Firm-custom rows are tenant-scoped and RLS-isolated.
+- Never deleted — deprecated_at preserves historical mappings for archived engagements.
+- pgvector embedding on `description` maintained in `common_control_embeddings` for AI-assisted mapping suggestions.
+
+### CommonControlSatisfies (Edge) — the cross-framework mapping core
+
+Directed, labeled, effective-dated edge from `CommonControl` to `FrameworkRequirement` carrying NIST STRM relationship vocabulary. This is the table that powers cross-framework evidence reuse.
+
+| Attribute | Type | Description |
+|---|---|---|
+| id | uuid | |
+| common_control_id | uuid | FK → CommonControl |
+| framework_requirement_id | uuid | FK → FrameworkRequirement |
+| relationship_type | enum | NIST STRM vocabulary: `equivalent-to`, `subset-of`, `superset-of`, `intersects-with`, `no-relationship` |
+| strength_score | integer | 0–100, how strong the relationship is (for AI ranking and partial-coverage surfacing) |
+| coverage_notes | text | Free text explaining partial satisfaction ("Covers network segmentation but not quarterly ASV scans") |
+| source | enum | scf, ucf, oscal, aicpa, cis, axiom_custom |
+| valid_from | date | |
+| valid_to | date | Nullable — when this mapping is superseded (framework version churn) |
+| created_at | timestamptz | |
+
+**Invariants:**
+- `(common_control_id, framework_requirement_id, valid_from)` is unique — a new edge row is created when a mapping changes rather than mutating the existing row.
+- Partial-satisfaction (`subset-of`, `intersects-with`) must always carry `coverage_notes`.
+- UI never renders a green check for `subset-of` or `intersects-with` — always surfaces percentage coverage and gap list.
+- AI does NOT author authoritative crosswalks; edges ingested from SCF/OSCAL/AICPA/CIS are authoritative. AI-suggested mappings go through `AIDecision` and are confirmed by a human before becoming a `CommonControlSatisfies` row.
 
 ### ControlObjectiveLibrary (Aggregate Root)
 
-System-maintained semantic control objectives, independent of any framework. These encode the ~80% overlap between frameworks and enable cross-framework evidence reuse.
+Legacy system-maintained library of semantic control objectives. Retained for backward compatibility with the firm methodology templates; new mapping work goes through `CommonControl`. The `ControlObjectiveLibrary` is effectively a view over platform-seeded `CommonControl` rows — in the current implementation they coexist, but a future migration will fold `ControlObjectiveLibrary` into `CommonControl`.
 
 | Attribute | Type | Description |
 |---|---|---|
@@ -253,7 +327,7 @@ System-maintained semantic control objectives, independent of any framework. The
 
 ### ControlObjectiveLibraryMapping
 
-Maps a library objective to framework requirements across all frameworks. This is the foundation of cross-framework evidence reuse.
+Maps a library objective to framework requirements across all frameworks. Being superseded by `CommonControlSatisfies`; both are maintained during the transition.
 
 | Attribute | Type | Description |
 |---|---|---|
@@ -381,16 +455,17 @@ One engagement = one client, one primary framework, one audit period. The centra
 | firm_id | uuid | |
 | client_id | uuid | FK → clients (identity module) |
 | name | text | |
-| engagement_type | enum | FinancialAudit_Private, FinancialAudit_Public, SOC1, SOC2, ISO27001, HIPAA, AgreedUponProcedures, Advisory |
+| engagement_type | enum | SOC1, SOC2, ISO27001, ISO27701, ISO42001, HIPAA, PCI_DSS, AgreedUponProcedures, Advisory |
 | primary_framework_id | uuid | FK → Framework |
+| primary_framework_version_id | uuid | FK → FrameworkVersion — locked at Planning → Fieldwork transition |
 | period_start | date | |
 | period_end | date | |
 | status | enum | Planning, Fieldwork, Review, Reporting, Finalized, Archived |
 | prior_engagement_id | uuid | FK → Engagement, nullable — for rollforward |
 | methodology_template_id | uuid | FK → methodology_templates (identity module) |
 | report_issued_at | timestamptz | Populated when report is issued |
-| assembly_deadline | date | Computed: report_issued_at + 60 days (AICPA) or + 45 days (PCAOB) |
-| retention_deadline | date | Computed: report_issued_at + 5 yrs (AICPA/SOC/ISO), + 7 yrs (PCAOB), + 6 yrs (HIPAA) |
+| assembly_deadline | date | Computed: report_issued_at + framework-specific window (SOC: 60 days; ISO CB assessment: per CB policy; PCI ROC: per QSA policy) |
+| retention_deadline | date | Computed: report_issued_at + framework-specific retention (SOC/ISO: 5 yrs; HIPAA: 6 yrs; PCI: 3 yrs per PCI DSS 12.10.1) |
 | finalized_at | timestamptz | |
 | archived_at | timestamptz | |
 | created_at | timestamptz | |
@@ -452,19 +527,23 @@ Associates users to an engagement with an engagement-level role.
 
 #### EngagementFramework
 
-Supports multi-framework engagements (e.g., integrated SOC 2 + ISO 27001).
+Supports multi-framework integrated engagements — a single engagement can simultaneously test SOC 2 + ISO 27001 + ISO 27701, reusing evidence across frameworks via the `CommonControl` graph. This is a first-class Axiom differentiator.
 
 | Attribute | Type | Description |
 |---|---|---|
 | id | uuid | |
 | engagement_id | uuid | FK → Engagement |
 | framework_id | uuid | FK → Framework |
-| framework_version | text | |
+| framework_version_id | uuid | FK → FrameworkVersion |
 | is_primary | boolean | Exactly one must be true per engagement |
+
+**Invariants:**
+- An engagement may include any combination of activated frameworks; AI-powered cross-mapping identifies where a single `CommonControl` satisfies requirements in multiple frameworks, so each control is tested once and evidence flows through `EvidenceItemSupports → CommonControl → CommonControlSatisfies` to all in-scope requirements.
+- Period windows may differ across frameworks (SOC 2 Type 2 window vs. ISO surveillance vs. PCI 90-day scan validity); `EvidenceItemSupports` rows carry `period_start`/`period_end` to express per-framework coverage.
 
 #### ClientAcceptance
 
-Per-engagement quality risk documentation required by SQMS 1. A regulatory gate.
+Per-engagement quality risk documentation required by AICPA SQMS 1 (for SOC engagements by CPA firms) and ISO 17021-1 (for ISO certification bodies). A regulatory gate.
 
 | Attribute | Type | Description |
 |---|---|---|
@@ -486,7 +565,7 @@ Per-engagement quality risk documentation required by SQMS 1. A regulatory gate.
 
 #### EngagementQualityReview
 
-Formal EQR record per SQMS 2 / PCAOB AS 1220.
+Formal engagement quality review per AICPA SQMS 2 (SOC engagements) / ISO 17021-1 impartiality review (ISO certification audits) / ISAE 3000 (Revised) equivalents.
 
 | Attribute | Type | Description |
 |---|---|---|
@@ -501,7 +580,7 @@ Formal EQR record per SQMS 2 / PCAOB AS 1220.
 | created_at | timestamptz | |
 
 **Invariants:**
-- Mandatory for PCAOB engagements; optional per firm policy for nonissuer.
+- Mandatory for framework assessments where the governing body or firm methodology requires independent quality review (e.g., SOC 2 per AICPA SQMS 2, ISO certifications per ISO 17021-1 impartiality rules); optional per firm policy otherwise.
 - System validates: reviewer has EQReviewer role AND is not on the engagement team — assignment rejected if validation fails.
 - Required before Review → Reporting transition (where applicable).
 - Sign-off is immutable once recorded.
@@ -567,7 +646,7 @@ A specific test step within a control.
 | expected_result | text | |
 | population_size | integer | |
 | sample_size | integer | |
-| sampling_method | enum | Systematic, Random, MonetaryUnit — nullable |
+| sampling_method | enum | Systematic, Random, Judgmental — nullable |
 | result | text | What was observed/measured/confirmed |
 | exceptions_noted | text | |
 | conclusion | text | |
@@ -579,7 +658,7 @@ A specific test step within a control.
 | prior_procedure_id | uuid | FK → TestProcedure, nullable — for rollforward |
 
 **Invariants:**
-- Sampling documentation (population_size, sample_size, sampling_method) is required for PCAOB engagements per AS 2315.
+- Sampling documentation (population_size, sample_size, sampling_method) is required where the framework methodology calls for sample-based testing (SOC 2 Type 2, ISO surveillance); for prescriptive population-level checks (e.g., PCI DSS ASV scans, log-stream checks) populate `population_size` with total population and leave sampling fields null.
 - Status progression: NotStarted → InProgress → Complete or Exception.
 
 ---
@@ -614,7 +693,7 @@ A single uploaded document or artifact. **Stored at the firm + client level, not
 
 #### EvidenceLink
 
-Connects an EvidenceItem to a specific TestProcedure. The critical junction in the cross-framework evidence chain.
+Connects an EvidenceItem to a specific TestProcedure within an engagement. Preserves the engagement-scoped audit trail of which evidence supported which test step.
 
 | Attribute | Type | Description |
 |---|---|---|
@@ -628,9 +707,35 @@ Connects an EvidenceItem to a specific TestProcedure. The critical junction in t
 | ai_decision_id | uuid | FK → AIDecision, nullable |
 
 **Invariants:**
-- When an EvidenceLink is created, the evidence simultaneously satisfies all FrameworkRequirements mapped to the control's FirmControlObjective.
 - Links are frozen after engagement finalization.
 - AI-suggested links require auditor accept/modify/reject action.
+
+#### EvidenceItemSupports (Edge) — the cross-framework coverage edge
+
+Directed, period-aware edge from `EvidenceItem` to `CommonControl`. A single evidence item (e.g., an access-review screenshot) can support many common controls, and each common control can be satisfied by many evidence items. The edge carries the period window (for SOC 2 Type 2 / ISO surveillance / PCI 90-day scan alignment), coverage percentage, and AI provenance. An `EvidenceItem` can attach to multiple `CommonControl` rows through this edge without re-uploading.
+
+| Attribute | Type | Description |
+|---|---|---|
+| id | uuid | |
+| firm_id | uuid | For RLS |
+| evidence_item_id | uuid | FK → EvidenceItem |
+| common_control_id | uuid | FK → CommonControl |
+| coverage_pct | integer | 0–100, how completely this evidence covers the common control |
+| period_start | date | Start of the window this evidence covers (for Type 2 / surveillance alignment) |
+| period_end | date | End of the window; null means point-in-time |
+| gap_notes | text | Free text describing what is NOT covered (when coverage_pct < 100) |
+| ai_suggested | boolean | |
+| ai_decision_id | uuid | FK → AIDecision, nullable — populated when AI proposed this mapping |
+| confirmed_by_user_id | uuid | FK → users — populated once a human accepts the mapping |
+| confirmed_at | timestamptz | |
+| created_at | timestamptz | |
+
+**Invariants:**
+- AI-suggested rows (`ai_suggested = true AND confirmed_by_user_id IS NULL`) are proposals only. They do NOT count toward coverage until a human confirms.
+- Once confirmed, the evidence simultaneously satisfies all `FrameworkRequirement` rows reachable from the `CommonControl` via `CommonControlSatisfies` edges (respecting the edge's `relationship_type` and `strength_score`).
+- Period windows on this edge align evidence to framework-specific validity: PCI ASV scans are valid 90 days, pen tests 1 year, background checks 1 year, SOC 2 Type 2 requires continuous period coverage.
+- Rows are not deleted — a removed mapping is expressed by setting `coverage_pct = 0` and documenting `gap_notes`, preserving the audit trail.
+- UI surfaces partial coverage explicitly (never a green check for coverage_pct < 100).
 
 ---
 
@@ -716,8 +821,8 @@ When a new engagement is created with prior_engagement_id set:
 | TestProcedures | Cloned per control; status reset; editable starting point |
 | DocumentRequests | Not auto-cloned; AI suggests new requests based on prior controls |
 | EvidenceItems | Not touched; exist at firm+client level; surfaced with "used in prior year" flag |
+| EvidenceItemSupports edges | Prior-year rows remain. On rollforward, AI proposes new `EvidenceItemSupports` rows for the new period window; prior-period rows are retained as history. |
 | Workpapers | New drafts; prior_workpaper_id set; prior year visible as read-only sidebar |
-| TrialBalance | New import required; prior year accessible as read-only reference |
 | Reports | New document; prior year accessible for reference only |
 | AIDecisions | Not carried forward; AI re-analyzes fresh evidence |
 | ClientAcceptance | New record required; must be refreshed annually |
@@ -725,92 +830,7 @@ When a new engagement is created with prior_engagement_id set:
 
 ---
 
-## 6. Context 5: Trial Balance & Analytics
-
-**Purpose:** Financial audit data — import, account mapping, lead schedules, adjustments, analytical procedures, and population sampling. Exists only for FinancialAudit engagement types.
-**Journeys:** 4 (Trial Balance).
-
-### TrialBalance (Aggregate Root)
-
-Container for an imported trial balance.
-
-| Attribute | Type | Description |
-|---|---|---|
-| id | uuid | |
-| engagement_id | uuid | FK → engagements (auditcore module) |
-| firm_id | uuid | For tenant isolation |
-| period_date | date | |
-| import_source | text | Accounting system name (QBO, NetSuite, Sage, Xero) |
-| column_mapping_profile_id | uuid | FK → ColumnMappingProfile, nullable |
-| imported_at | timestamptz | |
-| imported_by_id | uuid | |
-
-### TrialBalanceAccount
-
-Individual account row within a trial balance.
-
-| Attribute | Type | Description |
-|---|---|---|
-| id | uuid | |
-| trial_balance_id | uuid | FK → TrialBalance |
-| account_number | text | |
-| account_name | text | |
-| account_type | enum | Asset, Liability, Equity, Revenue, Expense |
-| balance_debit | numeric(19,4) | |
-| balance_credit | numeric(19,4) | |
-| net_balance | numeric(19,4) | Computed: balance_debit - balance_credit |
-| mapped_fs_line_item | text | Financial statement line item classification |
-| mapping_status | enum | Unmapped, AISuggested, Confirmed, Overridden |
-| ai_decision_id | uuid | FK → ai_decisions (auditcore module) |
-| confirmed_by_id | uuid | |
-| confirmed_at | timestamptz | |
-
-**Invariants:**
-- AI mapping runs immediately after import (Claude Haiku classifies each account).
-- Prior year confirmed mappings are pre-loaded as starting suggestions on rollforward.
-- Bulk-confirm is available for high-confidence mappings (>0.85).
-- Total debits must equal total credits — non-zero difference is flagged at import validation.
-
-### TrialBalanceAdjustment
-
-Proposed, passed, or waived audit adjustments.
-
-| Attribute | Type | Description |
-|---|---|---|
-| id | uuid | |
-| trial_balance_id | uuid | FK → TrialBalance |
-| account_id | uuid | FK → TrialBalanceAccount |
-| amount | numeric(19,4) | |
-| description | text | |
-| adjustment_type | enum | Proposed, Passed, Waived |
-| waiver_reason | text | Required when type = Waived (regulatory requirement) |
-| proposed_by_id | uuid | |
-| proposed_at | timestamptz | |
-| approved_by_id | uuid | Manager or Partner |
-| approved_at | timestamptz | |
-
-**Invariants:**
-- Waived adjustments require a documented reason (AU-C requirement).
-- All proposed adjustments are retained whether passed or not — cannot be deleted.
-- Lead schedules reflect adjustments in real-time.
-- Cumulative waived adjustments are tracked against materiality — auto-flagged when approaching threshold.
-
-### ColumnMappingProfile
-
-Saved column mapping configurations per accounting system for reuse across imports.
-
-| Attribute | Type | Description |
-|---|---|---|
-| id | uuid | |
-| firm_id | uuid | |
-| name | text | e.g., "NetSuite Standard Export" |
-| accounting_system | text | |
-| column_mappings | jsonb | Which CSV/Excel columns map to account_number, account_name, debit, credit |
-| created_at | timestamptz | |
-
----
-
-## 7. Context 6: Workpaper Authoring
+## 6. Context 5: Workpaper Authoring
 
 **Purpose:** Collaborative document creation, version history, and review workflow. Has distinct scaling characteristics — real-time collaborative editing via WebSocket (Yjs).
 **Journeys:** 5 (Control Testing — workpaper creation), 6 (Workpaper Review).
@@ -849,11 +869,11 @@ Draft
 ```
 
 **Invariants:**
-- Submit for review is blocked if ai_content_metadata contains any section with ai_generated = true AND human_edited = false (PCAOB AS 1105). Sections with modification_ratio < 0.05 trigger a confirmable warning ("Section [name] has minimal edits to AI-generated content") — soft gate, not a hard block.
+- Submit for review is blocked if ai_content_metadata contains any section with ai_generated = true AND human_edited = false (ISO 42001 human-in-the-loop, AICPA SSAE 21 / ISAE 3000 documentation standards, and Axiom provenance policy). Sections with modification_ratio < 0.05 trigger a confirmable warning ("Section [name] has minimal edits to AI-generated content") — soft gate, not a hard block.
 - Once submitted, the workpaper is locked for the preparer — only the reviewer can modify or return it.
 - After engagement finalization, is_locked = true — modifications require an addendum.
 - Sign-off creates a timestamped, named AuditLog entry — cannot be backdated.
-- Sign-off hierarchy enforced: Staff prepares → Manager reviews → Partner signs off (SQMS 1, AU-C 220).
+- Sign-off hierarchy enforced: Staff prepares → Manager reviews → Partner signs off (AICPA SQMS 1, ISO 17021-1 competence requirements, ISAE 3000 (Revised)).
 
 ### WorkpaperVersion
 
@@ -867,9 +887,9 @@ Immutable version history. Every save creates a new row.
 | content | jsonb | Structured rich text |
 | saved_by_id | uuid | |
 | saved_at | timestamptz | |
-| is_ai_draft | boolean | Derived convenience field: true when ai_content_metadata contains any section with ai_generated = true AND human_edited = false. Retained for backward compatibility — per PCAOB AS 1105 |
+| is_ai_draft | boolean | Derived convenience field: true when ai_content_metadata contains any section with ai_generated = true AND human_edited = false. Retained for Axiom provenance/ISO 42001 human-in-the-loop audit trail. |
 | ai_content_metadata | jsonb | Section-level AI content tracking: per-section ai_generated flag, human_edited flag, modification_ratio (Levenshtein distance / AI character count), character counts, editor identity and timestamps. See AI Architecture Design Section 5. |
-| is_addendum | boolean | True for post-finalization modifications — per AU-C 230 §.16 |
+| is_addendum | boolean | True for post-finalization modifications — per ISAE 3000 (Revised) / AICPA AT-C documentation rules on subsequent discoveries |
 | addendum_reason | text | Required when is_addendum = true |
 
 **Invariants:**
@@ -898,14 +918,14 @@ Structured feedback from a reviewer linked to specific workpaper content.
 | created_at | timestamptz | |
 
 **Invariants:**
-- **Cannot be deleted** — AU-C 230 requires retention of all review notes.
+- **Cannot be deleted** — AICPA AT-C 105 / ISAE 3000 (Revised) / ISO 17021-1 documentation rules require retention of all review notes.
 - Open review notes block workpaper advancement (InReview → ReviewComplete).
 - Resolution workflow: reviewer creates → staff responds → reviewer resolves.
 - Each note creation, response, and resolution creates an AuditLog entry.
 
 ---
 
-## 8. Context 7: Reporting & Archival
+## 7. Context 6: Reporting & Archival
 
 **Purpose:** Final deliverable generation, client review, issuance, and regulatory archival. Async report generation.
 **Journeys:** 9 (Reporting & Archive).
@@ -919,7 +939,7 @@ The engagement's final deliverable.
 | id | uuid | |
 | engagement_id | uuid | Plain UUID ref |
 | firm_id | uuid | For tenant isolation |
-| report_type | enum | SOC2Type1, SOC2Type2, SOC1Type1, SOC1Type2, FinancialAuditOpinion, AgreedUponProcedures, ManagementLetter |
+| report_type | enum | SOC2Type1, SOC2Type2, SOC1Type1, SOC1Type2, ISO27001Certification, ISO27701Certification, ISO42001Certification, HIPAAReport, PCIDSS_ROC, AgreedUponProcedures, ManagementLetter |
 | status | enum | Draft, ClientReview, FirmReview, Issued, Archived |
 | content | jsonb | Structured rich text |
 | template_id | uuid | Nullable — firm-customizable report template used |
@@ -952,20 +972,20 @@ Immutable version history per report.
 
 ---
 
-## 9. Cross-Cutting Concerns
+## 8. Cross-Cutting Concerns
 
 These operate across all bounded contexts.
 
 ### AIDecision
 
-Every AI output that could affect audit content is recorded. Required for PCAOB engagements; best practice for all.
+Every AI output that could affect audit content is recorded. Core to ISO 42001 human-in-the-loop compliance and Axiom's provenance ledger (the "auditor-defensible by construction" positioning). Required for all engagement types.
 
 | Attribute | Type | Description |
 |---|---|---|
 | id | uuid | |
 | firm_id | uuid | |
 | engagement_id | uuid | FK → Engagement, nullable — some AI operations are firm-level |
-| context_type | enum | ControlMapping, RiskCategorySuggestion, TrialBalanceMapping, DocumentCompleteness, EvidenceLinkSuggestion, WorkpaperDraft, ReportSectionDraft, AnomalyDetection |
+| context_type | enum | ControlMapping, RiskCategorySuggestion, DocumentCompleteness, EvidenceLinkSuggestion, EvidenceControlMapping, GapAnalysis, FrameworkMigration, FindingsTriage, DriftRetest, ManagementResponseDraft, WorkpaperDraft, ReportSectionDraft, AnomalyDetection |
 | context_id | uuid | UUID of the entity being analyzed |
 | context_table | text | Which table the context_id refers to |
 | model_id | text | e.g., "claude-sonnet-4-6", "claude-haiku-4-5" |
@@ -1008,7 +1028,7 @@ Append-only immutable event trail.
 
 **Invariants:**
 - **No updates, no deletes** — enforced by PostgreSQL RULE.
-- Satisfies regulatory immutability requirements (AU-C 230) and GDPR audit trail obligation.
+- Satisfies regulatory immutability requirements (AICPA AT-C 105, ISAE 3000 (Revised), ISO 17021-1 documentation rules, ISO 42001 AI system audit trail) and GDPR audit trail obligation.
 - Sign-off actions cannot be backdated — occurred_at is system-set.
 
 ### Notification
@@ -1029,7 +1049,7 @@ In-app and email delivery system for platform events.
 
 ---
 
-## 10. Data Model
+## 9. Data Model
 
 The data model translates the domain model above into PostgreSQL tables in a single database (`axiom_db`). This section covers physical design decisions that go beyond the domain model: column types, constraints, indexes, enum definitions, and cross-module reference strategy.
 
@@ -1039,10 +1059,9 @@ The data model translates the domain model above into PostgreSQL tables in a sin
 RDS PostgreSQL Instance (Multi-AZ production, Single-AZ dev/staging)
 └── axiom_db
     ├── Identity module tables     → Contexts 1 + 3 (Firm Identity, Firm Methodology)
-    ├── Audit Core module tables   → Contexts 2 + 4 + cross-cutting (Framework, Audit Core, AI/Audit/Notification)
-    ├── Trial Balance module tables → Context 5 (Trial Balance)
-    ├── Workpaper module tables    → Context 6 (Workpaper Authoring)
-    └── Reporting module tables    → Context 7 (Reporting)
+    ├── Audit Core module tables   → Contexts 2 + 4 + cross-cutting (Framework & Common Controls, Audit Core, AI/Audit/Notification)
+    ├── Workpaper module tables    → Context 5 (Workpaper Authoring)
+    └── Reporting module tables    → Context 6 (Reporting)
 ```
 
 All tables share one database. The Axiom API connects with a single database user (`axiom_svc`). RLS is enabled on all tenant-scoped tables.
@@ -1073,9 +1092,8 @@ CREATE TYPE invitation_status AS ENUM ('Sent','Accepted','Expired');
 
 ```sql
 CREATE TYPE engagement_type AS ENUM (
-  'FinancialAudit_Private','FinancialAudit_Public',
-  'SOC1','SOC2','ISO27001','HIPAA',
-  'AgreedUponProcedures','Advisory');
+  'SOC1','SOC2','ISO27001','ISO27701','ISO42001',
+  'HIPAA','PCI_DSS','AgreedUponProcedures','Advisory');
 CREATE TYPE engagement_status AS ENUM (
   'Planning','Fieldwork','Review','Reporting','Finalized','Archived');
 CREATE TYPE control_status AS ENUM (
@@ -1083,9 +1101,9 @@ CREATE TYPE control_status AS ENUM (
 CREATE TYPE procedure_type AS ENUM (
   'Inquiry','Observation','InspectionOfDocument','Reperformance','Analytics');
 CREATE TYPE procedure_status AS ENUM ('NotStarted','InProgress','Complete','Exception');
-CREATE TYPE sampling_method AS ENUM ('Systematic','Random','MonetaryUnit');
+CREATE TYPE sampling_method AS ENUM ('Systematic','Random','Judgmental');
 CREATE TYPE evidence_source AS ENUM (
-  'ClientUpload','CloudIntegration','APIImport','AuditorGenerated');
+  'ClientUpload','CloudIntegration','APIImport','AuditorGenerated','AgenticCollected');
 CREATE TYPE extraction_status AS ENUM ('Pending','Complete','Failed');
 CREATE TYPE doc_request_status AS ENUM (
   'Pending','Submitted','InReview','Accepted','Rejected','Overdue');
@@ -1095,25 +1113,27 @@ CREATE TYPE eqr_status AS ENUM ('Assigned','InProgress','Complete');
 CREATE TYPE eqr_conclusion AS ENUM ('Satisfied','SatisfiedWithConcerns','NotSatisfied');
 CREATE TYPE finding_severity AS ENUM ('Observation','Recommendation','RequiredAction');
 CREATE TYPE finding_status AS ENUM ('Pending','Addressed','Confirmed');
+CREATE TYPE requirement_type AS ENUM ('criterion','control','specification');
+CREATE TYPE strm_relationship_type AS ENUM (
+  'equivalent-to','subset-of','superset-of','intersects-with','no-relationship');
+CREATE TYPE common_control_source AS ENUM (
+  'platform_seed','scf_import','oscal_import','aicpa_mapping','cis_mapping','firm_custom');
+CREATE TYPE mapping_source AS ENUM (
+  'scf','ucf','oscal','aicpa','cis','axiom_custom');
 CREATE TYPE ai_context_type AS ENUM (
-  'ControlMapping','RiskCategorySuggestion','TrialBalanceMapping',
-  'DocumentCompleteness','EvidenceLinkSuggestion','WorkpaperDraft',
-  'ReportSectionDraft','AnomalyDetection');
+  'ControlMapping','RiskCategorySuggestion',
+  'DocumentCompleteness','EvidenceLinkSuggestion',
+  'EvidenceControlMapping','GapAnalysis','FrameworkMigration',
+  'FindingsTriage','DriftRetest','ManagementResponseDraft',
+  'WorkpaperDraft','ReportSectionDraft','AnomalyDetection');
 CREATE TYPE ai_review_action AS ENUM ('Pending','Accepted','Modified','Rejected');
 CREATE TYPE actor_type AS ENUM ('User','System','AIAgent');
 CREATE TYPE notification_type AS ENUM (
   'EngagementAssignment','ReviewNoteAdded','ReviewNoteResolved',
   'DocumentRequestStatus','PhaseTransition','EQRNotification',
-  'ReminderEscalation','ArchivalConfirmation','RetentionWarning');
+  'ReminderEscalation','ArchivalConfirmation','RetentionWarning',
+  'DriftDetected','EvidenceExpiring');
 CREATE TYPE delivery_channel AS ENUM ('InApp','Email','Both');
-```
-
-**Trial Balance module enums:**
-
-```sql
-CREATE TYPE account_type AS ENUM ('Asset','Liability','Equity','Revenue','Expense');
-CREATE TYPE mapping_status AS ENUM ('Unmapped','AISuggested','Confirmed','Overridden');
-CREATE TYPE adjustment_type AS ENUM ('Proposed','Passed','Waived');
 ```
 
 **Workpaper module enums:**
@@ -1134,7 +1154,9 @@ CREATE TYPE review_note_status AS ENUM ('Open','Responded','Resolved');
 ```sql
 CREATE TYPE report_type AS ENUM (
   'SOC2Type1','SOC2Type2','SOC1Type1','SOC1Type2',
-  'FinancialAuditOpinion','AgreedUponProcedures','ManagementLetter');
+  'ISO27001Certification','ISO27701Certification','ISO42001Certification',
+  'HIPAAReport','PCIDSS_ROC',
+  'AgreedUponProcedures','ManagementLetter');
 CREATE TYPE report_status AS ENUM ('Draft','ClientReview','FirmReview','Issued','Archived');
 ```
 
@@ -1168,11 +1190,19 @@ All tables reside in `axiom_db`. All UUID primary keys use `DEFAULT gen_random_u
 
 #### Audit Core Module — System Reference Tables (no RLS, not tenant-scoped)
 
-**frameworks** — `id (uuid PK)`, `name (text NOT NULL)`, `version (text NOT NULL)`, `effective_date (date NOT NULL)`, `deprecated_at (date)`, `governing_body (text NOT NULL)`. **Unique:** `(name, version)`.
+**frameworks** — `id (uuid PK)`, `name (text NOT NULL UNIQUE)`, `governing_body (text NOT NULL)`, `description (text)`. Rows: SOC 2, SOC 1, ISO 27001, ISO 27701, ISO 42001, HIPAA, PCI DSS.
 
-**framework_requirements** — `id (uuid PK)`, `framework_id (uuid FK → frameworks NOT NULL)`, `identifier (text NOT NULL)`, `title (text NOT NULL)`, `description (text)`, `category (text)`, `sort_order (integer NOT NULL)`. **Unique:** `(framework_id, identifier)`. **Indexes:** `(framework_id, sort_order)`.
+**framework_versions** — `id (uuid PK)`, `framework_id (uuid FK → frameworks NOT NULL)`, `version (text NOT NULL)`, `valid_from (date NOT NULL)`, `valid_to (date)`, `published_at (date)`. **Unique:** `(framework_id, version)`. **Indexes:** `(framework_id, valid_from)`.
 
-**control_objective_library** — `id (uuid PK)`, `name (text NOT NULL)`, `description (text NOT NULL)`, `tags (jsonb NOT NULL DEFAULT '[]')`.
+**framework_requirements** — `id (uuid PK)`, `framework_version_id (uuid FK → framework_versions NOT NULL)`, `requirement_code (text NOT NULL)`, `title (text NOT NULL)`, `description (text)`, `requirement_type (requirement_type NOT NULL)`, `category (text)`, `sort_order (integer NOT NULL)`. **Unique:** `(framework_version_id, requirement_code)`. **Indexes:** `(framework_version_id, sort_order)`.
+
+**common_controls** — `id (uuid PK)`, `firm_id (uuid)` — nullable; NULL = platform-seeded, populated = firm-custom, `code (text NOT NULL)`, `name (text NOT NULL)`, `description (text NOT NULL)`, `category (text NOT NULL)`, `source (common_control_source NOT NULL)`, `created_at (timestamptz NOT NULL)`, `deprecated_at (timestamptz)`. **Unique:** `(firm_id, code)` (with `firm_id IS NULL` treated as a distinct tenant for uniqueness). **Indexes:** `(firm_id)`, `(category)`, `(source)`. **RLS:** partial — rows with `firm_id IS NULL` are visible to all; `firm_id IS NOT NULL` rows are RLS-isolated to that firm.
+
+**common_control_satisfies** — `id (uuid PK)`, `common_control_id (uuid FK → common_controls NOT NULL)`, `framework_requirement_id (uuid FK → framework_requirements NOT NULL)`, `relationship_type (strm_relationship_type NOT NULL)`, `strength_score (integer NOT NULL CHECK (strength_score BETWEEN 0 AND 100))`, `coverage_notes (text)`, `source (mapping_source NOT NULL)`, `valid_from (date NOT NULL)`, `valid_to (date)`, `created_at (timestamptz NOT NULL)`. **Check:** `(relationship_type IN ('subset-of','intersects-with') AND coverage_notes IS NOT NULL) OR relationship_type NOT IN ('subset-of','intersects-with')`. **Unique:** `(common_control_id, framework_requirement_id, valid_from)`. **Indexes:** `(common_control_id)`, `(framework_requirement_id)`, `(valid_from, valid_to)`.
+
+**common_control_embeddings** — `id (uuid PK)`, `common_control_id (uuid FK → common_controls NOT NULL UNIQUE)`, `embedding (vector(1024) NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `USING ivfflat (embedding vector_cosine_ops)`. Used by Feature: evidence→control mapping and cross-framework semantic search.
+
+**control_objective_library** — `id (uuid PK)`, `name (text NOT NULL)`, `description (text NOT NULL)`, `tags (jsonb NOT NULL DEFAULT '[]')`. Legacy table — superseded by `common_controls`; retained during migration for template compatibility.
 
 **control_objective_library_mappings** — `id (uuid PK)`, `library_objective_id (uuid FK → control_objective_library NOT NULL)`, `framework_requirement_id (uuid FK → framework_requirements NOT NULL)`. **Unique:** `(library_objective_id, framework_requirement_id)`.
 
@@ -1180,11 +1210,11 @@ All tables reside in `axiom_db`. All UUID primary keys use `DEFAULT gen_random_u
 
 All tables below carry `firm_id uuid NOT NULL` with an index. RLS policy: `USING (firm_id = current_setting('app.current_firm_id')::uuid)`.
 
-**engagements** — `id (uuid PK)`, `firm_id`, `client_id (uuid NOT NULL)`, `name (text NOT NULL)`, `engagement_type (engagement_type NOT NULL)`, `primary_framework_id (uuid FK → frameworks NOT NULL)`, `period_start (date NOT NULL)`, `period_end (date NOT NULL)`, `status (engagement_status NOT NULL DEFAULT 'Planning')`, `prior_engagement_id (uuid FK → engagements)`, `methodology_template_id (uuid)`, `report_issued_at (timestamptz)`, `assembly_deadline (date)`, `retention_deadline (date)`, `finalized_at (timestamptz)`, `archived_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(firm_id)`, `(client_id)`, `(status)`, `(prior_engagement_id)`.
+**engagements** — `id (uuid PK)`, `firm_id`, `client_id (uuid NOT NULL)`, `name (text NOT NULL)`, `engagement_type (engagement_type NOT NULL)`, `primary_framework_id (uuid FK → frameworks NOT NULL)`, `primary_framework_version_id (uuid FK → framework_versions NOT NULL)`, `period_start (date NOT NULL)`, `period_end (date NOT NULL)`, `status (engagement_status NOT NULL DEFAULT 'Planning')`, `prior_engagement_id (uuid FK → engagements)`, `methodology_template_id (uuid)`, `report_issued_at (timestamptz)`, `assembly_deadline (date)`, `retention_deadline (date)`, `finalized_at (timestamptz)`, `archived_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(firm_id)`, `(client_id)`, `(status)`, `(prior_engagement_id)`.
 
 **engagement_team_members** — `id (uuid PK)`, `firm_id`, `engagement_id (uuid FK → engagements NOT NULL)`, `user_id (uuid NOT NULL)`, `engagement_role (text NOT NULL)`, `assigned_at (timestamptz NOT NULL)`, `removed_at (timestamptz)`. **Unique:** `(engagement_id, user_id) WHERE removed_at IS NULL`. **Indexes:** `(engagement_id, user_id)`.
 
-**engagement_frameworks** — `id (uuid PK)`, `firm_id`, `engagement_id (uuid FK → engagements NOT NULL)`, `framework_id (uuid FK → frameworks NOT NULL)`, `framework_version (text NOT NULL)`, `is_primary (boolean NOT NULL DEFAULT false)`. **Unique:** `(engagement_id, framework_id)`.
+**engagement_frameworks** — `id (uuid PK)`, `firm_id`, `engagement_id (uuid FK → engagements NOT NULL)`, `framework_id (uuid FK → frameworks NOT NULL)`, `framework_version_id (uuid FK → framework_versions NOT NULL)`, `is_primary (boolean NOT NULL DEFAULT false)`. **Unique:** `(engagement_id, framework_id)`. Enables multi-framework integrated engagements (SOC 2 + ISO 27001 + ISO 27701 in a single engagement).
 
 **client_acceptances** — `id (uuid PK)`, `firm_id`, `engagement_id (uuid FK → engagements NOT NULL UNIQUE)`, `quality_risks_identified (jsonb NOT NULL DEFAULT '[]')`, `firm_responses (jsonb NOT NULL DEFAULT '[]')`, `independence_confirmed (boolean NOT NULL DEFAULT false)`, `independence_confirmed_by_id (uuid)`, `accepted_by_id (uuid)`, `accepted_at (timestamptz)`, `created_at (timestamptz NOT NULL)`.
 
@@ -1206,6 +1236,8 @@ All tables below carry `firm_id uuid NOT NULL` with an index. RLS policy: `USING
 
 **evidence_links** — `id (uuid PK)`, `firm_id`, `evidence_item_id (uuid FK → evidence_items NOT NULL)`, `test_procedure_id (uuid FK → test_procedures NOT NULL)`, `linked_by_id (uuid NOT NULL)`, `linked_at (timestamptz NOT NULL)`, `notes (text)`, `ai_suggested (boolean NOT NULL DEFAULT false)`, `ai_decision_id (uuid FK → ai_decisions)`. **Unique:** `(evidence_item_id, test_procedure_id)`. **Indexes:** `(test_procedure_id)`, `(evidence_item_id)`.
 
+**evidence_item_supports** — `id (uuid PK)`, `firm_id`, `evidence_item_id (uuid FK → evidence_items NOT NULL)`, `common_control_id (uuid FK → common_controls NOT NULL)`, `coverage_pct (integer NOT NULL CHECK (coverage_pct BETWEEN 0 AND 100))`, `period_start (date NOT NULL)`, `period_end (date)`, `gap_notes (text)`, `ai_suggested (boolean NOT NULL DEFAULT false)`, `ai_decision_id (uuid FK → ai_decisions)`, `confirmed_by_user_id (uuid FK → users)`, `confirmed_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Check:** `(coverage_pct = 100 OR gap_notes IS NOT NULL)`. **Indexes:** `(evidence_item_id)`, `(common_control_id)`, `(firm_id, common_control_id)`, `(period_start, period_end)`. RLS policy: `USING (firm_id = current_firm_id())`. The cross-framework reuse edge — coverage flows from here through `common_control_satisfies` to every mapped `framework_requirement`.
+
 **document_requests** — `id (uuid PK)`, `firm_id`, `engagement_id (uuid FK → engagements NOT NULL)`, `control_id (uuid FK → controls)`, `test_procedure_id (uuid FK → test_procedures)`, `assigned_to_id (uuid)`, `title (text NOT NULL)`, `instructions (text NOT NULL)`, `due_date (date)`, `status (doc_request_status NOT NULL DEFAULT 'Pending')`, `reminder_count (integer NOT NULL DEFAULT 0)`, `last_reminder_sent_at (timestamptz)`, `fulfilled_by_evidence_item_id (uuid FK → evidence_items)`, `sent_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(engagement_id)`, `(engagement_id, status)`, `(assigned_to_id)`.
 
 **client_hub_tokens** — `id (uuid PK)`, `firm_id`, `engagement_id (uuid FK → engagements NOT NULL)`, `client_id (uuid NOT NULL)`, `token_hash (text NOT NULL UNIQUE)`, `valid_until (timestamptz NOT NULL)`, `created_by_id (uuid NOT NULL)`, `status (hub_token_status NOT NULL DEFAULT 'Active')`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(token_hash)`.
@@ -1217,18 +1249,6 @@ All tables below carry `firm_id uuid NOT NULL` with an index. RLS policy: `USING
 **audit_log** — `id (bigint PK GENERATED ALWAYS AS IDENTITY)`, `firm_id (uuid NOT NULL)`, `actor_id (uuid)`, `actor_type (actor_type NOT NULL)`, `action (text NOT NULL)`, `resource_type (text NOT NULL)`, `resource_id (uuid)`, `old_value (jsonb)`, `new_value (jsonb)`, `ip_address (inet)`, `user_agent (text)`, `occurred_at (timestamptz NOT NULL DEFAULT now())`. **Immutability:** `CREATE RULE audit_log_no_update AS ON UPDATE TO audit_log DO INSTEAD NOTHING; CREATE RULE audit_log_no_delete AS ON DELETE TO audit_log DO INSTEAD NOTHING;`. **Indexes:** `(firm_id, occurred_at)`, `(resource_type, resource_id)`, `(actor_id)`.
 
 **notifications** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `recipient_id (uuid NOT NULL)`, `notification_type (notification_type NOT NULL)`, `title (text NOT NULL)`, `body (text)`, `deep_link (text)`, `is_read (boolean NOT NULL DEFAULT false)`, `delivery_channel (delivery_channel NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(recipient_id, is_read, created_at DESC)`.
-
-#### Trial Balance Module
-
-Application-layer isolation (`WHERE firm_id = $1`), no RLS.
-
-**trial_balances** — `id (uuid PK)`, `engagement_id (uuid NOT NULL)`, `firm_id (uuid NOT NULL)`, `period_date (date NOT NULL)`, `import_source (text)`, `column_mapping_profile_id (uuid FK → column_mapping_profiles)`, `imported_at (timestamptz NOT NULL)`, `imported_by_id (uuid NOT NULL)`. **Indexes:** `(firm_id)`, `(engagement_id)`.
-
-**trial_balance_accounts** — `id (uuid PK)`, `trial_balance_id (uuid FK → trial_balances NOT NULL)`, `account_number (text NOT NULL)`, `account_name (text NOT NULL)`, `account_type (account_type)`, `balance_debit (numeric(19,4) NOT NULL DEFAULT 0)`, `balance_credit (numeric(19,4) NOT NULL DEFAULT 0)`, `net_balance (numeric(19,4) GENERATED ALWAYS AS (balance_debit - balance_credit) STORED)`, `mapped_fs_line_item (text)`, `mapping_status (mapping_status NOT NULL DEFAULT 'Unmapped')`, `ai_decision_id (uuid)`, `confirmed_by_id (uuid)`, `confirmed_at (timestamptz)`. **Indexes:** `(trial_balance_id)`, `(trial_balance_id, mapping_status)`.
-
-**trial_balance_adjustments** — `id (uuid PK)`, `trial_balance_id (uuid FK → trial_balances NOT NULL)`, `account_id (uuid FK → trial_balance_accounts NOT NULL)`, `amount (numeric(19,4) NOT NULL)`, `description (text NOT NULL)`, `adjustment_type (adjustment_type NOT NULL)`, `waiver_reason (text)`, `proposed_by_id (uuid NOT NULL)`, `proposed_at (timestamptz NOT NULL)`, `approved_by_id (uuid)`, `approved_at (timestamptz)`. **Check:** `(adjustment_type != 'Waived' OR waiver_reason IS NOT NULL)`. **Indexes:** `(trial_balance_id)`.
-
-**column_mapping_profiles** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `name (text NOT NULL)`, `accounting_system (text)`, `column_mappings (jsonb NOT NULL)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(firm_id)`.
 
 #### Workpaper Module
 
@@ -1250,15 +1270,14 @@ Application-layer isolation.
 
 ---
 
-## 11. Multi-Tenancy and Isolation
+## 10. Multi-Tenancy and Isolation
 
 All tables reside in `axiom_db`. RLS is enabled on all tenant-scoped tables.
 
 | Module | Tables | firm_id Indexed | RLS |
 |---|---|---|---|
 | Identity | 11 (includes firm_control_objective_embeddings) | Yes | Yes |
-| Audit Core | 23 (6 system + 17 tenant-scoped) | Yes (tenant tables) | Yes (tenant tables) |
-| Trial Balance | 4 | Yes | Yes |
+| Audit Core | 27 (9 system reference + 18 tenant-scoped) | Yes (tenant tables) | Yes (tenant tables); `common_controls` has partial RLS — NULL-firm rows shared across tenants |
 | Workpaper | 3 | Yes | Yes |
 | Reporting | 2 | Yes | Yes |
 
@@ -1268,31 +1287,32 @@ The three authorization dimensions:
 2. **Engagement team membership** — Application-layer middleware. Point lookup on `engagement_team_members (engagement_id, user_id)`.
 3. **Client user scoping** — Application-layer middleware. Client users see only document requests and evidence items for engagements they are invited to.
 
-System-wide reference tables (`frameworks`, `framework_requirements`, `control_objective_library`, `control_objective_library_mappings`) have no `firm_id` and no RLS — read-only reference data shared across all tenants.
+System-wide reference tables (`frameworks`, `framework_versions`, `framework_requirements`, `common_controls` WHERE `firm_id IS NULL`, `common_control_satisfies`, `common_control_embeddings`, `framework_requirement_embeddings`, `control_objective_library`, `control_objective_library_mappings`) have no `firm_id` (or allow NULL) and no conventional RLS — read-only reference data shared across all tenants, maintained by Axiom from SCF / OSCAL / AICPA / CIS catalogs on a quarterly cadence.
 
 ---
 
-## 12. Journey-to-Entity Traceability
+## 11. Journey-to-Entity Traceability
 
 | Journey | Persona | Primary Entities |
 |---|---|---|
 | 1: Firm Setup | FirmAdmin | Firm, User, Invitation, MethodologyTemplate, Engagement, Control, TestProcedure, Workpaper, ClientAcceptance |
 | 2: Staff Onboarding | Staff Auditor | User, Invitation, Notification, EngagementTeamMember |
 | 3: Engagement Scoping | Partner | Engagement, EngagementTeamMember, EngagementFramework, Client, Control, TestProcedure, ClientAcceptance, EngagementQualityReview, FirmControlObjectiveMapping, AIDecision |
-| 4: Trial Balance | Staff Auditor | TrialBalance, TrialBalanceAccount, TrialBalanceAdjustment, ColumnMappingProfile, Workpaper, AIDecision |
-| 5: Control Testing | Staff Auditor | Control, TestProcedure, EvidenceItem, EvidenceLink, Workpaper, WorkpaperVersion, AIDecision |
+| 4: Cross-Framework Mapping | Manager / FirmAdmin | CommonControl, CommonControlSatisfies, FrameworkRequirement, FrameworkVersion, FirmControlObjective, FirmControlObjectiveMapping, AIDecision (EvidenceControlMapping, GapAnalysis, FrameworkMigration) |
+| 5: Control Testing | Staff Auditor | Control, TestProcedure, EvidenceItem, EvidenceLink, EvidenceItemSupports, CommonControl, Workpaper, WorkpaperVersion, AIDecision |
 | 6: Workpaper Review | Manager | Workpaper, WorkpaperVersion, ReviewNote, AuditLog, Notification |
-| 7: Document Requests | Staff Auditor | DocumentRequest, ClientHubToken, EvidenceItem, EvidenceLink, AIDecision, AuditLog |
+| 7: Document Requests | Staff Auditor | DocumentRequest, ClientHubToken, EvidenceItem, EvidenceLink, EvidenceItemSupports, AIDecision, AuditLog |
 | 8: Client Fulfillment | Client Contact | DocumentRequest, ClientHubToken, DelegationToken, EvidenceItem, AuditLog |
 | 9: Reporting & Archive | Partner | Engagement, Report, ReportVersion, Workpaper, WorkpaperVersion, AuditLog |
 | 10: EQR | EQR Reviewer | EngagementQualityReview, EQRFinding, AIDecision, AuditLog |
+| 11: Multi-Framework Integrated Engagement | Partner / Manager | Engagement, EngagementFramework (multiple per engagement), FrameworkVersion, CommonControl, CommonControlSatisfies, EvidenceItemSupports, Control, TestProcedure, AIDecision (EvidenceControlMapping) — one control tested once, evidence satisfies requirements across all in-scope frameworks |
+| 12: Continuous Assurance / Drift-Triggered Re-Testing | Client / Auditor | EvidenceItem, EvidenceItemSupports (period windows), CommonControl, Notification (DriftDetected, EvidenceExpiring), AIDecision (DriftRetest, FindingsTriage), AuditLog |
 
 ### Entity Count Summary
 
-- **Total domain entities:** 43
-- **Total tables in `axiom_db`:** 43
+- **Total domain entities:** ~46 (seven added: FrameworkVersion, CommonControl, CommonControlSatisfies, CommonControlEmbedding, EvidenceItemSupports; four removed: TrialBalance, TrialBalanceAccount, TrialBalanceAdjustment, ColumnMappingProfile)
+- **Total tables in `axiom_db`:** ~46
 - **Identity module:** 11 (includes firm_control_objective_embeddings; pgvector required)
-- **Audit Core module:** 23 (6 system + 17 tenant-scoped; system tables include framework_requirement_embeddings and control_objective_library_embeddings)
-- **Trial Balance module:** 4
+- **Audit Core module:** 27 (9 system reference + 18 tenant-scoped; system tables include framework_requirement_embeddings, common_control_embeddings, control_objective_library_embeddings)
 - **Workpaper module:** 3
 - **Reporting module:** 2
