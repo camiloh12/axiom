@@ -1,0 +1,10 @@
+{
+  "name": "@axiom/openapi",
+  "private": true,
+  "scripts": {
+    "codegen": "openapi-typescript identity-service.yaml -o ../../apps/web/src/api/generated/identity.ts && openapi-typescript common.yaml -o ../../apps/web/src/api/generated/common.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7"
+  }
+}

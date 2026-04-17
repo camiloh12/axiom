@@ -1,0 +1,18 @@
+{
+  "name": "axiom",
+  "private": true,
+  "packageManager": "npm@11.12.1",
+  "workspaces": [
+    "apps/web",
+    "packages/openapi"
+  ],
+  "devDependencies": {
+    "turbo": "^2"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "codegen": "turbo codegen"
+  }
+}
