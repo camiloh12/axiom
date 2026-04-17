@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
 type Handler struct {

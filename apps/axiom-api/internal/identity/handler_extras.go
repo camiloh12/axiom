@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
 // RoleGuard produces middleware restricting access to the listed roles.
@@ -75,12 +76,7 @@ func (h *Handler) updateCurrentFirm(w http.ResponseWriter, r *http.Request) {
 		platform.WriteError(w, platform.ErrBadRequest("invalid request body"))
 		return
 	}
-	firm, err := h.svc.UpdateFirm(r.Context(), claims.FirmID, UpdateFirmInput{
-		Name:                req.Name,
-		LogoURL:             req.LogoURL,
-		Timezone:            req.Timezone,
-		BillingContactEmail: req.BillingContactEmail,
-	})
+	firm, err := h.svc.UpdateFirm(r.Context(), claims.FirmID, UpdateFirmInput(req))
 	if err != nil {
 		platform.WriteError(w, err)
 		return
@@ -160,11 +156,7 @@ func (h *Handler) updateUser(w http.ResponseWriter, r *http.Request) {
 		platform.WriteError(w, platform.ErrBadRequest("invalid request body"))
 		return
 	}
-	user, err := h.svc.UpdateUser(r.Context(), id, UpdateUserInput{
-		DisplayName:           req.DisplayName,
-		Role:                  req.Role,
-		NotificationFrequency: req.NotificationFrequency,
-	})
+	user, err := h.svc.UpdateUser(r.Context(), id, UpdateUserInput(req))
 	if err != nil {
 		platform.WriteError(w, err)
 		return
@@ -202,11 +194,7 @@ func (h *Handler) createClient(w http.ResponseWriter, r *http.Request) {
 		platform.WriteError(w, platform.ErrValidation("missing required fields", "name is required"))
 		return
 	}
-	client, err := h.svc.CreateClient(r.Context(), claims.FirmID, CreateClientInput{
-		Name:                req.Name,
-		Industry:            req.Industry,
-		PrimaryContactEmail: req.PrimaryContactEmail,
-	})
+	client, err := h.svc.CreateClient(r.Context(), claims.FirmID, CreateClientInput(req))
 	if err != nil {
 		platform.WriteError(w, err)
 		return
@@ -256,11 +244,7 @@ func (h *Handler) updateClient(w http.ResponseWriter, r *http.Request) {
 		platform.WriteError(w, platform.ErrBadRequest("invalid request body"))
 		return
 	}
-	client, err := h.svc.UpdateClient(r.Context(), id, UpdateClientInput{
-		Name:                req.Name,
-		Industry:            req.Industry,
-		PrimaryContactEmail: req.PrimaryContactEmail,
-	})
+	client, err := h.svc.UpdateClient(r.Context(), id, UpdateClientInput(req))
 	if err != nil {
 		platform.WriteError(w, err)
 		return

@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity/queries"
-	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
+
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity/queries"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
 type Service struct {
@@ -76,7 +77,7 @@ func (s *Service) RegisterFirm(ctx context.Context, input RegisterFirmInput) (*R
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := s.queries.WithTx(tx)
 

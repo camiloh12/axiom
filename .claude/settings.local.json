@@ -86,7 +86,9 @@
       "Bash(taskkill //F //PID 42892 //PID 32036)",
       "Bash(awk '{print $5}')",
       "Bash(taskkill //F //PID 11420 //PID 39804)",
-      "Bash(go install *)"
+      "Bash(go install *)",
+      "Bash(go vet *)",
+      "Bash(gofmt -l .)"
     ]
   }
 }

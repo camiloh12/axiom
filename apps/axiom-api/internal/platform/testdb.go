@@ -73,7 +73,7 @@ func TestDB(t *testing.T) *pgxpool.Pool {
 		pool.Close()
 		cleanupPool, err := pgxpool.New(context.Background(), adminURL)
 		if err == nil {
-			cleanupPool.Exec(context.Background(), fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
+			_, _ = cleanupPool.Exec(context.Background(), fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
 			cleanupPool.Close()
 		}
 	})

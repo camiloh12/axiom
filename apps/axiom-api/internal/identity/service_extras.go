@@ -320,7 +320,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, displayName, pass
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := s.queries.WithTx(tx)
 	if _, err := tx.Exec(ctx, "SELECT set_config('app.current_firm_id', $1, true)", inv.FirmID.String()); err != nil {
