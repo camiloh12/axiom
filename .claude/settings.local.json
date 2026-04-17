@@ -70,7 +70,10 @@
       "Bash(where.exe docker *)",
       "Bash(where.exe node *)",
       "Read(//c/Users/camil/.claude/plugins/cache//**)",
-      "Read(//c/Users/camil/.claude/skills//**)"
+      "Read(//c/Users/camil/.claude/skills//**)",
+      "Bash(docker compose *)",
+      "Bash(go mod *)",
+      "Bash(go build *)"
     ]
   }
 }
