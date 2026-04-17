@@ -1,26 +1,32 @@
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ProtectedRoute } from './components/protected-route'
+import LoginPage from './pages/login'
+import RegisterPage from './pages/register'
+import DashboardPage from './pages/dashboard'
+import './styles/tokens.css'
 
 const queryClient = new QueryClient()
-
-function HealthCheck() {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['health'],
-    queryFn: () => fetch('/api/healthz').then(res => res.json()),
-  })
-
-  if (isLoading) return <p>Connecting to API...</p>
-  if (isError) return <p style={{ color: 'red' }}>API disconnected</p>
-
-  return <p style={{ color: 'green' }}>API connected: {data?.status}</p>
-}
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <div style={{ padding: '2rem' }}>
-        <h1>Axiom</h1>
-        <HealthCheck />
-      </div>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </BrowserRouter>
     </QueryClientProvider>
   )
 }
