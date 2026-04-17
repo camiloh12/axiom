@@ -4,7 +4,18 @@
 
 ---
 
-**On the name:** "Axiom" represents a self-evident truth or starting point for reasoning — fitting for a platform anchored in the trial balance as the financial source of truth. It is a working name and can be changed before launch.
+**On the name:** "Axiom" represents a self-evident truth or foundational starting point for reasoning — fitting for a compliance and assurance platform whose core promise is auditor-defensible attestation: every evidence item, every control mapping, every AI decision traceable to a verifiable source of truth. It is a working name and can be changed before launch.
+
+Alternatives under consideration for a future rename (not prioritized at this time):
+
+| Name | Rationale |
+|---|---|
+| **Prism** | One piece of evidence refracted across many frameworks — a visual metaphor for cross-framework evidence mapping |
+| **Tenet** | A principle held to be true; near-synonym for axiom, shorter |
+| **Canon** | Authoritative body of rules / attested standard (note: potential trademark overlap with Canon Inc.) |
+| **Veris** | Latin *verus* = true; attestation-native with modern startup phonetics |
+| **Affirma** | Directly attestation-native — "to affirm as true" |
+| **Throughline** | Evidence that runs through multiple frameworks; narrative framing |
 
 ---
 
