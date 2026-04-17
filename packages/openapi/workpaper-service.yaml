@@ -26,7 +26,9 @@ info:
     ```
     Draft
       → PreparedPendingReview   POST /submit           (Staff)
-                                  Guard: all AI-generated sections must be human-edited (PCAOB AS 1105)
+                                  Guard: all AI-generated sections must be human-edited
+                                  (ISO 42001 human-in-the-loop, AICPA SSAE 21 / ISAE 3000,
+                                  ISO 17021-1 documentation)
       → InReview                POST /start-review     (Manager)
       → ReviewNotesOpen         POST /return           (Manager)
       → InReview                POST /resubmit         (Staff)
@@ -49,7 +51,8 @@ info:
     - **AI content gate.** `POST /submit` returns 422 when the latest `WorkpaperVersion` has
       any AI-generated section with `human_edited = false` in `ai_content_metadata`. Sections
       with `modification_ratio < 0.05` trigger a confirmable warning (soft gate). This
-      section-level tracking replaces the prior binary `is_ai_draft` check per PCAOB AS 1105.
+      section-level tracking replaces the prior binary `is_ai_draft` check — required by
+      ISO 42001 AI management controls and SOC 2 / ISO 27001 evidence-of-work expectations.
 
 servers:
   - url: https://api.axiom.internal/workpaper
@@ -316,7 +319,8 @@ paths:
         - Caller must be the `prepared_by_id` user or a Manager/Partner.
         - All AI-generated sections in the latest `WorkpaperVersion.ai_content_metadata` must
           have `human_edited = true`. If any AI section has not been edited, submission is blocked
-          with 422 (`AI_CONTENT_NOT_REVIEWED`) to enforce PCAOB AS 1105.
+          with 422 (`AI_CONTENT_NOT_REVIEWED`) to enforce ISO 42001 human-in-the-loop and
+          AICPA SSAE 21 / ISAE 3000 / ISO 17021-1 documentation requirements.
         - AI sections with `modification_ratio < 0.05` trigger a soft gate: the response
           includes a `warnings` array listing minimally-edited sections. The caller must
           re-submit with `confirm_minimal_edits: true` to proceed.
@@ -356,7 +360,7 @@ paths:
         '422':
           description: |
             Business rule violation. Common codes:
-            - `AI_DRAFT_SUBMISSION_BLOCKED` — latest version is an AI draft; staff must edit before submitting (PCAOB AS 1105).
+            - `AI_DRAFT_SUBMISSION_BLOCKED` — latest version is an AI draft; staff must edit before submitting (ISO 42001 / AICPA SSAE 21 / ISAE 3000).
           content:
             application/json:
               schema:
@@ -1273,7 +1277,6 @@ components:
     WorkpaperType:
       type: string
       enum:
-        - LeadSchedule
         - TestPaper
         - Memo
         - ConfirmationLetter
@@ -1281,7 +1284,13 @@ components:
         - ManagementLetter
         - AnalyticalProcedures
         - Other
-      description: Classification of the workpaper's purpose within the engagement.
+      description: |
+        Classification of the workpaper's purpose within the engagement. All types are
+        framework-agnostic and apply across compliance/assurance engagements (SOC 2,
+        ISO 27001/27701, ISO 42001, HIPAA, PCI DSS, SOC 1). `SamplingWorksheet` is used
+        where sample-based testing is required (SOC 2 Type 2, ISO surveillance);
+        `AnalyticalProcedures` denotes analytical review procedures applied during
+        compliance testing.
 
     WorkpaperStatus:
       type: string
@@ -1469,7 +1478,7 @@ components:
             Derived convenience field. True when `ai_content_metadata` contains any section
             with `ai_generated = true` AND `human_edited = false`. Retained for backward
             compatibility. The section-level `ai_content_metadata` provides the authoritative
-            gate logic (PCAOB AS 1105).
+            gate logic (ISO 42001 human-in-the-loop, AICPA SSAE 21 / ISAE 3000, ISO 17021-1).
         ai_content_metadata:
           type:
             - object

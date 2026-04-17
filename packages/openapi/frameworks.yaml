@@ -1,0 +1,1398 @@
+openapi: 3.1.0
+
+info:
+  title: Axiom Frameworks Module API
+  version: 1.0.0
+  description: |
+    **Frameworks** is the cross-framework intelligence layer of the Axiom platform. It owns
+    the common-control catalog (SCF / OSCAL / AICPA / CIS crosswalks), the NIST STRM-encoded
+    satisfaction edges between `CommonControl` and `FrameworkRequirement`, the period-aware
+    `EvidenceItem → CommonControl` support edges, and the gap-analysis and framework-version-
+    migration engines.
+
+    This spec covers the Frameworks module within the Axiom API modular monolith (Go package
+    `internal/frameworks`). Endpoints are served by the same Go binary as other modules
+    (identity, audit core, workpaper, reporting, provenance).
+
+    ## Authentication
+    Most endpoints require three context values injected by the gateway middleware after
+    JWT verification:
+    - `X-User-Id` — UUID of the authenticated user
+    - `X-Firm-Id` — UUID of the user's firm
+    - `X-User-Role` — role of the authenticated user
+
+    ## Pagination
+    List endpoints use opaque cursor-based pagination per `common.yaml`.
+
+    ## User Roles
+    `FirmAdmin | Partner | Manager | Staff | EQReviewer | ClientAdmin | ClientUser | ViewOnly`
+
+servers:
+  - url: https://api.axiom.app
+    description: Production
+  - url: https://api.staging.axiom.app
+    description: Staging
+
+tags:
+  - name: Frameworks
+    description: |
+      Read-only catalog of supported regulatory frameworks (SOC 2, ISO 27001, ISO 27701,
+      ISO 42001, HIPAA, PCI DSS, SOC 1) and their versioned requirement sets. Seeded by
+      Axiom from SCF / OSCAL / AICPA / CIS sources on a quarterly cadence.
+
+  - name: FrameworkRequirements
+    description: |
+      Individual requirements (criteria / controls / specifications) within a framework
+      version. Filterable by framework version, category, and requirement type. pgvector
+      embeddings power semantic search.
+
+  - name: CommonControls
+    description: |
+      Axiom's unified common-control catalog — the pivot node decoupling "what a control
+      does" from "how a framework expresses it". Platform-seeded rows (firm_id IS NULL)
+      are read-only; firms may add firm-custom rows and adapt mappings.
+
+  - name: CommonControlSatisfies
+    description: |
+      Directed, NIST STRM-encoded edges from `CommonControl → FrameworkRequirement` with
+      relationship type, strength score, coverage notes, and effective-dated windows.
+      Platform edges come from SCF / OSCAL / AICPA / CIS; firms may add firm-custom
+      overrides.
+
+  - name: EvidenceItemSupports
+    description: |
+      Directed, period-aware edges from `EvidenceItem → CommonControl` with coverage
+      percentage, period window, and STRM relationship. Populated from AI suggestions
+      confirmed by a human; carries `ai_decision_id` and `confirmed_by_user_id` for audit
+      trail.
+
+  - name: Coverage
+    description: |
+      Engagement-level cross-framework gap analysis. Aggregates confirmed
+      `EvidenceItemSupports` edges through `CommonControlSatisfies` to produce per-
+      framework coverage percentages and prioritized gap recommendations.
+
+  - name: FrameworkMigration
+    description: |
+      AI-assisted bulk remapping when a framework version is superseded (e.g., ISO
+      27001:2013 → 2022, PCI DSS 3.2 → 4.0). Proposes edge updates as `AIDecision`
+      records requiring human confirmation.
+
+paths:
+
+  # ---------------------------------------------------------------------------
+  # Frameworks
+  # ---------------------------------------------------------------------------
+
+  /api/v1/frameworks:
+    get:
+      operationId: listFrameworks
+      summary: List supported frameworks
+      description: |
+        Returns the global list of frameworks Axiom supports (SOC 2, ISO 27001, ISO 27701,
+        ISO 42001, HIPAA, PCI DSS, SOC 1). Not tenant-scoped — the same list is returned
+        for every firm.
+
+        **Access:** All authenticated users.
+      tags: [Frameworks]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+      responses:
+        '200':
+          description: Array of frameworks with current versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameworkListResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/frameworks/{frameworkId}:
+    get:
+      operationId: getFramework
+      summary: Get a framework with its version history
+      description: |
+        Returns a single framework including all published versions (both current and
+        superseded) with effective-dated windows.
+
+        **Access:** All authenticated users.
+      tags: [Frameworks]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: frameworkId
+          in: path
+          required: true
+          description: UUID of the framework.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Framework detail with version list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameworkDetailResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Framework Requirements
+  # ---------------------------------------------------------------------------
+
+  /api/v1/framework-requirements:
+    get:
+      operationId: listFrameworkRequirements
+      summary: List framework requirements
+      description: |
+        Returns the paginated requirement catalog for a framework version. Filterable by
+        category, requirement type, and free-text search.
+
+        **Access:** All authenticated users.
+      tags: [FrameworkRequirements]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - $ref: './common.yaml#/components/parameters/CursorParam'
+        - $ref: './common.yaml#/components/parameters/LimitParam'
+        - name: framework_version_id
+          in: query
+          required: true
+          description: UUID of the framework version to list requirements for.
+          schema:
+            type: string
+            format: uuid
+        - name: category
+          in: query
+          required: false
+          description: Filter by category (e.g. `Access Control`, `Encryption`).
+          schema:
+            type: string
+        - name: requirement_type
+          in: query
+          required: false
+          description: Filter by requirement type.
+          schema:
+            $ref: '#/components/schemas/RequirementType'
+        - name: search
+          in: query
+          required: false
+          description: Full-text search over title and description.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of framework requirements.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameworkRequirementListResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Common Controls
+  # ---------------------------------------------------------------------------
+
+  /api/v1/common-controls:
+    get:
+      operationId: listCommonControls
+      summary: List common controls (platform + firm-scoped)
+      description: |
+        Returns platform-seeded common controls (`firm_id IS NULL`) plus the requesting
+        firm's firm-custom rows. Filterable by category, source, and free-text search.
+
+        **Access:** All authenticated firm users.
+      tags: [CommonControls]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - $ref: './common.yaml#/components/parameters/CursorParam'
+        - $ref: './common.yaml#/components/parameters/LimitParam'
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: source
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CommonControlSource'
+        - name: include_deprecated
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: search
+          in: query
+          required: false
+          description: Full-text search over name and description.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of common controls.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonControlListResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    post:
+      operationId: createCommonControl
+      summary: Create a firm-custom common control
+      description: |
+        Creates a firm-scoped `CommonControl` row (firm_id populated from the gateway
+        header). Used when a firm needs a control that is not in the platform-seeded
+        catalog.
+
+        **Access:** `FirmAdmin`, `Partner`.
+      tags: [CommonControls]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommonControlRequest'
+      responses:
+        '201':
+          description: Common control created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonControl'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '409':
+          $ref: './common.yaml#/components/responses/Conflict'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/common-controls/{id}:
+    get:
+      operationId: getCommonControl
+      summary: Get a common control
+      tags: [CommonControls]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Common control detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonControl'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    patch:
+      operationId: updateCommonControl
+      summary: Update a firm-scoped common control
+      description: |
+        Updates a firm-custom `CommonControl`. Platform-seeded rows (`firm_id IS NULL`) are
+        immutable and return 403 on modification attempts.
+
+        **Access:** `FirmAdmin`, `Partner`.
+      tags: [CommonControls]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCommonControlRequest'
+      responses:
+        '200':
+          description: Common control updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonControl'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Common Control Satisfies (STRM edges)
+  # ---------------------------------------------------------------------------
+
+  /api/v1/common-control-satisfies:
+    get:
+      operationId: listCommonControlSatisfies
+      summary: List STRM-encoded satisfaction edges
+      description: |
+        Returns `CommonControl → FrameworkRequirement` edges with NIST STRM relationship
+        vocabulary. Filterable by common control, framework requirement, framework version,
+        and active-at date.
+
+        **Access:** All authenticated firm users.
+      tags: [CommonControlSatisfies]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - $ref: './common.yaml#/components/parameters/CursorParam'
+        - $ref: './common.yaml#/components/parameters/LimitParam'
+        - name: common_control_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: framework_requirement_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: framework_version_id
+          in: query
+          required: false
+          description: Filter to edges whose requirement belongs to this framework version.
+          schema:
+            type: string
+            format: uuid
+        - name: active_at
+          in: query
+          required: false
+          description: Return only edges valid on this date (valid_from <= date AND (valid_to IS NULL OR valid_to >= date)).
+          schema:
+            type: string
+            format: date
+        - name: relationship_type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/STRMRelationshipType'
+      responses:
+        '200':
+          description: Paginated satisfaction edges.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonControlSatisfiesListResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+    post:
+      operationId: createCommonControlSatisfies
+      summary: Create a firm-custom satisfaction edge (or override)
+      description: |
+        Creates a firm-authored `CommonControlSatisfies` edge. May be used to override a
+        platform-seeded mapping for this firm (a new row with a later `valid_from` and
+        `source = axiom_custom`); the platform row is preserved for audit trail.
+
+        **Access:** `FirmAdmin`, `Partner`, `Manager`.
+      tags: [CommonControlSatisfies]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommonControlSatisfiesRequest'
+      responses:
+        '201':
+          description: Satisfaction edge created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonControlSatisfies'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '409':
+          $ref: './common.yaml#/components/responses/Conflict'
+        '422':
+          $ref: './common.yaml#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Evidence Item Supports (period-aware coverage edges)
+  # ---------------------------------------------------------------------------
+
+  /api/v1/evidence-items/{id}/supports:
+    get:
+      operationId: listEvidenceItemSupports
+      summary: List common-controls supported by an evidence item
+      description: |
+        Returns all confirmed `EvidenceItemSupports` rows for a single `EvidenceItem`,
+        with per-framework downstream coverage implications computed from the STRM graph.
+
+        **Access:** All firm users with RLS access to the evidence item.
+      tags: [EvidenceItemSupports]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: id
+          in: path
+          required: true
+          description: UUID of the evidence item.
+          schema:
+            type: string
+            format: uuid
+        - name: include_pending
+          in: query
+          required: false
+          description: When true, include AI-suggested rows not yet human-confirmed.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Array of supports edges.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceItemSupportsListResponse'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/evidence-items/{id}/suggest-mappings:
+    post:
+      operationId: suggestEvidenceMappings
+      summary: Request AI-suggested CommonControl mappings for an evidence item
+      description: |
+        Enqueues a `frameworks.evidence-control-mapping` River job. On completion, the job
+        creates an `AIDecision` (`context_type = EvidenceControlMapping`) with candidate
+        `CommonControl` IDs, confidence scores, and per-framework downstream coverage.
+        The caller polls the returned AI decision ID to retrieve suggestions.
+
+        AI does NOT materialize `EvidenceItemSupports` rows directly. A human must confirm
+        each suggestion via `POST /evidence-item-supports`.
+
+        **Access:** `FirmAdmin`, `Partner`, `Manager`, `Staff`.
+      tags: [EvidenceItemSupports]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: id
+          in: path
+          required: true
+          description: UUID of the evidence item.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestMappingsRequest'
+      responses:
+        '202':
+          description: Mapping suggestion job enqueued. Poll the AI decision to retrieve results.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MappingSuggestionJob'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/evidence-item-supports:
+    post:
+      operationId: createEvidenceItemSupports
+      summary: Confirm or edit an AI-suggested evidence-control mapping
+      description: |
+        Materializes an `EvidenceItemSupports` row. If `ai_decision_id` is provided, the
+        backend marks that `AIDecision` as accepted/modified and records the
+        `confirmed_by_user_id` from the gateway context. A human must always confirm —
+        AI-only suggestions do NOT count toward coverage.
+
+        Partial coverage (`coverage_pct < 100`) requires `gap_notes`. The UI never shows a
+        green check for partial coverage.
+
+        **Access:** `FirmAdmin`, `Partner`, `Manager`, `Staff`.
+      tags: [EvidenceItemSupports]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEvidenceItemSupportsRequest'
+      responses:
+        '201':
+          description: Supports edge created/confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceItemSupports'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '409':
+          $ref: './common.yaml#/components/responses/Conflict'
+        '422':
+          $ref: './common.yaml#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Coverage / Gap Analysis
+  # ---------------------------------------------------------------------------
+
+  /api/v1/engagements/{engagementId}/coverage:
+    get:
+      operationId: getEngagementCoverage
+      summary: Cross-framework coverage report for an engagement
+      description: |
+        Returns per-framework coverage percentage, per-requirement status (satisfied |
+        partial | unsatisfied | stale), and a prioritized gap list with AI-generated
+        recommendations ranked by (cross-framework-coverage-gain / collection-effort).
+
+        The response is produced by the `frameworks.gap-analysis` River worker. If
+        `force_recompute=true`, a new job is enqueued; otherwise the most recent cached
+        result is returned.
+
+        **Access:** All firm users with RLS access to this engagement.
+      tags: [Coverage]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: engagementId
+          in: path
+          required: true
+          description: UUID of the engagement.
+          schema:
+            type: string
+            format: uuid
+        - name: force_recompute
+          in: query
+          required: false
+          description: When true, enqueues a new gap-analysis job instead of returning cached results.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Coverage report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageReport'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  # ---------------------------------------------------------------------------
+  # Framework Version Migration
+  # ---------------------------------------------------------------------------
+
+  /api/v1/framework-migrations/suggest:
+    post:
+      operationId: suggestFrameworkMigration
+      summary: Request AI-assisted framework version migration suggestions
+      description: |
+        Enqueues a `frameworks.framework-migration` River worker to propose bulk
+        `CommonControlSatisfies` edge updates when a framework version is superseded
+        (e.g., ISO 27001:2013 → 2022, PCI DSS 3.2 → 4.0, NIST CSF 1.1 → 2.0). Each
+        proposed edge update is written as a separate `AIDecision` requiring human
+        confirmation before becoming a firm-custom edge.
+
+        **Access:** `FirmAdmin`, `Partner`.
+      tags: [FrameworkMigration]
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrameworkMigrationRequest'
+      responses:
+        '202':
+          description: Migration job enqueued. Resulting AIDecision records are listed in the response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameworkMigrationJob'
+        '400':
+          $ref: './common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+components:
+
+  schemas:
+
+    # -------------------------------------------------------------------------
+    # Enums
+    # -------------------------------------------------------------------------
+
+    RequirementType:
+      type: string
+      description: Type of a framework requirement.
+      enum:
+        - criterion
+        - control
+        - specification
+
+    STRMRelationshipType:
+      type: string
+      description: |
+        NIST STRM (Set Theory Relationship Mapping) vocabulary used on
+        `CommonControlSatisfies` edges.
+      enum:
+        - equivalent-to
+        - subset-of
+        - superset-of
+        - intersects-with
+        - no-relationship
+
+    CommonControlSource:
+      type: string
+      description: Provenance of a CommonControl row.
+      enum:
+        - platform_seed
+        - scf_import
+        - oscal_import
+        - aicpa_mapping
+        - cis_mapping
+        - firm_custom
+
+    MappingSource:
+      type: string
+      description: Provenance of a CommonControlSatisfies edge.
+      enum:
+        - scf
+        - ucf
+        - oscal
+        - aicpa
+        - cis
+        - axiom_custom
+
+    CoverageStatus:
+      type: string
+      description: Per-requirement coverage state within an engagement.
+      enum:
+        - satisfied
+        - partial
+        - unsatisfied
+        - stale
+
+    # -------------------------------------------------------------------------
+    # Core domain objects
+    # -------------------------------------------------------------------------
+
+    Framework:
+      type: object
+      required:
+        - id
+        - name
+        - governing_body
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Display name (e.g. `SOC 2`, `ISO 27001`, `ISO 42001`, `HIPAA`, `PCI DSS`).
+        governing_body:
+          type: string
+          description: Authoring body (e.g. `AICPA`, `ISO`, `HHS`, `PCI SSC`).
+        description:
+          type:
+            - string
+            - "null"
+
+    FrameworkVersion:
+      type: object
+      required:
+        - id
+        - framework_id
+        - version
+        - valid_from
+      properties:
+        id:
+          type: string
+          format: uuid
+        framework_id:
+          type: string
+          format: uuid
+        version:
+          type: string
+          description: e.g. `2022`, `TSC 2017 (rev. 2022)`, `4.0.1`.
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type:
+            - string
+            - "null"
+          format: date
+          description: Null while this version is current.
+        published_at:
+          type:
+            - string
+            - "null"
+          format: date
+
+    FrameworkDetail:
+      allOf:
+        - $ref: '#/components/schemas/Framework'
+        - type: object
+          required:
+            - versions
+          properties:
+            versions:
+              type: array
+              items:
+                $ref: '#/components/schemas/FrameworkVersion'
+
+    FrameworkRequirement:
+      type: object
+      required:
+        - id
+        - framework_version_id
+        - requirement_code
+        - title
+        - requirement_type
+        - sort_order
+      properties:
+        id:
+          type: string
+          format: uuid
+        framework_version_id:
+          type: string
+          format: uuid
+        requirement_code:
+          type: string
+          description: e.g. `CC6.1`, `A.5.15`, `8.3.1`, `§164.312(a)(1)`.
+        title:
+          type: string
+        description:
+          type:
+            - string
+            - "null"
+        requirement_type:
+          $ref: '#/components/schemas/RequirementType'
+        category:
+          type:
+            - string
+            - "null"
+        sort_order:
+          type: integer
+
+    CommonControl:
+      type: object
+      description: |
+        A unified control intent that can map to many framework requirements via STRM
+        edges. Platform-seeded rows have `firm_id = null`; firm-custom rows carry the
+        firm's UUID.
+      required:
+        - id
+        - code
+        - name
+        - description
+        - category
+        - source
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        firm_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Null for platform-seeded rows; populated for firm-custom rows.
+        code:
+          type: string
+          description: Axiom-assigned identifier (e.g. `CC-AC-01`).
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          description: e.g. `Access Control`, `Encryption`, `Logging`, `Governance`, `AI Governance`.
+        source:
+          $ref: '#/components/schemas/CommonControlSource'
+        created_at:
+          type: string
+          format: date-time
+        deprecated_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+
+    CommonControlSatisfies:
+      type: object
+      description: |
+        Directed STRM-encoded edge from a `CommonControl` to a `FrameworkRequirement`.
+        Effective-dated — a new row is created when a mapping changes rather than
+        mutating an existing row.
+      required:
+        - id
+        - common_control_id
+        - framework_requirement_id
+        - relationship_type
+        - strength_score
+        - source
+        - valid_from
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        common_control_id:
+          type: string
+          format: uuid
+        framework_requirement_id:
+          type: string
+          format: uuid
+        relationship_type:
+          $ref: '#/components/schemas/STRMRelationshipType'
+        strength_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: How strongly the CommonControl satisfies the requirement (0–100).
+        coverage_notes:
+          type:
+            - string
+            - "null"
+          description: |
+            Free text explaining partial satisfaction. Required when
+            `relationship_type` is `subset-of` or `intersects-with`.
+        source:
+          $ref: '#/components/schemas/MappingSource'
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type:
+            - string
+            - "null"
+          format: date
+        created_at:
+          type: string
+          format: date-time
+
+    EvidenceItemSupports:
+      type: object
+      description: |
+        Directed, period-aware edge from an `EvidenceItem` to a `CommonControl`. One
+        evidence item can support many common controls; the confirmed edges flow through
+        `CommonControlSatisfies` to every mapped `FrameworkRequirement`.
+      required:
+        - id
+        - firm_id
+        - evidence_item_id
+        - common_control_id
+        - coverage_pct
+        - period_start
+        - ai_suggested
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        firm_id:
+          type: string
+          format: uuid
+        evidence_item_id:
+          type: string
+          format: uuid
+        common_control_id:
+          type: string
+          format: uuid
+        coverage_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: How completely this evidence covers the common control (0–100).
+        period_start:
+          type: string
+          format: date
+          description: Start of the window this evidence covers (Type 2 / surveillance alignment).
+        period_end:
+          type:
+            - string
+            - "null"
+          format: date
+          description: End of the window; null for point-in-time evidence.
+        gap_notes:
+          type:
+            - string
+            - "null"
+          description: Required when `coverage_pct < 100`.
+        ai_suggested:
+          type: boolean
+        ai_decision_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: FK to the AIDecision that proposed this mapping, if AI-originated.
+        confirmed_by_user_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: The human who confirmed the mapping. Null for pending AI suggestions.
+        confirmed_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    MappingSuggestion:
+      type: object
+      description: |
+        An AI-produced candidate mapping from an evidence item to a common control.
+        Generated by the `frameworks.evidence-control-mapping` worker.
+      required:
+        - common_control_id
+        - confidence
+        - explanation
+      properties:
+        common_control_id:
+          type: string
+          format: uuid
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        explanation:
+          type: string
+          description: One-line plain-language justification.
+        downstream_framework_requirement_ids:
+          type: array
+          description: Framework requirements that would be covered if this mapping is confirmed.
+          items:
+            type: string
+            format: uuid
+        ai_decision_id:
+          type: string
+          format: uuid
+          description: The AIDecision record capturing this suggestion.
+
+    CoverageReport:
+      type: object
+      description: |
+        Engagement-level cross-framework gap analysis output. Produced by the
+        `frameworks.gap-analysis` River worker. The structured recommendations power the
+        Coverage dashboard UI.
+      required:
+        - engagement_id
+        - generated_at
+        - frameworks
+      properties:
+        engagement_id:
+          type: string
+          format: uuid
+        generated_at:
+          type: string
+          format: date-time
+        ai_decision_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: AIDecision record for any Sonnet-generated narrative recommendations.
+        frameworks:
+          type: array
+          items:
+            type: object
+            required:
+              - framework_version_id
+              - coverage_pct
+              - requirement_statuses
+            properties:
+              framework_version_id:
+                type: string
+                format: uuid
+              coverage_pct:
+                type: integer
+                minimum: 0
+                maximum: 100
+              requirement_statuses:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - framework_requirement_id
+                    - status
+                  properties:
+                    framework_requirement_id:
+                      type: string
+                      format: uuid
+                    status:
+                      $ref: '#/components/schemas/CoverageStatus'
+                    coverage_pct:
+                      type: integer
+                      minimum: 0
+                      maximum: 100
+                    gap_notes:
+                      type:
+                        - string
+                        - "null"
+        recommendations:
+          type: array
+          description: Prioritized next evidence collections (highest cross-framework leverage first).
+          items:
+            type: object
+            required:
+              - rank
+              - description
+            properties:
+              rank:
+                type: integer
+              description:
+                type: string
+              common_control_ids:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+              projected_coverage_gain_pct:
+                type: number
+
+    # -------------------------------------------------------------------------
+    # Request schemas
+    # -------------------------------------------------------------------------
+
+    CreateCommonControlRequest:
+      type: object
+      required:
+        - code
+        - name
+        - description
+        - category
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+
+    UpdateCommonControlRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        deprecated_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+
+    CreateCommonControlSatisfiesRequest:
+      type: object
+      required:
+        - common_control_id
+        - framework_requirement_id
+        - relationship_type
+        - strength_score
+        - valid_from
+      properties:
+        common_control_id:
+          type: string
+          format: uuid
+        framework_requirement_id:
+          type: string
+          format: uuid
+        relationship_type:
+          $ref: '#/components/schemas/STRMRelationshipType'
+        strength_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        coverage_notes:
+          type: string
+          description: Required when relationship_type is subset-of or intersects-with.
+        valid_from:
+          type: string
+          format: date
+        valid_to:
+          type:
+            - string
+            - "null"
+          format: date
+
+    SuggestMappingsRequest:
+      type: object
+      description: Optional scoping parameters for the AI mapping suggestion job.
+      properties:
+        engagement_id:
+          type: string
+          format: uuid
+          description: If provided, restricts candidate CommonControls to those in-scope for this engagement's active frameworks.
+        max_candidates:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 3
+          description: Maximum number of candidate CommonControl mappings to return.
+
+    MappingSuggestionJob:
+      type: object
+      required:
+        - ai_decision_id
+        - status
+      properties:
+        ai_decision_id:
+          type: string
+          format: uuid
+          description: Poll this AIDecision to retrieve suggestions on completion.
+        status:
+          type: string
+          enum:
+            - Pending
+            - Processing
+            - Complete
+            - Failed
+        suggestions:
+          type: array
+          description: Populated when status is Complete.
+          items:
+            $ref: '#/components/schemas/MappingSuggestion'
+
+    CreateEvidenceItemSupportsRequest:
+      type: object
+      required:
+        - evidence_item_id
+        - common_control_id
+        - coverage_pct
+        - period_start
+      properties:
+        evidence_item_id:
+          type: string
+          format: uuid
+        common_control_id:
+          type: string
+          format: uuid
+        coverage_pct:
+          type: integer
+          minimum: 0
+          maximum: 100
+        period_start:
+          type: string
+          format: date
+        period_end:
+          type:
+            - string
+            - "null"
+          format: date
+        gap_notes:
+          type: string
+          description: Required when coverage_pct < 100.
+        ai_decision_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: If set, the AIDecision is marked Accepted/Modified and linked to this row.
+
+    FrameworkMigrationRequest:
+      type: object
+      required:
+        - from_framework_version_id
+        - to_framework_version_id
+      properties:
+        from_framework_version_id:
+          type: string
+          format: uuid
+          description: Superseded framework version (e.g. ISO 27001:2013).
+        to_framework_version_id:
+          type: string
+          format: uuid
+          description: New framework version (e.g. ISO 27001:2022).
+        engagement_id:
+          type: string
+          format: uuid
+          description: Optional — when set, migration is scoped to CommonControls active in this engagement.
+
+    FrameworkMigrationJob:
+      type: object
+      required:
+        - status
+        - ai_decision_ids
+      properties:
+        status:
+          type: string
+          enum:
+            - Pending
+            - Processing
+            - Complete
+            - Failed
+        ai_decision_ids:
+          type: array
+          description: One AIDecision per proposed edge update; confirm individually.
+          items:
+            type: string
+            format: uuid
+
+    # -------------------------------------------------------------------------
+    # List wrappers
+    # -------------------------------------------------------------------------
+
+    FrameworkListResponse:
+      type: object
+      required:
+        - frameworks
+      properties:
+        frameworks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Framework'
+
+    FrameworkDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/FrameworkDetail'
+
+    FrameworkRequirementListResponse:
+      type: object
+      required:
+        - requirements
+        - pagination
+      properties:
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/FrameworkRequirement'
+        pagination:
+          $ref: './common.yaml#/components/schemas/Pagination'
+
+    CommonControlListResponse:
+      type: object
+      required:
+        - common_controls
+        - pagination
+      properties:
+        common_controls:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommonControl'
+        pagination:
+          $ref: './common.yaml#/components/schemas/Pagination'
+
+    CommonControlSatisfiesListResponse:
+      type: object
+      required:
+        - edges
+        - pagination
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommonControlSatisfies'
+        pagination:
+          $ref: './common.yaml#/components/schemas/Pagination'
+
+    EvidenceItemSupportsListResponse:
+      type: object
+      required:
+        - supports
+      properties:
+        supports:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceItemSupports'

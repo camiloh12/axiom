@@ -1,6 +1,6 @@
 # Axiom Product Specification
-**Date:** April 15, 2026
-**Status:** Implementation-Ready
+**Date:** April 17, 2026
+**Status:** Implementation-Ready (compliance/assurance pivot)
 
 ---
 
@@ -39,75 +39,91 @@ Alternatives under consideration for a future rename (not prioritized at this ti
 
 ## 1. Product Overview
 
-> Research: [01-target-market.md](../research/01-target-market.md)
+> Research: [01-target-market.md](../research/01-target-market.md) <!-- STALE: research doc predates compliance pivot --> · [compliance-pivot-findings.md](compliance-pivot-findings.md)
 
 ### What Axiom Is
 
-Axiom is an AI-native audit engagement platform built for mid-market CPA and advisory firms doing both financial audits and compliance framework audits (SOC 2, ISO 27001, HIPAA) from a single subscription. It replaces the fragmented CaseWare + DataSnipper + Excel toolstack with a unified platform that handles workpaper management, trial balance analysis, framework-agnostic evidence collection, PBC request management, and regulatory-compliant archiving — all with an AI layer that eliminates the manual extraction, evidence-matching, and review-delay work that consumes 10–20 hours per auditor per week. Axiom is designed to be operational within one week of signup, without an implementation consultant.
+Axiom is an AI-native compliance and assurance platform built for mid-market CPA firms and compliance-first consultancies that deliver SOC 2, ISO 27001, ISO 27701, ISO 42001, HIPAA, PCI DSS, and SOC 1 attestation work. It is deliberately **both-sided**: the auditor-side workspace (engagement scoping, fieldwork, workpapers, reporting) and the auditee-side workspace (Client Hub with continuous monitoring, policy library, drift-triggered re-testing) operate on the same `CommonControl` graph, so one evidence artifact clears requirements across every in-scope framework simultaneously. The AI layer is ISO 42001-native by construction and every AI output is cryptographically signed and WORM-stored — auditor-defensible by the data path, not by marketing claim. Axiom is designed to be operational within one week of signup, without an implementation consultant.
 
 ### Target ICP
 
-**Firm size:** 20–60 professional staff (partners, managers, seniors, staff auditors).
+**Firm type:** Mid-market CPA firms delivering AICPA SOC attestations + compliance-first consultancies (the tier below Schellman / A-LIGN) delivering ISO readiness, PCI gap assessment, HIPAA/HITRUST, and ISO 42001 engagements.
 
-**Practice mix:** Mixed financial audit and compliance framework audit (SOC 2 Type II and/or ISO 27001 and/or HIPAA). Not compliance-only. Not internal audit.
+**Firm size:** 20–60 professional staff.
 
-**Current toolstack:** Running CaseWare (or CaseWare + DataSnipper) alongside Excel for trial balance work. Managing PBC requests via email or a bolt-on tool like Suralink or AuditDashboard. No unified AI layer.
+**Practice mix:** Compliance and assurance work across SOC 2 Type I/II, ISO 27001:2022, ISO 27701:2019, ISO 42001:2023, HIPAA Security Rule (with HITRUST CSF r2 path post-MVP), PCI DSS v4.0.1, and SOC 1 Type I/II. **Not** Certification Bodies (ISO CBs do not fit the engagement-workspace model), **not** QSA firms (QSA ROC signing is out of scope), **not** internal audit / SOX / enterprise GRC (AuditBoard's territory), **not** financial audit.
 
-**Geography:** US and Canada at launch. Primarily auditing private companies (AICPA nonissuer standards); may have a small number of PCAOB-registered engagements.
+**Geography:** US and Canada at launch. AWS us-east-1.
 
 **Engagement volume:** 30–100 engagements per year.
 
-**Decision-maker profile:** Managing partner or audit partner who has evaluated Fieldguide and was deterred by cost or implementation complexity, or who has not yet evaluated modern platforms and is actively experiencing the pain of their current toolstack.
+**Decision-maker profile:** Managing partner, practice lead, or head of attestation services who is either (a) paying $30K+/year for Drata/Vanta/Hyperproof and realizing these tools are auditee-facing with bolted-on auditor features, (b) struggling through multi-framework engagements where evidence is re-collected per framework, (c) selling ISO 42001 engagements with no adequate tooling, or (d) scrutinizing AI-assisted work after the March 2026 category trust crisis and asking "how do we prove our AI outputs are defensible?"
 
 ### Primary and Secondary Differentiators
 
-**Primary differentiator:** Axiom is the only mid-market-priced platform that supports financial audits (trial balance, GAAS workpapers, materiality, sampling) and compliance audits (SOC 2, ISO 27001, HIPAA) in the same engagement workspace, with a framework-agnostic evidence architecture that eliminates redundant evidence collection across frameworks. The underlying evidence chain (EvidenceItem → TestProcedure → FirmControlObjective → FrameworkRequirement) operates at all tiers. The explicit cross-framework mapping UI — showing which other frameworks an evidence item satisfies and enabling auditors to run integrated multi-framework engagements — is a Scale-tier feature.
+**Primary differentiator:** Axiom is a **both-sided (auditor + auditee) AI-native compliance platform with STRM-grade cross-framework evidence mapping, cryptographic AIDecision provenance, and ISO 42001-native human-in-the-loop AI governance.** Each of those is concrete:
 
-**Secondary differentiator:** Self-serve onboarding with time-to-first-engagement under one week. No implementation consultant required for firms using standard AICPA, SOC 2, or ISO 27001 methodologies. This is not just a UX goal — it is a structural sales advantage that enables a product-led growth motion where Fieldguide cannot follow.
+- **Both-sided** — auditor-side tooling (engagement lifecycle, workpapers, EQR, reporting, archival) and a full auditee GRC workspace (Client Hub continuous monitoring, policy library, drift-triggered re-testing) operate on the same data model. Drata / Vanta / Secureframe / Delve are auditee-only. Agentive is auditor-only. None cover both.
+- **STRM-grade cross-framework evidence mapping** — the `CommonControl` graph uses NIST Secure Controls Framework (SCF) crosswalks with NIST STRM relationship vocabulary (`equivalent-to | subset-of | superset-of | intersects-with | no-relationship`), strength scores, and effective-dated edges. One evidence artifact flows coverage through the `EvidenceItemSupports → CommonControl → CommonControlSatisfies → FrameworkRequirement` chain to every mapped framework, with period-aware staleness checks (ASV scan 90d, pen test 1y, background check 1y, SOC 2 Type II windows, ISO surveillance cycles) applied per-framework. Axiom never shows a green checkmark on partial coverage — percentages and gap lists only.
+- **Cryptographic AIDecision provenance** — every AI output is signed with an AWS KMS asymmetric key (`ECC_NIST_P256`, `SIGN_VERIFY`) at emission and written to S3 Object Lock (WORM) with the provenance envelope (`artifact_id`, `model_id`, `model_version`, `prompt_hash`, `input_content_hashes`, `output_hash`, `generated_at`, reviewer identity, reviewer action). Any party — EQR reviewer, ISO CB technical reviewer, client procurement, regulator — can recompute and verify the signature. This is the direct answer to the March 2026 agentic-compliance trust crisis.
+- **ISO 42001-native HITL AI governance** — Axiom dogfoods ISO 42001. The three-tier HITL policy, `AIDecision` ledger, and `ai_content_metadata` tracking are the operational realization of ISO 42001 clauses 6–9 for Axiom as a deployer of AI. Impact-assessment records, model-change-management logs, prompt/model/context/confidence/reviewer/override auditability are first-class platform features, not a policy PDF.
+
+**Secondary differentiator:** Self-serve onboarding with time-to-first-engagement under one week. No implementation consultant required for standard SOC 2, ISO 27001/27701, HIPAA, ISO 42001, PCI DSS, or SOC 1 methodologies. This is a structural sales advantage against incumbents (Drata / Vanta Enterprise, AuditBoard, Hyperproof) whose ACVs require sales-led procurement cycles.
 
 ### What Axiom Does NOT Do at Launch
 
-- Big Four or enterprise firm workflows (sales cycles too long, security review burden too high)
-- Internal audit, SOX compliance, or enterprise GRC (AuditBoard's market)
-- ESG or sustainability reporting
-- White-labeling or reseller channels
-- Custom AI model training per firm
-- On-device or local model execution
-- AI-autonomous engagement actions (AI suggests; humans decide — always)
-- PCAOB-registered firm deep compliance automation beyond AS 1105 documentation requirements
-- ERP write-back integrations (read-only at launch)
-- Practice management billing integration (Karbon sync is read-status, not billing)
+- **Certification Body (CB) issuance** — Axiom supports firms *preparing and assisting* with ISO 27001/27701/42001; the certificate itself is issued by an accredited CB, which Axiom does not become.
+- **QSA/QSI PCI ROC signing** — Axiom supports PCI DSS gap assessment, evidence collection, and ROC preparation; final ROC/AOC signing requires an accredited QSA, and that sign-off is the licensed firm's responsibility.
+- **PCAOB public-company audits** — Axiom does not support issuer audits under PCAOB standards.
+- **Financial audit / GAAS** — no trial balance, sampling, materiality, or financial-statement workpapers. This is a deliberate exit from the audit vertical.
+- **Internal audit / SOX compliance / enterprise GRC** — AuditBoard's market; different buyer, different workflow, different regulatory framework (IIA vs. AICPA / ISO).
+- **ESG or sustainability reporting**.
+- **White-labeling or reseller channels**.
+- **Custom AI model training per firm** (insufficient data, managed via RAG instead).
+- **On-device or local model execution** (Bedrock over VPC endpoint is sufficient).
+- **AI-autonomous engagement actions** — AI suggests, humans decide; ISO 42001 Tier 3 actions are human-initiated only.
 
 ---
 
 ## 2. Competitive Positioning
 
-> Research: [01-target-market.md](../research/01-target-market.md) · [02-competitive-differentiation.md](../research/02-competitive-differentiation.md)
+> Research: [02-competitive-differentiation.md](../research/02-competitive-differentiation.md) <!-- STALE: research doc predates compliance pivot --> · [compliance-pivot-findings.md](compliance-pivot-findings.md)
 
-### One-Paragraph Positioning vs. Fieldguide, Yak, and CaseWare+DataSnipper
+### One-Paragraph Positioning
 
-Fieldguide is the correct choice for the top 100 US CPA firms with budget exceeding $50,000/year and appetite for a structured multi-week implementation program — it is not priced or designed for the firm that needs to run its first engagement next Monday. Yak is excellent for compliance-only boutiques doing SOC 2 and HIPAA, but it has no trial balance module and no financial audit support, making it irrelevant for any firm doing mixed-service work. CaseWare + DataSnipper is the de facto mid-market standard, but it is two products, two licenses, two logins, and no AI layer — firms pay $40,000–$67,000/year for a stack that still requires Excel as the connective tissue. Axiom occupies the gap that none of these tools fill: a platform with the breadth of Fieldguide (financial audit + compliance audit + AI) at mid-market pricing, with the self-serve simplicity that CaseWare and Fieldguide structurally cannot provide.
+**Drata, Vanta, and Secureframe** are auditee-only — they automate control implementation and evidence collection for the company being audited, and hand off a report package to whichever external auditor the client brings. **Agentive** (YC S23, ~$500K seed, ~6 people) is auditor-only — a narrow workpaper-drafting surface with no framework intelligence and no cross-mapping. **AuditBoard CrossComply** and **Hyperproof** license UCF / pivot to SCF for crosswalks but carry internal-audit-GRC baggage that mis-fits mid-market attestation firms. **Sprinto** and **Thoropass** compete in mid-market auditee SaaS, with Thoropass owning an audit practice (an independence concern for external-auditor buyers). The March 2026 trust crisis in the agentic-compliance category made unverifiable AI output commercially toxic, and no competitor today produces cryptographically signed AI outputs with a reviewer-attested ledger. Axiom is the only platform that (a) serves both auditor and auditee sides on one data model, (b) rides SCF/OSCAL/AICPA/CIS crosswalks with STRM-grade period-aware edges, (c) signs every AI output at emission and WORM-stores it, and (d) is ISO 42001-native by construction — and does so at mid-market self-serve pricing.
+
+### Competitor Set
+
+| Competitor | Scope | Strengths | Gap vs. Axiom |
+|---|---|---|---|
+| **Drata** | Auditee-only | 30+ frameworks, DCF proprietary control framework, strong SOC 2 auditor hand-off | No auditor workspace, no cross-mapping UX for external auditors, no signed AI provenance |
+| **Vanta** | Auditee-only | 35+ frameworks, strongest enterprise adoption, Vanta Control Framework (VCF) launched March 2026 | Auditee-only; enterprise pricing; AI features unsigned |
+| **Secureframe** | Auditee-only | 40+ frameworks, similar depth to Vanta | Auditee-only; weaker enterprise story |
+| **AuditBoard CrossComply** | Enterprise GRC + UCF license | Strongest internal-audit pedigree, UCF crosswalk | Internal-audit workflow mis-fit for mid-market attestation; enterprise sales cycle |
+| **Hyperproof** | GRC with 142 frameworks | SCF-pivot crosswalk, breadth | Internal-audit tilt; no both-sided product; no signed provenance |
+| **Sprinto** | Mid-market auditee | "Magic Mapping", fast-to-SOC-2 | Auditee-only |
+| **Thoropass** | Mid-market auditee + audit practice | Bundled audit + tooling | Owns audit practice — independence concerns for external-auditor buyers |
+| **Agentive** (YC S23) | Auditor-only workpaper drafting | Narrow PBC/workpaper UX | Tiny (~$500K funding, ~6 people); no framework intelligence, no cross-mapping, no both-sided surface |
+| *(post–March 2026 agentic-compliance trust crisis)* | — | — | The crisis makes unverifiable AI output commercially untenable. Axiom's response is signed, reviewer-attested AIDecisions. Axiom does not name this competitor in-product. |
 
 ### The Switching Trigger
 
-A mid-market firm evaluates Axiom when one or more of these events occurs:
+A firm evaluates Axiom when one or more of the following occurs:
 
-1. **Busy-season failure:** A partner exits a January–April audit season having spent 15+ hours/week on manual PDF extraction, evidence chasing, and review delays. The pain is acute and the budget conversation is easy.
-2. **The Fieldguide wall:** A firm requests a demo or quote from Fieldguide, receives either no response or a quote exceeding $40,000/year with a mandatory Accelerator program, and begins looking for alternatives.
-3. **The DataSnipper renewal:** A firm receives its annual DataSnipper renewal ($10,000–$20,000/year) and asks why they are paying for a productivity layer on top of Excel rather than replacing Excel.
-4. **Lost engagement:** A firm loses a prospective client because their document request process was too slow or their report delivery was delayed.
+1. **Incumbent renewal sticker shock.** A firm receives a Drata / Vanta / Hyperproof renewal at $50K+/year and re-examines whether they are paying for features they actually use. Particularly acute when the firm is on the auditor side and realizes the tool is auditee-centric.
+2. **Failed audit on evidence gaps.** A firm's engagement goes sideways because evidence staleness, period coverage, or partial-satisfaction gaps were not caught. A platform that surfaces these automatically is an easy budget conversation.
+3. **Continuous-monitoring drift not caught.** An incumbent tool flagged a drift but didn't tie it to re-testing; the auditor only discovered during fieldwork that a control had silently broken mid-period.
+4. **Multi-framework expansion.** A firm picking up a SOC 2 + ISO 27001 + ISO 27701 integrated engagement, or adding ISO 42001 to the offering, needs cross-mapping and cannot get it cleanly from an auditee-only tool.
+5. **Post-crisis AI scrutiny.** After the March 2026 category trust crisis, a partner asks "how do we prove our AI-assisted work is defensible?" Signed provenance + AIDecision ledger is the answer.
 
-The in-app trial strategy exploits triggers 1 and 3: a firm can sign up, load a real trial balance, run an AI completeness review on a PBC document, and experience the time savings within 30 minutes — before committing to any payment.
+The 14-day trial exploits triggers 1 and 4: a firm can sign up, load a real SOC 2 Type II template, upload one piece of evidence, and watch the cross-framework coverage dashboard update live — before committing to any payment.
 
-### Why Fieldguide Won't Easily Respond Downmarket
+### Why Drata and Vanta Won't Respond Downmarket-Auditor-Side
 
-Fieldguide has raised $125M in total funding at a $700M valuation (Series C, February 2026, led by Goldman Sachs). They serve 40+ of the top 100 US CPA firms. Their strategic incentive is to expand upmarket — into the Big Four, into ESG reporting, into enterprise GRC — not to launch a self-serve product at one-third of their current price point. A downmarket product would:
+Drata is a unicorn ($2B+ valuation) and Vanta is the category leader both raised to sustain enterprise-auditee growth. Their strategic incentive is to expand **upmarket within the auditee segment** — larger customers, more frameworks, more integrations, deeper verticals — not to launch an auditor-side workspace that would (a) require a separate product motion, (b) create a conflict of interest with their installed base (they serve the auditees their auditor customers audit), and (c) dilute their core message. A both-sided pivot by an incumbent would require organizational duplication that enterprise SaaS companies at this stage rarely execute successfully.
 
-- Directly undercut their current customer base's willingness to pay (signaling that enterprise pricing was inflated)
-- Require a separate product motion (PLG vs. enterprise sales) that conflicts with their Accelerator onboarding model
-- Attract a buyer segment with shorter sales cycles, lower ACVs, and higher support burden per dollar
-
-Enterprise SaaS companies at Fieldguide's stage rarely segment down successfully. The structural incentives run in the opposite direction.
+Agentive has the reverse constraint: capital-constrained, no framework intelligence, narrow auditor-side surface. They can grow within PBC/workpaper drafting but cannot cross into cross-mapping + auditee workspace without a ground-up rebuild.
 
 ---
 
@@ -119,27 +135,31 @@ Enterprise SaaS companies at Fieldguide's stage rarely segment down successfully
 
 **Growth — $1,200/month ($14,400/year, or $12,000/year billed annually)**
 
-Best for: 10–40 staff firms, 20–50 engagements/year, migrating off CaseWare + DataSnipper.
+Best for: 10–40 staff firms, 20–50 engagements/year, one to two frameworks.
 
 - Unlimited users
 - Up to 35 active engagements/year included
-- Financial audit: trial balance import, workpaper management, sampling calculators, materiality
-- Compliance audit: SOC 2 Type I/II, HIPAA, ISO 27001
-- Standard AI: document extraction, evidence completeness review, workpaper draft assist
-- Pre-built methodology templates (AICPA/GAAS, SOC 2 TSC 2017, ISO 27001:2022)
-- Client PBC request portal (tokenized upload links, no client login required for simple upload)
+- **Framework templates at launch:** SOC 2 Type I/II, ISO 27001:2022, ISO 27701:2019, HIPAA, PCI DSS SAQ, SOC 1 Type I/II
+- Client Hub with continuous monitoring (auditee workspace)
+- AI evidence → `CommonControl` mapping suggestions
+- Standard AI: document extraction, evidence completeness review, workpaper draft assist, report section draft
+- Pre-built methodology templates (AICPA SOC 2 TSC, ISO 27001 Annex A, HIPAA Safeguards, PCI DSS requirements)
+- Tokenized Client Hub upload links (no client login required for simple upload) + full ClientAdmin workspace
 - Standard email support + in-app help
 - Overage: $350/engagement beyond included 35
 
 **Scale — $2,400/month ($28,800/year, or $24,000/year billed annually)**
 
-Best for: 30–100 staff firms, 50–150 engagements/year, running multi-framework audits.
+Best for: 30–100 staff firms, 50–150 engagements/year, running multi-framework integrated engagements.
 
 - Everything in Growth
 - Up to 100 active engagements/year included
-- Cross-framework evidence mapping (one evidence item satisfies multiple frameworks simultaneously)
-- AI-assisted risk assessment and control gap analysis
-- Advanced analytics dashboard (engagement cycle time, staff utilization, review bottleneck identification)
+- **Cross-framework evidence mapping** (one evidence item flows coverage through the STRM graph to every mapped framework — note: this is a tier feature; the primary product differentiator is the both-sided workspace with provenance, of which cross-mapping is one component)
+- AI-assisted gap analysis and cross-framework risk assessment
+- **Drift-triggered re-testing** (configuration-drift detection + autonomous re-test with AIDecision ledger)
+- **ISO 42001 engagement support** (AI system inventory, impact-assessment templates, model-card management)
+- **PCI DSS ROC preparation** (gap assessment, evidence binder assembly for QSA sign-off)
+- Advanced analytics dashboard (engagement cycle time, staff utilization, review bottleneck identification, coverage freshness)
 - Multi-entity / group audit support
 - Custom methodology template editor
 - Priority support + dedicated onboarding call
@@ -147,21 +167,22 @@ Best for: 30–100 staff firms, 50–150 engagements/year, running multi-framewo
 
 **Enterprise — Custom ($50,000–$120,000/year, negotiated)**
 
-Best for: 80–200+ staff firms, 150+ engagements/year, requiring enterprise security and SLAs.
+Best for: 80–200+ staff firms, 150+ engagements/year, requiring enterprise security, SLAs, and custom integrations.
 
 - Everything in Scale, unlimited engagements
 - Dedicated Customer Success Manager
 - 99.9% uptime SLA
-- Signed HIPAA BAA between Axiom and the audit firm (required for the firm's compliance documentation; Growth/Scale tiers receive the platform HIPAA BAA on request, but dedicated BAA negotiation and compliance documentation are included in Enterprise)
 - SAML/SSO integration
+- Signed HIPAA BAA (dedicated BAA review and negotiation)
 - Audit trail export and long-term data retention configuration
-- Custom integrations (ERP, practice management, GL systems)
-- Security review package (SOC 2 Type II report, penetration test summary, data residency documentation)
+- Custom integrations (firm-specific connectors, enterprise identity providers, bespoke reporting pipelines)
+- Security review package (Axiom's own SOC 2 Type II report, ISO 27001 certificate, ISO 42001 certificate, penetration test summary, data residency documentation)
+- **Optional SKU:** UCF (Unified Compliance Framework) license passthrough for firms that require UCF content in addition to the platform's default SCF/OSCAL/AICPA/CIS stack
 - Negotiated multi-year contracts; EU/APAC data residency option
 
 **Annual billing incentive:** 2 months free (16.7% discount) for annual prepayment. Monthly billing available at Growth tier only. Scale and Enterprise require annual contracts.
 
-**Engagement definition:** One engagement = one client entity, one primary framework, one audit period. A rollforward to the following year counts as a new engagement. Integrated audits (e.g., SOC 2 + ISO 27001 in one engagement) count as one engagement. This definition is stated in the terms of service and enforced in the product UI.
+**Engagement definition:** One engagement = one client entity, one primary framework, one period. A rollforward to the following period counts as a new engagement. **An integrated engagement (e.g., SOC 2 + ISO 27001 + ISO 27701 scoped together per Journey 11) counts as one engagement**, not three — the whole value proposition of cross-mapping is defeated if the pricing model re-counts it. This definition is stated in the terms of service and enforced in the product UI.
 
 ### Self-Serve vs. Sales-Assisted Thresholds
 
@@ -173,9 +194,9 @@ Best for: 80–200+ staff firms, 150+ engagements/year, requiring enterprise sec
 
 ### Trial Strategy
 
-14-day full-feature trial, no credit card required. Trial requires a business email domain and brief intake form (firm name, staff count, primary audit types). One pre-loaded engagement template on signup (SOC 2 Type II or GAAS Financial Audit, selectable). Trial workspace is locked (not deleted) at expiry until a plan is selected. AI-driven in-app progress guidance toward completing the first engagement setup.
+14-day full-feature trial, no credit card required. Trial requires a business email domain and brief intake form (firm name, staff count, primary engagement types: multi-select from SOC 2 / ISO 27001 / ISO 27701 / ISO 42001 / HIPAA / PCI DSS / SOC 1). One pre-loaded engagement template on signup — **SOC 2 Type II or ISO 27001:2022, selectable**. Trial workspace is locked (not deleted) at expiry until a plan is selected. AI-driven in-app progress guidance toward completing the first engagement setup.
 
-No permanent free tier. The trust and professional-perception risk of a free tier outweighs the acquisition benefit for a platform handling sensitive financial data.
+No permanent free tier. The trust and professional-perception risk of a free tier outweighs the acquisition benefit for a platform handling sensitive compliance data and cryptographically signed evidence.
 
 ### Revenue Model Summary
 
@@ -185,116 +206,105 @@ No permanent free tier. The trust and professional-perception risk of a free tie
 | **200 firms** | 90 Growth, 80 Scale, 30 Enterprise | ~$5.4M ARR |
 | **500 firms** | 175 Growth, 225 Scale, 100 Enterprise | ~$15M ARR |
 
-With overage revenue (5–15% of ACV) and NRR of 110–120%, realistic ARR at 500 firms is $16–18M. Gross churn target: 8–12% annually. The primary churn risk is not product dissatisfaction — it is firm-level business events (mergers, economic contraction, partner retirement removing the champion). Historical audit software has very low churn because engagement history and compliance retention obligations create a strong switching cost: migrating five years of engagement files to a new platform costs $40,000–60,000.
+With overage revenue (5–15% of ACV) and NRR of 110–120%, realistic ARR at 500 firms is $16–18M. Gross churn target: 8–12% annually. Primary churn risk is not product dissatisfaction but firm-level business events (mergers, practice consolidation, champion turnover). Historical compliance/assurance software has very low churn because engagement history and regulatory retention obligations create a strong switching cost.
 
 ---
 
 ## 4. Regulatory Compliance Requirements
 
-> Research: [03-regulatory-standards.md](../research/03-regulatory-standards.md)
+> Research: [03-regulatory-standards.md](../research/03-regulatory-standards.md) <!-- STALE: research doc predates compliance pivot --> · [compliance-pivot-findings.md](compliance-pivot-findings.md)
 
 ### Engagement Type × Standard × Platform Requirements
 
-| Requirement | Financial Audit (Private) | SOC 1 / SOC 2 | Financial Audit (Public / PCAOB) | ISO 27001:2022 | HIPAA |
-|---|---|---|---|---|---|
-| **Governing standard** | AICPA AU-C (SAS 122+) | AICPA AT-C 105/205/320 (SSAE 18) | PCAOB AS series | ISO/IEC 27001:2022 | HIPAA Security Rule (45 CFR §§164.302–318) |
-| **Workpaper assembly deadline** | 60 days after report release | 60 days after report issuance | 45 days after report release | N/A | N/A |
-| **Retention period** | 5 years from report date | 5 years from report date | 7 years from report date | Ongoing ISMS records | 6 years from date of creation or last effective date |
-| **Sign-off hierarchy** | Engagement partner + reviewer | Partner + EQR (SQMS 2 where applicable) | Partner + mandatory EQR (AS 1220) | Certification body | N/A (agreed-upon procedures or internal audit) |
-| **Period coverage** | Year-end or stub period | Full examination period (Type II: 6 or 12 months minimum) | Year-end | Certification cycle (initial + annual surveillance + triennial full) | Ongoing compliance point-in-time |
-| **AI documentation required** | Best practice (PCAOB guidance used as reference) | Best practice | Mandatory (PCAOB AS 1105, eff. Dec 15, 2025) | N/A | N/A |
-| **Immutable lock trigger** | After 60-day assembly window closes | After 60-day assembly window closes | After 45-day assembly window closes | After certification issued | N/A |
-| **Quality management** | SQMS 1 (eff. Dec 15, 2025) | SQMS 1 (eff. Dec 15, 2025) | PCAOB QC 1000 | ISO internal audit requirements | N/A |
+| Requirement | SOC 1 | SOC 2 | ISO 27001 | ISO 27701 | ISO 42001 | HIPAA | PCI DSS |
+|---|---|---|---|---|---|---|---|
+| **Governing standard** | AICPA AT-C 105/205/320 (SSAE 18) | AICPA AT-C 105/205/320 (SSAE 18) | ISO/IEC 27001:2022 | ISO/IEC 27701:2019 | ISO/IEC 42001:2023 | HIPAA Security Rule (45 CFR §§164.302–318) | PCI DSS v4.0.1 |
+| **Sign-off authority** | CPA firm partner + EQR (SQMS 2 where applicable) | CPA firm partner + EQR (SQMS 2 where applicable) | Accredited CB (ISO 17021-1) — Axiom supports readiness; CB issues certificate | Accredited CB — Axiom supports readiness | Accredited CB — Axiom supports readiness; dogfooded internally | Firm attestation or internal audit; HITRUST r2 via Authorized External Assessor (post-MVP) | QSA (accredited by PCI SSC) signs ROC; Axiom supports gap assessment and evidence assembly |
+| **Period coverage** | Full examination period (Type II: 6 or 12 months minimum) | Full examination period (Type II: 6 or 12 months minimum) | Certification cycle (initial + annual surveillance + triennial full) | Certification cycle + privacy-program surveillance | Certification cycle; AI-lifecycle management-system scope | Ongoing compliance point-in-time | Annual assessment; ASV scans quarterly; pen test annually |
+| **Retention period** | 5 years from report date | 5 years from report date | Ongoing ISMS records | Ongoing PIMS records | Ongoing AIMS records | 6 years from creation / last effective date | 3 years minimum (some evidence longer) |
+| **Workpaper assembly deadline** | 60 days after report issuance | 60 days after report issuance | N/A (ongoing ISMS) | N/A | N/A | N/A | N/A |
+| **Immutable lock trigger** | After 60-day assembly window closes | After 60-day assembly window closes | On certificate issuance | On certificate issuance | On certificate issuance | Policy-driven point-in-time | On ROC issuance |
+| **AI documentation required** | Best practice | Best practice | Best practice (ISO 42001 if the org is deploying AI) | Best practice | **Mandatory** — ISO 42001 itself requires documented AI lifecycle, impact assessments, HITL, model change management | Best practice | Best practice; required if AI is used in CDE |
 
-### SQMS 1 Implications for Platform Workflow
+### Explicit Scope Boundary
 
-SQMS 1 (effective December 15, 2025) replaces the prior QC 10 quality control standard. It is not a policy document — it changes the workflow of engagements in ways the platform must support:
+Axiom does **not** issue ISO certificates (that is a CB function under ISO 17021-1), **not** sign PCI ROCs (that is a QSA function), and **not** issue attestation opinions on behalf of any firm. The platform supports firms *preparing* and *assisting* with these engagements — specifically: AICPA-licensed CPA firms for SOC attestations, compliance-first consultancies for ISO readiness and ISO 42001 engagements, QSA firms for PCI gap assessment and ROC evidence assembly, and firms delivering HIPAA/HITRUST-r2 (post-MVP) engagements. Final attestation, certification, and ROC sign-off are the licensed firm's responsibility. This boundary is also stated in the MSA and in product in-app.
 
-**Client/engagement acceptance:** When creating a new engagement, the platform requires completion of a `ClientAcceptance` record documenting quality risks identified and the firm's responses to those risks. The Planning → Fieldwork transition is blocked until this record is signed off by a partner. This is not optional and cannot be bypassed.
+### Firm Quality Management + Internal Inspection
 
-**Communicating quality policies:** During engagement setup, applicable firm quality policies are surfaced inline (not buried in a separate policy document the team never reads). Firms maintain their quality policies in the platform, and the system links relevant policies to each engagement type.
+Firms running SOC engagements fall under AICPA SQMS 1 (effective December 15, 2025) and SQMS 2 (for EQR). Firms running ISO engagements fall under ISO 17021-1 §9.6 internal-audit expectations for CBs (Axiom does not become a CB but its consultancy customers produce readiness artifacts a CB will later review). Firms running PCI engagements fall under PCI SSC QSA QA requirements.
 
-**Engagement Quality Review (SQMS 2):** For engagements where EQR is required (mandatory for all PCAOB engagements under AS 1220; applicable for higher-risk nonissuer engagements under SQMS 1), the platform enforces:
-- EQR reviewer must be assigned at engagement setup
-- EQR reviewer cannot be an `EngagementTeamMember` on the same engagement (system-enforced via role conflict check)
-- Review → Reporting transition is blocked until `EngagementQualityReview.status = Complete` and `signed_off_at` is populated
-- The EQR record captures: reviewer identity, independence confirmation date, scope notes, and conclusion
+The platform supports a **generic firm quality management + internal inspection workflow** that applies across all of these:
 
-**Partner involvement evidence:** The AuditLog creates a timestamped record of engagement partner activity throughout the engagement. Partner sign-off events are first-class log entries. This provides the "substantial and meaningful involvement" audit trail required under AU-C 220.
+- **Client/engagement acceptance:** On engagement creation, the platform requires completion of a `ClientAcceptance` record documenting quality risks and firm responses. Planning → Fieldwork is blocked until this record is signed off by a partner (or partner-equivalent for consultancies).
+- **Firm quality policies:** Firms maintain policies in the platform; applicable policies surface inline during engagement setup.
+- **Engagement Quality Review (EQR):** For SOC attestations requiring EQR, the platform enforces reviewer assignment, reviewer independence (the EQR reviewer cannot be an `EngagementTeamMember`), and blocks the Review → Reporting transition until EQR sign-off. For ISO engagements, an analogous internal-review workflow applies.
+- **Partner involvement evidence:** The `AuditLog` records timestamped partner activity throughout the engagement.
+- **Annual internal inspection:** The platform supports inspection sampling by stratified random selection, findings documentation, and remediation tracking. Growth-tier firms get partner-managed inspection; Scale adds inspection analytics.
 
-**Annual internal inspection:** The platform supports inspection workflows — sampling prior engagements by stratified random selection, documenting inspection findings, tracking remediation. This is a Growth-tier feature at launch (partner-managed), with enhanced inspection analytics on Scale.
+### AIDecision Ledger Maps to Regulatory Documentation Expectations
 
-### PCAOB AS 1105 AI Documentation Requirement (Effective December 15, 2025)
+Every AI action that affects engagement content creates an `AIDecision` row. The schema is regulator-ready:
 
-PCAOB AS 1105 (as amended effective December 15, 2025) requires that for any audit procedure using technology-based analysis tools (including AI):
-
-1. The auditor must evaluate the reliability of electronic information used as evidence
-2. IT general controls over source systems must be tested
-3. Technology-assisted procedures must be documented as meeting their intended purpose
-4. All flagged transactions or balances must be investigated and documented
-
-**Platform implementation:** Every AI action that affects audit content creates an `AIDecision` record (defined in Section 5). For PCAOB engagements, `AIDecision` records are included in the immutable engagement archive. The `AIDecision` schema maps directly to AS 1105 documentation requirements:
-
-| AS 1105 Requirement | AIDecision Field |
+| Documentation Expectation | AIDecision Field |
 |---|---|
-| What technology procedure was performed | `context_type` + `context_id` |
-| What model/tool was used | `model_id` |
+| What technology procedure was performed | `context_type` + `context_id` + `context_table` |
+| What model/tool was used | `model_id` (pinned Bedrock model version) |
 | What the AI determined | `suggested_value` + `raw_output` |
 | Who reviewed the AI output | `reviewed_by_id` |
-| What the auditor decided (accepted/modified/rejected) | `review_action` + `accepted_value` |
+| What the reviewer decided (accepted/modified/rejected) | `review_action` + `accepted_value` |
 | When review occurred | `reviewed_at` |
+| Reviewer rationale when overriding | `explanation` |
+| Cryptographic proof of artifact | `ProvenanceRecord` (signed envelope — see §10) |
 
-AI outputs alone never constitute sufficient audit evidence. Every Tier 2 AI action (defined in Section 6) requires explicit auditor review and documented sign-off before becoming part of the audit file.
-
-**AS 1215 future-readiness (effective December 15, 2026):** The forthcoming AS 1215 amendment will standardize documentation structure to facilitate AI and data analytics in audit workflows. Axiom's structured, machine-readable workpaper format (content stored as typed jsonb, not free-form text) anticipates this requirement. No retroactive changes will be needed to existing engagements.
+AI outputs alone never constitute sufficient audit evidence. Every Tier 2 AI action (see §6) requires explicit reviewer action and a signed `AIDecision` before becoming part of the engagement record.
 
 ### Framework Version Management
 
-The `Framework` table treats each version as a separate row. ISO 27001 2013 and ISO 27001 2022 are separate entries. SOC 2 TSC 2017 and any future revision will be separate entries.
-
-**How versions are managed:**
-- Each engagement records `framework_version_id` at creation time — the version in effect at that time
-- When a new framework version is published, a new `Framework` row is added with its `effective_date`; no existing engagement references are changed
-- Evidence linked to a control requirement must reference the specific version of the criterion satisfied (e.g., "SOC 2 TSC 2017, CC6.1" — not just "CC6.1")
-- The platform prevents applying deprecated version control mappings to new engagements after the transition deadline (e.g., ISO 27001:2013 was deprecated October 31, 2025)
-- When a firm opens a new engagement, the current active version for each framework is the default; firms can select a prior version only with explicit override and documentation reason (for re-engagements or comparatives)
+`Framework` and `FrameworkVersion` are separate rows. ISO 27001:2013 and ISO 27001:2022 are distinct. SOC 2 TSC 2017, ISO 42001:2023, PCI DSS 3.2.1 and 4.0.1 are distinct. Each engagement records `framework_version_id` at creation time; new framework versions do not change existing engagement references. Evidence → `CommonControl` → `FrameworkRequirement` edges carry effective-dated windows so version churn does not silently invalidate historical coverage. AI Feature 7 (framework version migration) proposes `CommonControlSatisfies` edge updates on version cutover; each proposal is a signed `AIDecision`.
 
 ---
 
 ## 5. Core Data Model
 
-> **Full specification:** [Domain and Data Model Design](domain-and-data-model-design.md) — complete domain model (bounded contexts, aggregates, invariants), data model (table definitions, column types, constraints, indexes), and journey-to-entity traceability. What follows is a summary.
+> **Full specification:** [Domain and Data Model Design](domain-and-data-model-design.md) — complete domain model (bounded contexts, aggregates, invariants), table definitions, column types, constraints, indexes, enum types, and journey-to-entity traceability. What follows is a summary.
 
 ### Bounded Contexts
 
-The domain is organized into 7 bounded contexts and 3 cross-cutting concerns, derived from the [user journeys](../user-journeys/all-journeys.md):
+Six bounded contexts and three cross-cutting concerns, derived from the [user journeys](../user-journeys/all-journeys.md) (updated for the compliance/assurance scope):
 
 | # | Context | Key Entities | Module |
 |---|---|---|---|
 | 1 | Firm Identity | Firm, User, Client, Invitation | `internal/identity` |
-| 2 | Regulatory Framework | Framework, FrameworkRequirement, ControlObjectiveLibrary | `internal/auditcore` |
+| 2 | Regulatory Framework & Common Controls | Framework, FrameworkVersion, FrameworkRequirement, CommonControl, CommonControlSatisfies (STRM), EvidenceItemSupports | `internal/frameworks` |
 | 3 | Firm Methodology | MethodologyTemplate, FirmControlObjective, template items | `internal/identity` |
-| 4 | Audit Core | Engagement, Control, TestProcedure, EvidenceItem, EvidenceLink, DocumentRequest, ClientAcceptance, EngagementQualityReview | `internal/auditcore` |
-| 5 | Trial Balance | TrialBalance, TrialBalanceAccount, TrialBalanceAdjustment | `internal/trialbalance` |
-| 6 | Workpaper Authoring | Workpaper, WorkpaperVersion, ReviewNote | `internal/workpaper` |
-| 7 | Reporting | Report, ReportVersion | `internal/reporting` |
-| — | Cross-cutting | AIDecision, AuditLog, Notification | `internal/auditcore` |
+| 4 | Audit Core | Engagement, EngagementFramework, Control, TestProcedure, EvidenceItem, EvidenceLink, DocumentRequest, ClientAcceptance, EngagementQualityReview, Finding, ManagementResponse, CorrectiveActionPlan | `internal/auditcore` |
+| 5 | Workpaper Authoring | Workpaper, WorkpaperVersion, ReviewNote | `internal/workpaper` |
+| 6 | Reporting & Archival | Report, ReportVersion | `internal/reporting` |
+| — | Cross-cutting | AIDecision, AuditLog, Notification, ProvenanceRecord | `internal/auditcore` + `internal/provenance` |
 
-**Total entities: 33** in a single PostgreSQL database (`axiom_db`) with RLS.
+**Total domain entities:** ~46 in a single PostgreSQL database (`axiom_db`) with RLS on all tenant-scoped tables. See [Domain and Data Model Design](domain-and-data-model-design.md) for the authoritative list.
 
 ### Cross-Framework Evidence Chain
 
-The core architectural differentiator — one evidence upload satisfies all mapped framework requirements simultaneously:
+The core architectural differentiator — one evidence upload satisfies all mapped framework requirements simultaneously, through the STRM graph:
 
 ```
-EvidenceItem → EvidenceLink → TestProcedure → Control
-  → FirmControlObjective → FirmControlObjectiveMapping
-    → FrameworkRequirement (SOC 2 CC6.1)
-    → FrameworkRequirement (ISO 27001 A.8.3)
-    → FrameworkRequirement (HIPAA §164.312(a)(1))
+EvidenceItem ──► EvidenceItemSupports ──► CommonControl
+                                             │
+                                             ├──► CommonControlSatisfies ──► FrameworkRequirement (SOC 2 CC6.1)
+                                             ├──► CommonControlSatisfies ──► FrameworkRequirement (ISO 27001 A.5.15)
+                                             ├──► CommonControlSatisfies ──► FrameworkRequirement (ISO 27701 §6.x)
+                                             └──► CommonControlSatisfies ──► FrameworkRequirement (HIPAA §164.312(a)(1))
+
+EvidenceItem ──► EvidenceLink ──► TestProcedure ──► Control
+                                                      │
+                                                      └──► FirmControlObjective (engagement-specific testing narrative)
 ```
 
-This chain requires ACID transactions, which is why Audit Core (Context 4) is a single bounded context with a shared database.
+`CommonControl` is the pivot node: it decouples **what a control does** (semantic intent, platform-seeded from SCF / OSCAL / AICPA / CIS) from **how a firm tests it** (`FirmControlObjective`) and **how a framework expresses it** (`FrameworkRequirement`). STRM-encoded `CommonControlSatisfies` edges carry NIST relationship vocabulary, strength score, coverage percentage, and effective-dated windows — so partial satisfaction and version churn are modeled explicitly, not papered over.
+
+This chain requires ACID transactions, which is why Audit Core and Frameworks are in the same `axiom_db` with function-call (not HTTP) interfaces. See [Backend Architecture §3](backend-architecture-design.md).
 
 ### Engagement Lifecycle State Machine
 
@@ -306,73 +316,88 @@ Reporting ──[Report.status = Issued]──► Finalized
 Finalized ──[System: assembly_deadline elapsed]──► Archived (IMMUTABLE)
 ```
 
-Reverse paths exist for exceptional cases (scope change, additional procedures, significant post-reporting issues). Once Finalized, no content can be modified — addenda only (AU-C 230, PCAOB AS 1215).
+Reverse paths exist for exceptional cases (scope change, additional procedures, significant post-reporting issues). Once Finalized, no content can be modified — addenda only.
 
-### Entities Added by Journey Analysis
+### Integrated Multi-Framework Engagement Model
 
-The following entities were identified through the user journey analysis and are not present in earlier versions of this spec:
-
-- **Invitation** — magic link onboarding for staff (Journey 1, 2)
-- **TemplateDocumentRequest** — pre-drafted PBC requests within methodology templates (Journey 7)
-- **ReviewNote** — structured, immutable review feedback on workpapers (Journey 6)
-- **EQRFinding** — individual findings within an engagement quality review (Journey 10)
-- **ClientHubToken** — tokenized no-login access for client document uploads (Journey 7, 8)
-- **DelegationToken** — single-request scoped delegation for client contacts (Journey 8)
-- **ColumnMappingProfile** — saved TB import configurations per accounting system (Journey 4)
-- **Notification** — in-app and email delivery with deep links (Journey 2, 5, 6, 7)
+`engagement_frameworks` is a 1:N join between `Engagement` and `FrameworkVersion` with `is_primary` flag. Per Journey 11, a single engagement can carry SOC 2 + ISO 27001 + ISO 27701 simultaneously; one `Control` tested once produces coverage edges across every in-scope framework via the `CommonControl` graph, with an auditor-defensible separation of opinion per framework at the report layer.
 
 ### Multi-Tenancy
 
-`axiom_db` uses PostgreSQL RLS with `firm_id` on all tenant-scoped tables. Three authorization dimensions: firm isolation (RLS), engagement team membership (point lookup), and client user scoping (engagement-level invitation).
+`axiom_db` uses PostgreSQL RLS with `firm_id` on all tenant-scoped tables. Platform-seeded reference data (`frameworks`, `framework_versions`, `framework_requirements`, platform rows of `common_controls` / `common_control_satisfies`) is shared across tenants. Firm-authored extensions carry `firm_id` and are RLS-enforced. Three authorization dimensions: firm isolation (RLS), engagement team membership (point lookup), and client user scoping (engagement-level invitation).
 
-See [Domain and Data Model Design](domain-and-data-model-design.md) for complete attribute definitions, data types, constraints, indexes, enum types, rollforward behavior, and the journey-to-entity traceability matrix.
+See [Domain and Data Model Design](domain-and-data-model-design.md) for complete attribute definitions, data types, constraints, indexes, enum types, and journey-to-entity traceability.
 
 ---
 
 ## 6. AI Architecture
 
-> **Full specification:** [AI Architecture Design](ai-architecture-design.md) — LLM provider decision, vector database, all eight AI features with model assignments and human review gates, AI content tracking, and cost estimates. What follows is a summary.
+> **Full specification:** [AI Architecture Design](ai-architecture-design.md) — LLM provider decision, vector database, all eleven AI features with model assignments and human review gates, AI content tracking, ISO 42001-native positioning, cryptographic provenance, and cost estimates. What follows is a summary.
 
 ### LLM Provider and Vector Database
 
-**AWS Bedrock with Claude Haiku and Sonnet**, accessed via VPC endpoint (PrivateLink). IAM-based auth, single AWS BAA, CloudWatch-native metrics. No external API keys, no additional sub-processor.
+**AWS Bedrock with Claude Haiku and Sonnet**, accessed via VPC endpoint (PrivateLink). IAM-based auth, single AWS BAA, CloudWatch-native metrics. No external API keys, no additional sub-processor. Opus is reserved behind a feature flag for future multi-framework-planning workloads.
 
-**pgvector** (PostgreSQL extension) for embedding storage at launch. Migration path to Qdrant at 5–10M vectors.
+**pgvector** (PostgreSQL extension) for embedding storage at launch — framework requirement text, evidence content, `CommonControl` library, firm methodology/policy library, and prior engagement artifacts. Migration path to Qdrant at 5–10M vectors.
 
-### Eight AI Features
+### Eleven AI Features
 
 | # | Feature | Model | Tier | Journeys |
 |---|---------|-------|------|----------|
 | 1 | Document completeness review | Sonnet | 2 | 7, 8 |
-| 2 | Control mapping (cross-framework) | Haiku | 2 | 3 |
-| 3 | Trial balance account mapping | Haiku | 2 | 4 |
+| 2 | Evidence → CommonControl mapping suggestion | Haiku | 2 | 4, 7, 8 |
+| 3 | Cross-framework gap analysis | Sonnet | 2 | 3, 4, 11, 12 |
 | 4 | Workpaper narrative draft | Sonnet | 2 | 5 |
 | 5 | Evidence link suggestion | Haiku | 2 | 5, 7 |
-| 6 | Risk category suggestion | Sonnet | 2 | 3 |
-| 7 | Trial balance anomaly detection | Haiku | 1 (Tier 2 for PCAOB) | 4 |
-| 8 | Report section draft | Sonnet | 2 | 9 |
+| 6 | Risk category suggestion for client acceptance | Sonnet | 2 | 3 |
+| 7 | Framework version migration assistance | Sonnet | 2 | 3, 4 |
+| 8 | Findings triage & severity reasoning | Sonnet | 2 | 6, 9 |
+| 9 | Drift-triggered re-testing | Haiku (+ Sonnet for severity narrative) | 1 detect / 2 conclude | 12 |
+| 10 | Agentic management-response drafting | Sonnet | 2 | 9, 12 |
+| 11 | Report section draft | Sonnet | 2 | 9 |
 
-Every Tier 2 feature creates an `AIDecision` record and requires explicit human review before affecting the audit file. Feature 7 elevates to Tier 2 behavior for PCAOB engagements per AS 1105 documentation requirements. See [ai-architecture-design.md](ai-architecture-design.md) for full feature definitions including inputs, process, outputs, failure modes, and human review gates.
+Every Tier 2 feature creates an `AIDecision` record and requires explicit human review before affecting engagement content. See [ai-architecture-design.md](ai-architecture-design.md) for full feature definitions.
 
-### Human-in-the-Loop Policy
+### Human-in-the-Loop Policy (Three Tiers)
 
-**Tier 1 — Fully Automated:** Text extraction, embedding generation, notification-only flags, overdue reminders, analytics computation, anomaly detection (nonissuer engagements).
+**Tier 1 — Fully Automated:** Text extraction, embedding generation, notification-only flags, overdue reminders, analytics computation, drift *detection* (not conclusion), evidence routing suggestions.
 
-**Tier 2 — Human Approval Required:** All eight AI features above (except Feature 7 on nonissuer engagements). No audit file content changes without explicit auditor action.
+**Tier 2 — Human Approval Required:** All eleven AI features above (Feature 9 detection is Tier 1; any control-status-changing conclusion elevates to Tier 2). No engagement content changes without explicit named human action.
 
-**Tier 3 — Human-Initiated Only:** Engagement status transitions, control conclusions, exception documentation, sign-offs, report issuance, client acceptance, and any action constituting professional judgment.
+**Tier 3 — Human-Initiated Only:** Engagement status transitions, control conclusions, exception documentation, sign-offs, report issuance, client acceptance, EQR / internal-review sign-off, authoritative cross-framework equivalence declarations, and any action constituting professional judgment under AT-C 105, ISAE 3000 (Revised), ISO 17021-1, PCI DSS QSA sign-off, or HITRUST AEA attestation.
+
+This tiering is the operational spine of Axiom's ISO 42001 alignment — it is enforced in code, not policy.
+
+### ISO 42001-Native Positioning
+
+Axiom is an ISO 42001-native platform. ISO 42001 is the international management-system standard for AI, and Axiom both *assesses* clients against it (Feature 11 drafts the ISO 42001 management-system audit report) and *operates under* it. The three-tier HITL policy, the `AIDecision` ledger with `prompt_hash`/`model_id`/`model_version`/`confidence`/`reviewer`/`override` as first-class columns, the per-feature impact-assessment records, and model-change-management workflows together satisfy ISO 42001 clauses 6–9 for Axiom as a deployer of AI. See [ai-architecture-design.md §6](ai-architecture-design.md#6-iso-42001-native-positioning) for detail.
+
+### Cryptographic Provenance for AI Outputs
+
+Every AI output is signed at emission. At creation, Axiom constructs a provenance envelope (`artifact_id`, `ai_decision_id`, `model_id`, `model_version`, `prompt_hash`, `input_content_hashes`, `output_hash`, `generated_at`, `axiom_version`), signs it with an AWS KMS asymmetric key (`ECC_NIST_P256`, `SIGN_VERIFY`), and writes the signature + envelope + raw output to an S3 Object Lock (WORM) bucket with retention matching the engagement's record-retention policy (minimum 7 years). Human edits to AI drafts sign a new envelope with a pointer to the parent — a tamper-evident chain. A public verification endpoint and CLI let any party recompute the output hash and verify the signature. This is the direct answer to the March 2026 category trust crisis. See [ai-architecture-design.md §7](ai-architecture-design.md#7-cryptographic-provenance-for-ai-outputs) for detail.
 
 ### AI Content Tracking
 
-AI-drafted content (Features 4 and 8) is tracked at the **section level**, not as a document-level boolean. Each AI-generated section records: origin timestamp, whether it was human-edited, editor identity, and a modification ratio (Levenshtein distance between AI output and current text). The advancement gate requires all AI-generated sections to have at least one human edit. Sections with <5% modification trigger a soft confirmation gate. EQR reviewers and managers see per-workpaper and engagement-wide AI edit substantiveness summaries. See [ai-architecture-design.md § 5](ai-architecture-design.md#5-ai-content-tracking) for the full data model and gate logic.
+AI-drafted content (Features 4 and 11) is tracked at the **section level** via `ai_content_metadata` on `WorkpaperVersion` and `ReportVersion`. Each AI-generated section records origin timestamp, human-edited flag, editor identity, and modification ratio (Levenshtein distance between AI output and current text, divided by AI character count). The advancement gate requires all AI sections to have at least one human edit; sections with <5% modification trigger a soft confirmation gate. EQR reviewers and managers see per-workpaper and engagement-wide AI edit substantiveness summaries. See [ai-architecture-design.md §5](ai-architecture-design.md#5-ai-content-tracking).
 
 ### Per-Engagement AI Cost Estimate
 
-~$5.80 per SOC 2 engagement, ~$6.15 per financial audit engagement at on-demand Bedrock pricing. With prompt caching: **$3–5 per SOC 2**, **$4–6 per financial audit**. At 100 engagements/year, platform AI costs are $300–$600/year — absorbed into the subscription. See [ai-architecture-design.md § 6](ai-architecture-design.md#6-per-engagement-ai-cost-estimate) for the full breakdown.
+After prompt caching, per-engagement effective cost by framework:
+
+| Framework | Cost Range |
+|---|---|
+| SOC 2 Type II | $3–5 |
+| ISO 27001 / 27701 | $3–5 |
+| ISO 42001 | $4–6 |
+| HIPAA (with HITRUST CSF r2 path post-MVP) | $3–5 |
+| PCI DSS 4.0.1 | $5–8 |
+| SOC 1 Type II | $3–5 |
+
+Multi-framework integrated engagements (Journey 11) do not multiply linearly — the `CommonControl` graph means evidence is embedded once, gap analysis runs once per scope, and the marginal cost of adding a second framework is roughly 30–40% of its standalone cost. At 100 engagements/year, platform AI costs are **$300–$800/year per firm** — absorbed into the subscription. KMS signing (~$0.03/engagement) and S3 Object Lock WORM storage (~$1–2/engagement) are rounding error. See [ai-architecture-design.md §8](ai-architecture-design.md#8-per-engagement-ai-cost-estimate).
 
 ### What AI Does NOT Do at Launch
 
-Fine-tuned models per firm, on-device execution, multi-agent orchestration, AI-generated audit opinions or professional conclusions, autonomous multi-step actions without human review gates, auto-finalization of any audit content
+Fine-tuned models per firm, on-device execution, multi-agent orchestration frameworks (LangGraph / CrewAI — staged pipelines in Feature 10 use River-scheduled Tier-gated steps), AI-generated certification decisions / attestation opinions / QSA sign-off / HITRUST AEA attestations, AI-generated authoritative cross-framework equivalence declarations (AI suggests mappings; authoritative crosswalk is SCF/OSCAL/AICPA-sourced plus firm-confirmed), external side effects without named human approval on the AIDecision, auto-finalization of any audit content, use of Opus (reserved, feature-flagged).
 
 ---
 
@@ -380,17 +405,17 @@ Fine-tuned models per firm, on-device execution, multi-agent orchestration, AI-g
 
 ### Frontend
 
-**TypeScript / React SPA.** Component library: Shadcn/ui (accessible, customizable, no licensing overhead). State management: TanStack Query for server state; Zustand for local UI state. API types are generated from the OpenAPI specs in `packages/openapi/` via `openapi-typescript` — a spec change automatically regenerates the client on the next build.
+**TypeScript / React SPA.** Component library: Shadcn/ui (accessible, customizable, no licensing overhead). State management: TanStack Query for server state; Zustand for local UI state. API types are generated from the OpenAPI specs in `packages/openapi/` via `openapi-typescript`.
 
-### Backend: Go Modular Monolith + Python PDF Service
+### Backend: Go Modular Monolith + Python PDF Service + Provenance Signer
 
-**Decision: Go as the primary backend language, structured as a modular monolith. Python retained for PDF extraction.**
+**Go as the primary backend language, structured as a modular monolith. Python retained for PDF extraction. A separate `provenance-signer` ECS service isolates KMS signing.**
 
-Go was chosen for its compile-time type safety, lean container images (30–50MB per Fargate task), and strong fit for compliance SaaS — Workiva, an established player in this space, uses Go for their REST services. The backend is a single Go binary organized into internal packages by bounded context (identity, audit core, trial balance, workpaper, reporting). Modules communicate via Go interfaces, not HTTP — this provides ACID transactions across the full evidence chain and eliminates distributed systems overhead for a solo developer + AI agent team.
+Go was chosen for compile-time type safety, lean container images (30–50MB per Fargate task), and strong fit for compliance SaaS. The backend is a single Go binary organized into internal packages by bounded context. Modules communicate via Go interfaces, not HTTP — this provides ACID transactions across the evidence chain and eliminates distributed-systems overhead.
 
-Python is retained as a single stateless service for PDF extraction. `pdfplumber` handles complex, multi-column, scanned audit documents better than any Go library. The polyglot cost is contained — one endpoint, one job, no shared state.
+Python is retained as a stateless service for PDF extraction (`pdfplumber` + Tesseract). The `provenance-signer` is a minimal Go service with narrow IAM (only `kms:Sign` on the provenance-signing key) to reduce signing blast radius.
 
-**Full module descriptions, database design, Go and Python tech stack choices, and inter-module communication patterns are specified in [`backend-architecture-design.md`](./backend-architecture-design.md).**
+**Full module descriptions, database design, and inter-module communication patterns are specified in [`backend-architecture-design.md`](./backend-architecture-design.md).**
 
 **Monorepo structure:**
 ```
@@ -399,162 +424,97 @@ apps/
     internal/
       gateway/      — Chi middleware: JWT verification, routing, rate limiting
       identity/     — Auth, RBAC, firm/user/client, templates
-      auditcore/    — Engagements, controls, evidence, AI decisions
-      trialbalance/ — Trial balance, population analysis
+      auditcore/    — Engagements, controls, evidence, AI decisions, findings
+      frameworks/   — Framework catalog, CommonControl graph, STRM edges, cross-mapping, drift detection
+      provenance/   — AI output signing, evidence provenance, WORM manifest management
       workpaper/    — Workpapers, Yjs collaboration (WebSocket)
       reporting/    — Report generation, S3 archival
-      ai/           — Bedrock client, prompt templates
+      ai/           — Bedrock client, prompt templates, embedding helpers
       platform/     — DB, config, OTel, River, common middleware
   doc-processing/   — Python: PDF extraction only
+  provenance-signer/— Go: Isolated ECS service with narrow KMS:Sign IAM
 packages/
-  openapi/          — OpenAPI 3.1 specs organized by module (source of truth)
+  openapi/          — OpenAPI 3.1 specs organized by module
 ```
 
 Turborepo manages the monorepo with build caching.
 
 ### API Layer: REST + OpenAPI
 
-**Decision: REST with OpenAPI 3.1 for all services. Hasura is rejected.**
-
-**Why REST with OpenAPI:** REST decouples the frontend from the backend language. OpenAPI enables future public API exposure (webhooks, partner integrations) without adding a separate layer.
-
-Each module defines its API contract as an OpenAPI 3.1 spec in `packages/openapi/`. `oapi-codegen` generates typed Go server interfaces from the spec. `openapi-typescript` generates typed fetch clients for the React frontend. Authorization is enforced as composable Go middleware:
-
-- `WithFirmIsolation` — reads `firm_id` from gateway-injected headers, sets Postgres session variable for RLS
-- `WithEngagementAccess` — verifies `EngagementTeamMember` record exists for the requested engagement
-- `WithClientScoping` — for `ClientUser` roles, filters to invited engagements only
-
-**Why Hasura is rejected:** The evidence authorization chain requires a five-level relationship traversal (`EvidenceItem → EvidenceLink → TestProcedure → Control → Engagement → EngagementTeamMember`). Hasura v2's `_exists` permission predicates materialize this as an `IN (...)` query that degrades as `EngagementTeamMember` grows. Hasura permissions are YAML metadata — not code, not testable with standard unit tests, difficult to reason about as authorization rules evolve. The auto-generated CRUD value Hasura provides is not justified for a platform where most queries are purpose-built for specific UI requirements.
-
-**Public API (year 2+):** The OpenAPI specs already define the contract. Exposing selected endpoints publicly requires adding authentication scopes and rate limiting at the API Gateway — no rewrite of business logic.
+REST with OpenAPI 3.1 for all services. Each module defines its contract as an OpenAPI 3.1 spec in `packages/openapi/`. `oapi-codegen` generates typed Go server interfaces; `openapi-typescript` generates typed fetch clients. Authorization is composable Go middleware (`WithFirmIsolation`, `WithEngagementAccess`, `WithClientScoping`).
 
 ### Database: PostgreSQL with RLS
 
-PostgreSQL is the sole persistent data store. One RDS instance hosts a single database (`axiom_db`) with row-level security (RLS) on all tenant-scoped tables for multi-tenancy. Each module owns specific tables and accesses them via its own sqlc queries; cross-module data is accessed through Go service interfaces, not direct table queries. Database access uses `sqlc` + `pgx/v5` (type-safe SQL generation from plain SQL query files) with `golang-migrate` for schema migrations. PgBouncer for connection pooling in transaction mode.
+PostgreSQL is the sole persistent data store. One RDS instance hosts a single database (`axiom_db`) with row-level security on all tenant-scoped tables. Each module owns specific tables and accesses them via its own `sqlc` queries; cross-module data goes through Go service interfaces. `golang-migrate` for schema migrations. PgBouncer (transaction mode) as ECS sidecar.
 
-**pgvector** extension enabled on `axiom_db` for embedding storage (Section 6).
-
-**Workpaper content** stored as typed jsonb in `Workpaper.content`. The jsonb structure supports rich text (ProseMirror document format), embedded tables, formula references, and metadata. A dedicated document store is not needed at launch scale.
+**pgvector** extension enabled for embeddings (framework requirements, evidence, `CommonControl`, firm methodology/policy library).
 
 ### Workflow Engine: Two-Tier (River + Step Functions)
 
-**Tier 1 — River (PostgreSQL-based job queue) for background jobs:**
+**River** (Go-native Postgres-backed queue) for fire-and-forget background jobs — document extraction, embedding generation, AI mapping/gap analysis, drift detection, notifications. **AWS Step Functions** Standard Workflows for the engagement lifecycle state machine and long-running reminder sequences.
 
-All fire-and-forget background work uses River, a Go-native Postgres-backed job queue. Zero additional infrastructure — it uses the existing database. One River instance serves all modules. Jobs are durable (WAL-backed), support retry with exponential backoff, and have dead-letter queues.
+### Real-Time Collaboration
 
-River jobs (running within the Axiom API against `axiom_db`):
-- `document.extract` — PDF extraction via Python service
-- `document.embed` — embedding generation and pgvector indexing
-- `ai.completeness-check` — per document upload
-- `ai.nightly-sweep` — engagement-level completeness review
-- `ai.batch-control-mapping` — nightly, for new engagements
-- `email.notification` — all transactional emails
-
-**Tier 2 — AWS Step Functions Standard Workflows for the engagement lifecycle state machine:**
-
-The engagement lifecycle — its state machine with explicit guard conditions, time-based Finalized → Archived transition, and auditability requirement — maps directly to Step Functions Standard Workflows. Standard Workflows are designed for long-running processes (days to years) with durable state. A `Wait` state keyed to the computed archival timestamp handles the Finalized → Archived transition reliably regardless of service restarts. The DocumentRequest reminder sequence is a `Task` → `Wait` → `Task` loop.
-
-Step Functions is already within the AWS VPC, covered by the AWS BAA, and natively integrated with CloudWatch and X-Ray for execution history and distributed tracing. No additional vendor, no additional sub-processor. Cost at this scale is negligible ($0.025 per 1,000 state transitions; 100 engagements × ~20 transitions = cents per year).
-
-State machines are defined in Amazon States Language (ASL) and invoked from the Audit Core service via the AWS SDK for Go. Execution history is persisted and queryable by Step Functions — engagement lifecycle transitions are auditable without a separate event store.
-
-Step Functions state machines:
-- `EngagementLifecycleStateMachine` — state machine, guards as ECS task invocations, `Wait` state for scheduled Archived transition
-- `DocumentRequestReminderStateMachine` — `Task` (send) → `Wait` (7 days) → `Task` (send again) → `Wait` → `Task` (escalate)
-
-### Real-Time Collaboration: Two-Tier by Data Type
-
-**Workpaper rich text (TipTap + Yjs):** TipTap (ProseMirror-based editor) with Yjs CRDT for real-time co-editing of workpaper narratives. Yjs handles keystroke-level text concurrency naturally. Each save (triggered by idle timeout or explicit save) creates a `WorkpaperVersion` record. AI-generated content is tracked at the section level via `ai_content_metadata` on `WorkpaperVersion` (see [ai-architecture-design.md § 5](ai-architecture-design.md#5-ai-content-tracking)), satisfying PCAOB's requirement to distinguish AI-generated from auditor-authored content and providing EQR reviewers with edit substantiveness visibility.
-
-**Structured audit data (server-authoritative with field locking):** Trial balance cells, AI decision acceptance, control status, and engagement state transitions use server-authoritative operations with optimistic UI updates. For high-stakes operations (AI decision review, control conclusion, workpaper sign-off), field-level locking prevents concurrent conflicting professional judgments. If Auditor A opens an AI decision for review, the server marks it "in review by User A." Auditor B sees a "locked" indicator. Conflicts (network partitions, duplicate submissions) are resolved by the server: first committed action wins; the AuditLog records both attempts; the second user is notified.
-
-CRDTs (Yjs, Automerge) are explicitly not used for structured audit data. The automatic merge behavior of CRDTs is incompatible with the regulatory requirement that conflicting professional judgments produce an unambiguous, auditable outcome.
+Workpaper rich text uses TipTap + Yjs CRDT. Structured audit data (evidence mapping acceptance, control status, engagement transitions) uses server-authoritative operations with field-level locking for high-stakes decisions. CRDTs are explicitly not used for structured audit data — the automatic-merge behavior is incompatible with the regulatory requirement that conflicting professional judgments produce an unambiguous, auditable outcome.
 
 ### Spreadsheet Component: AG Grid Community + HyperFormula
 
-**Decision: AG Grid Community (MIT) + `hyperformula` (MIT) at launch. Univer evaluated at 6–12 months.**
-
-AG Grid Community handles 200–10,000 rows with virtualization, has a large React integration ecosystem, and is free. `hyperformula` (the same formula engine used internally by Handsontable, now independently MIT-licensed) provides 400+ Excel-compatible functions. Cell-level comments are implemented as a custom cell renderer.
-
-**Why AG Grid Enterprise is rejected:** The $999/developer cost is not justified when the required features (formula engine, basic export) are achievable with Community + open-source libraries.
-
-**Why Handsontable is rejected:** The per-developer/per-year licensing model creates a recurring cost that grows with the team. The formula engine advantage is neutralized by adding `hyperformula` to AG Grid. Collaborative editing story is no better.
-
-**Univer (Apache 2.0):** Provides native collaborative editing and a full formula engine, but is a newer project with limited production case studies outside of its creator. Evaluate via a 3-month spike at 6–12 months post-launch, after the collaborative editing requirement is confirmed by customer feedback. If the spike validates Univer's stability, migrate the spreadsheet component.
+AG Grid Community (MIT) + `hyperformula` (MIT) at launch — used for coverage dashboards, evidence ledgers, and tabular evidence capture. Univer evaluated at 6–12 months.
 
 ### Infrastructure: AWS + ECS Fargate
 
-**Primary cloud:** AWS. ECS Fargate for container orchestration (serverless — no node management or control plane upgrades). Infrastructure-as-code via Terraform.
+ECS Fargate, ALB, RDS PostgreSQL (Multi-AZ), S3 (with Object Lock for evidence, archive, reports, and signed AI artifacts), CloudFront, SES, Secrets Manager, CloudWatch + X-Ray, WAF, GuardDuty, AWS Config. Three ECS services: `axiom-api`, `doc-processing`, and `provenance-signer`. Dedicated KMS asymmetric key (`axiom-{env}-provenance-signing`, `ECC_NIST_P256`, `SIGN_VERIFY`) for AI and evidence provenance. Dedicated S3 bucket (`axiom-{env}-scf-catalog`) for SCF/OSCAL/AICPA/CIS crosswalk import.
 
-**Key AWS services:**
-- **ECS Fargate** — Container orchestration for two services: Axiom API (Go modular monolith) and Document Processing (Python). ECS Service Connect provides DNS for API-to-doc-processing communication. Axiom API scales on the maximum of CPU utilization and active WebSocket connection count.
-- **ALB** — Application Load Balancer for TLS termination in front of the API Gateway
-- **RDS PostgreSQL** — Single Multi-AZ instance hosting one database (`axiom_db`) with RLS; pgvector extension enabled
-- **S3** — Evidence file storage; Object Lock enabled for finalized engagements (see Section 10)
-- **CloudFront** — CDN for the React SPA
-- **SES** — Transactional email (document request notifications, client invitations, review alerts)
-- **Secrets Manager** — API keys, database credentials, OAuth tokens (automatic 30-day rotation for RDS credentials)
-- **CloudWatch + X-Ray** — Logging, monitoring, distributed tracing (via OpenTelemetry Go SDK)
-- **AWS WAF** — Web Application Firewall on ALB and CloudFront (OWASP core rules, rate limiting, geo-restriction)
-- **GuardDuty** — Threat detection across ECS, S3, and RDS
-- **AWS Config** — Continuous infrastructure compliance monitoring
-
-**Full AWS account structure, VPC design, Terraform workspace segmentation, CI/CD pipeline, security controls, observability configuration, and cost estimates are specified in [`infrastructure-design.md`](./infrastructure-design.md).**
+**Full AWS account structure, VPC design, Terraform workspaces, CI/CD, security controls, observability, and cost estimates are specified in [`infrastructure-design.md`](./infrastructure-design.md).**
 
 ---
 
 ## 8. Integration Roadmap
 
-> Research: [07-integrations.md](../research/07-integrations.md)
+> Research: [07-integrations.md](../research/07-integrations.md) <!-- STALE: research doc predates compliance pivot -->
+
+### Integration Philosophy
+
+Axiom prefers **standards-based ingestion (OAuth 2.0, SAML, SCIM, webhooks)** over per-vendor custom connectors. Cloud-provider, identity-provider, and dev-tool integrations exist to pull evidence (SOC 2 CC6.x, ISO 27001 A.5.x, A.8.x, PCI DSS 2.x/7.x/8.x, HIPAA §164.312) directly into `EvidenceItem` records, where they enter the same AI mapping / human-review pipeline as direct uploads.
 
 ### Launch (Must-Have)
 
-These are prerequisites — without them, the target ICP cannot run an engagement.
-
 | Integration | Type | What It Enables |
 |---|---|---|
-| **Transactional email (SES)** | Outbound notifications | Document request notifications, client portal invitations, review alerts. Without this, the PBC workflow does not function. |
-| **Direct file upload (native UX)** | Evidence ingestion | Clients upload evidence via tokenized link, no login required. Handles CSV, Excel, PDF, ZIP with bulk upload and folder-structure recognition. Covers 80%+ of evidence delivery cases with no external dependency. |
-| **CSV/Excel trial balance import** | Financial data | QBO, NetSuite, Sage, and Xero all export trial balances as CSV/Excel. A well-designed importer covering common format variations handles financial audit MVP. |
-| **Microsoft / Google SSO (SAML/OAuth)** | Identity | Mid-market firms authenticate via Microsoft or Google. Separate Axiom credentials for every staff member is an onboarding barrier. SAML for Enterprise; OAuth for Growth/Scale. |
+| **Transactional email (SES)** | Outbound | Document request notifications, client portal invitations, review alerts, drift alerts |
+| **Direct file upload** | Evidence ingestion | Clients upload evidence via tokenized link, no login required. Handles CSV, Excel, PDF, ZIP |
+| **Microsoft / Google SSO (SAML/OAuth)** | Identity | Firm staff authentication |
+| **SCF quarterly import** | Platform seed data | Updates the `CommonControl` and `CommonControlSatisfies` catalog with the quarterly SCF release |
+| **OSCAL catalog import** | Platform seed data | NIST-family catalogs (future-proofs for FedRAMP) |
 
 ### First 6 Months Post-Launch
 
-| Integration | Type | Priority Rationale |
+| Integration | Type | Purpose |
 |---|---|---|
-| **Drata Audit Hub API** | Evidence ingestion | Highest-value compliance audit integration. Drata is the SOC 2 compliance automation market leader. A Drata → Axiom connection delivers structured, control-tagged evidence directly into engagements, replacing hours of manual organization. Fieldguide already has this; Axiom needs it to compete in the SOC 2 segment. |
-| **Vanta evidence export** | Evidence ingestion | Analogous to Drata; 375+ source integrations, large installed base. Drata + Vanta covers the majority of well-prepared SOC 2 audit clients. |
-| **Google Drive OAuth** | Cloud storage | Highest-coverage cloud storage integration. Many mid-market clients organize evidence in Drive. Clean OAuth implementation. |
-| **Karbon API** | Practice management | Most important practice management integration for the ICP. Karbon is dominant in 20–200 staff US/Canada accounting firms. Engagement sync eliminates double-entry. A Karbon integration is a clear differentiator over Fieldguide, which does not offer one. |
-| **QuickBooks Online direct connector** | Accounting data | Most common accounting system for clients audited by the ICP. Direct QBO API connection (pull trial balance + journal entries on authorization) removes the "ask client to export a file" step and ensures point-in-time completeness. |
-| **Merge.dev HRIS layer** | HR data | Enables employee list pull for access review testing (CC6.2, CC6.3) in SOC 2 and HIPAA engagements. Covers Gusto, Rippling, BambooHR, Workday with one integration rather than six. |
+| **AWS, Azure, GCP** | Cloud evidence | Evidence collection for SOC 2 CC6, ISO 27001 A.5/A.8, PCI DSS 2.x, HIPAA technical safeguards |
+| **Okta, Google Workspace, Microsoft Entra** | Identity | Access reviews, SSO, MFA evidence (SOC 2 CC6.2/6.3, ISO A.5.15-18, HIPAA §164.308(a)(4)) |
+| **GitHub, GitLab, Bitbucket, Jira, Linear** | Dev tools | Change management, ticket evidence, SDLC audit trail (SOC 2 CC8.1, ISO A.8.25-32) |
+| **Slack, Zendesk** | Productivity / support | Incident response evidence (SOC 2 CC7.x, ISO A.5.24-29) |
+| **Drata Audit Hub + Vanta evidence export** | Evidence bridge | Ingest structured, control-tagged evidence from auditee-side tools when the client is already on Drata / Vanta — abstracts the client's infrastructure stack |
 
 ### 6–18 Months Post-Launch
 
 | Integration | Type | Notes |
 |---|---|---|
-| **SharePoint / Microsoft 365** | Cloud storage | Strategically important (M365 is dominant in firm IT stacks) but technically complex — Azure AD app registration, tenant admin consent, higher maintenance burden. Build after Google Drive is proven. |
-| **Dropbox** | Cloud storage | Simpler OAuth than SharePoint. Lower priority than Google Drive by installed base size. |
-| **NetSuite direct connector** | Accounting data | High-complexity integration; NetSuite APIs are heavily customized. Prioritize after QBO is proven. Clients at this size can provide file exports. |
-| **Sage Intacct direct connector** | Accounting data | Well-documented XML API. Sage Intacct is dominant for SaaS-model companies and nonprofits — a significant SOC 2 audit client segment. |
-| **Xero direct connector** | Accounting data | Clean REST API with native trial balance endpoint. Canadian market and smaller clients. |
-| **TaxDome API** | Practice management | Relevant for mixed tax/audit firms. Lower priority than Karbon for audit-focused ICP. |
-| **Public API + webhooks (Axiom-outbound)** | Platform extensibility | Enables Karbon workflows, Zapier/Make automation. Required before any firm can build custom workflows on top of Axiom. |
-| **Sprinto / Hyperproof evidence export** | Evidence ingestion | Analogous to Drata/Vanta; smaller installed base. Add after Drata + Vanta are live. |
-| **Box** | Cloud storage | Legitimate enterprise presence in regulated industries; lower footprint than Dropbox in the ICP's client population. |
+| **Rippling, Gusto, BambooHR** | HRIS | Onboarding/offboarding/training evidence (SOC 2 CC1.4, ISO A.6.x, HIPAA §164.308(a)(5)) |
+| **Sprinto / Hyperproof evidence export** | Evidence bridge | Analogous to Drata/Vanta; smaller installed base |
+| **Box / SharePoint / Google Drive / Dropbox** | Cloud storage | Client-side evidence repositories (Box retained — useful for regulated-industry clients) |
+| **Public API + webhooks (Axiom-outbound)** | Platform extensibility | Required before firms can build custom workflows on top of Axiom |
+| **UCF license passthrough** | Optional Enterprise SKU | Commercial UCF crosswalk content in addition to SCF/OSCAL/AICPA/CIS defaults |
 
-### Key Insight: Drata Audit Hub Over Direct Infrastructure Integrations
+### Integration Architecture Principles (all tiers)
 
-Axiom is on the **auditor side**, not the auditee side. Axiom does not need to build direct integrations into AWS, Okta, GitHub, or any other client infrastructure system. That is the auditee platform's problem — Drata, Vanta, and Sprinto already have 200–375+ integrations into those systems. Axiom's role is to receive evidence packages from auditee platforms (via Drata Audit Hub, Vanta export) or via direct file upload.
-
-The Drata Audit Hub integration is therefore more valuable than any single infrastructure integration (AWS IAM, Okta, GitHub combined), because it abstracts the entire auditee stack through one API connection. This is not obvious from the original spec's integration list — the original spec listed AWS, Dropbox, Box, Google Drive, and O365 as the integrations, without recognizing that the compliance automation platforms (Drata, Vanta) are the correct abstraction layer. Direct AWS/Okta integrations are deferred to Tier 3 and evaluated only if customer demand signals that a significant portion of audit clients do not use any compliance automation platform.
-
-**Integration architecture principles (all tiers):**
-1. Every integration is an abstraction behind an internal interface — trial balance data enters the same `TrialBalance` data model whether it came from a CSV upload, QBO API, or Codat. Integrations are data sources, not architectural dependencies.
+1. Every integration is an abstraction behind an internal interface — evidence enters the same `EvidenceItem` data model whether it came from a CSV upload, an OAuth connector, or a Drata Audit Hub pull.
 2. OAuth credentials are stored per firm + client, not globally. Each firm's connections are isolated.
-3. Evidence from integrations goes through the same AI extraction and review workflow as direct uploads. Integration source is recorded on `EvidenceItem.source_integration` but does not bypass review.
-4. Graceful degradation: if Drata's API is down, the auditor falls back to file upload without blocking the engagement.
-5. Read-only scopes at launch. No write-back into any client system.
+3. Evidence from integrations goes through the same AI mapping + human-review workflow as direct uploads. `EvidenceItem.source_type` and `source_integration` record provenance but do not bypass review.
+4. Connector-captured browser evidence (screenshots, DOM snapshots) is signed at capture via the Provenance module (`SignedScreenshot`, `HashedDOMSnapshot`).
+5. Graceful degradation: if a connector is down, auditor or auditee falls back to file upload without blocking the engagement.
+6. Read-only scopes at launch. No write-back into client systems.
 
 ---
 
@@ -564,83 +524,61 @@ The Drata Audit Hub integration is therefore more valuable than any single infra
 
 ### Data Processing Agreement Structure
 
-Axiom is a **data processor**; the audit firm is the **data controller**. The firm determines the purposes and means of processing; Axiom processes data only on the firm's documented instructions.
-
-Every customer (US, Canada, EU, UK, AU) must execute a signed DPA before accessing the platform. Clicking "I accept" on the terms of service is not sufficient — a separately executed DPA is required.
+Axiom is a **data processor**; the customer firm is the **data controller**. Every customer (US, Canada, EU, UK, AU) must execute a signed DPA before accessing the platform.
 
 **Required DPA contents (GDPR Article 28 and equivalent):**
 1. Processing only on documented instructions from the controller
 2. Confidentiality obligations on all authorized persons
-3. Article 32-compliant technical and organizational measures (AES-256 encryption at rest, TLS 1.3 in transit, access controls, incident response procedures)
-4. Sub-processor management: prior written authorization required; equivalent obligations imposed on sub-processors; 30-day advance notice of sub-processor changes via published sub-processor list
+3. Article 32-compliant technical and organizational measures (AES-256 at rest, TLS 1.3 in transit, access controls, incident response)
+4. Sub-processor management: prior written authorization, equivalent obligations, 30-day advance notice
 5. Data subject rights assistance (access, correction, deletion where not legally blocked)
-6. 60-day read-only export window post-termination; deletion of all copies within 30 days of export window close; written deletion certificate provided
-7. Audit rights: SOC 2 Type II certification satisfies most audit rights provisions; additional audits on request with reasonable notice
-8. Breach notification: Axiom notifies the firm within 24 hours of becoming aware of a personal data breach
+6. 60-day read-only export window post-termination; deletion within 30 days thereafter; written deletion certificate
+7. Audit rights: Axiom's own SOC 2 Type II + ISO 27001 + ISO 42001 certificates satisfy most audit provisions
+8. Breach notification: Axiom notifies within 24 hours of awareness
 
-**Explicit DPA prohibition:** Axiom does not use customer data (uploaded workpapers, financial data, client lists, evidence) to train AI models without separate controller authorization. All AI model inference runs via AWS Bedrock over a VPC endpoint — data does not leave the AWS network and is not retained by Anthropic. The DPA states this explicitly.
+**Explicit DPA prohibition:** Axiom does not use customer data (control evidence, policies, risk assessments, AI decision artifacts, client lists, uploaded documents) to train AI models without separate controller authorization. All AI model inference runs via AWS Bedrock over a VPC endpoint — data does not leave the AWS network and is not retained by Anthropic. The DPA states this explicitly.
 
-**Sub-processor list:** Published publicly; current sub-processors include AWS (infrastructure, AI model inference via Bedrock, workflow execution via Step Functions, and transactional email via SES — all covered under a single AWS sub-processor entry). 30-day change notification via email to the firm's admin contact.
+**Sub-processor list:** Published publicly; current sub-processors include AWS (infrastructure, AI model inference via Bedrock, workflow execution via Step Functions, transactional email via SES, KMS signing — all covered under a single AWS sub-processor entry).
 
-### GDPR/CCPA Deletion Rights vs. Immutable Archiving — Resolution
+### GDPR/CCPA Deletion Rights vs. Immutable Archiving
 
-The conflict between data subject deletion rights and audit retention obligations is resolved by **GDPR Article 17(3)(b)** and **CCPA California Civil Code §1798.105(d)(8)** — the "legal obligation" exemptions. Retaining an unchanged audit file is required by law (SOX §802, PCAOB AS 1215, AU-C 230). A data subject cannot compel deletion of records that the audit firm is criminally prohibited from deleting.
+The conflict between data subject deletion rights and record-retention obligations is resolved by **GDPR Article 17(3)(b)** and **CCPA §1798.105(d)(8)** — the legal-obligation exemptions. Retention of ISMS/PIMS/AIMS records, SOC engagement files, and PCI ROC evidence is required by the applicable regulatory regime; a data subject cannot compel deletion of records the firm is obligated to retain.
 
-**Platform implementation of the deletion request workflow:**
-1. Acknowledge receipt of the deletion request in writing within 72 hours
-2. Invoke the legal retention exemption, citing the specific statute (SOX §802, PCAOB AS 1215 / AU-C 230, GDPR Art. 17(3)(b))
-3. Restrict the retained data — no use for any purpose outside the legal retention obligation (no analytics, no AI training)
-4. Log the decision in the `AuditLog`: deletion request received, basis for refusal, date of expected deletion
-5. Delete on schedule when the mandatory retention window closes (5 or 7 years from report date, per engagement type)
+**Platform implementation of the deletion-request workflow:**
+1. Acknowledge receipt within 72 hours
+2. Invoke legal retention exemption, citing the specific regime (AU-C 230 / AT-C 105 / ISO 27001:2022 §7.5 / ISO 42001:2023 §7.5 / HIPAA §164.530(j) / PCI DSS 12.10.1 / GDPR Art. 17(3)(b))
+3. Restrict retained data — no use outside the legal retention obligation
+4. Log the decision in the `AuditLog`
+5. Delete on schedule when the mandatory retention window closes
 
-The platform provides templated deletion request response letters that the audit firm can use with data subjects. The response is generated automatically when a deletion request is logged.
-
-Data minimization: the platform only captures personal data strictly necessary for audit documentation, reducing the surface area of deletion conflicts.
+The platform provides templated deletion request response letters the firm can use with data subjects. Data minimization: the platform only captures personal data strictly necessary for attestation documentation.
 
 ### Data Residency Approach
 
-**US at launch (AWS us-east-1):** No federal data residency law mandates US-origin financial data remain in the US. All launch customers are US/Canada firms; AWS us-east-1 is the default and only deployment region.
-
-**Canada:** AWS us-east-1 is acceptable under PIPEDA (no mandatory residency). DPA addresses PIPEDA cross-border transfer obligations. For Quebec-based clients, a Privacy Impact Assessment (PIA) is documented per Quebec Law 25 requirements.
-
-**EU/APAC as Enterprise tier (year 2+):** EU customers (GDPR) require either EU-US Data Privacy Framework self-certification or Standard Contractual Clauses (2021 version, Module 2: Controller to Processor) incorporated into the DPA. Given DPF political risk (Schrems III challenge pending), maintaining SCCs as a parallel mechanism is maintained regardless of DPF status. For EU enterprise customers, offer AWS eu-central-1 (Frankfurt) data residency as a product tier — eliminates the transfer compliance question entirely.
-
-For UK enterprise customers: execute the ICO IDTA or EU SCCs with UK Addendum. AWS eu-west-2 (London) residency option for FRC-regulated engagements. For Australian enterprise customers: APP 8 compliance via DPA contractual undertaking; AWS ap-southeast-2 (Sydney) residency option for APRA-regulated audit clients.
+**US at launch (AWS us-east-1).** Canada customers covered under PIPEDA (no mandatory residency; DPA addresses cross-border obligations; Quebec Law 25 PIA documented for Quebec-based clients). **EU/APAC as Enterprise tier (year 2+)** — AWS eu-central-1 (Frankfurt), eu-west-2 (London), ap-southeast-2 (Sydney) data residency options under SCCs (2021 Module 2) incorporated into the DPA.
 
 ### AI Liability Policy
 
-**Human review is mandatory; AI never auto-finalizes.** This is the single most important platform design decision for managing liability.
-
-Every AI-generated workpaper narrative, finding suggestion, control conclusion, or evidence assessment requires explicit human review and named sign-off before it is treated as finalized in the platform. This creates an auditable paper trail demonstrating that the auditor exercised independent professional judgment, which breaks the causal chain for vendor liability in the event of an audit error.
+**Human review is mandatory; AI never auto-finalizes.** Every AI-generated workpaper narrative, finding suggestion, control conclusion, evidence assessment, or mapping requires explicit human review and named sign-off before it is treated as finalized. This creates an auditable paper trail (the `AIDecision` ledger + `ProvenanceRecord` signature chain) demonstrating that the reviewer exercised independent professional judgment.
 
 AI liability protections embedded in the MSA:
-- Disclaimer that Axiom does not provide accounting, auditing, tax, legal, or other professional services
+- Disclaimer that Axiom does not provide accounting, auditing, certification, QSA, HITRUST, or other professional services
 - Liability cap equal to 12 months of fees paid (direct damages only)
-- Consequential damages waiver (lost profits, business interruption, third-party claims)
+- Consequential damages waiver
 - Data security super-cap: 2× annual fees for data breaches
 - Gross negligence and fraud carve-out from the limitation of liability
-
-Every AI output is logged with: which model generated it, model version, date, and the inputs that produced it. This is essential for post-incident investigation and demonstrates the AI was used as an assistive tool.
 
 ### Insurance Requirements
 
 | Coverage | Minimum at Launch | Target at Series A |
 |---|---|---|
-| Tech E&O (Professional Liability) | $1M per occurrence / $1M aggregate | $2M per occurrence / $2M aggregate |
-| Cyber Liability | $1M per occurrence | $2M–$5M per occurrence |
-| General Commercial Liability | $1M/$2M | $1M/$2M |
-
-Secure Tech E&O and Cyber coverage before signing the first enterprise customer contract. Most enterprise MSAs require proof of coverage before execution. Specialist brokers for early-stage SaaS with financial services exposure: Vouch, Corvus (Travelers), Corgi Insurance.
-
-Axiom's standard MSA states coverage levels and commits to maintaining them throughout the contract term.
+| Tech E&O (Professional Liability) | $1M per occurrence / $1M aggregate | $2M / $2M |
+| Cyber Liability | $1M per occurrence | $2M–$5M |
+| General Commercial Liability | $1M / $2M | $1M / $2M |
 
 ### Offboarding Obligations
 
-**Data export:** Upon contract termination, the firm receives 60 days of read-only platform access for data export. Export formats: PDF (rendered workpapers), CSV/XLSX (structured data), JSON (engagement metadata and API exports), native format for uploaded documents. The export package includes the complete audit evidence chain: source documents, AI decision records, human review sign-offs, final workpaper content, and version history. A written deletion certificate is provided within 30 days of the export window close.
-
-**Data deletion:** All customer data is deleted from production systems, backups, and sub-processor systems within 30 days of the export window close. Encrypted isolated backups are retained for up to 90 additional days then purged on the next backup rotation.
-
-**Retention exception:** Where a legal obligation (PCAOB AS 1215, AU-C 230, SOX §802) requires the firm to retain records, the deletion obligation runs to the firm — Axiom deletes its copies; the firm is responsible for maintaining compliant archival copies. The DPA states this explicitly: "Upon termination, Processor shall provide Customer with a data export and thereafter delete Customer Data from all Processor systems within 60 days, unless a legal obligation requires Processor to retain such data, in which case Processor shall notify Customer and restrict the data to the minimum necessary for compliance with such obligation."
+60-day read-only export window; written deletion certificate within 30 days of export-window close. Export formats include PDF (rendered workpapers/reports), CSV/XLSX (structured data), JSON (engagement metadata and API exports), native format for uploaded documents, and **signed provenance manifests** so the firm retains verifiable proof that exported AI artifacts are byte-identical to what Axiom generated. All customer data is deleted from production systems, backups, and sub-processor systems within 30 days of export-window close; encrypted isolated backups are retained up to 90 additional days then purged on next rotation.
 
 ---
 
@@ -648,116 +586,122 @@ Axiom's standard MSA states coverage levels and commits to maintaining them thro
 
 ### Encryption
 
-**In transit:** TLS 1.2 minimum for all connections (browser → CloudFront → API, API → database, API → S3, API → Bedrock via VPC endpoint). TLS 1.3 is preferred and negotiated when both sides support it. The ALB uses the `ELBSecurityPolicy-TLS13-1-2-2021-06` policy, which supports TLS 1.2 and 1.3 (TLS 1.3-only would break some enterprise clients). No exceptions; HTTP requests are redirected to HTTPS.
+**In transit:** TLS 1.2 minimum (1.3 preferred and negotiated) on all connections. HTTP redirects to HTTPS; ALB uses `ELBSecurityPolicy-TLS13-1-2-2021-06`.
 
-**At rest:** AES-256 server-side encryption for all data:
-- RDS PostgreSQL: AES-256 via customer-managed KMS key (`axiom-{env}-rds`) with annual automatic rotation
-- S3 evidence files: AES-256 SSE-S3 default; HIPAA-flagged evidence uses SSE-KMS with a dedicated customer-managed key (`axiom-{env}-hipaa`) for CloudTrail decrypt auditing and IAM-level key access control (see [`infrastructure-design.md`](./infrastructure-design.md) Section 4 for rationale)
+**At rest:** AES-256 server-side encryption:
+- RDS PostgreSQL via customer-managed KMS key (`axiom-{env}-rds`), annual automatic rotation
+- S3 evidence files: SSE-S3 default; HIPAA-flagged evidence uses SSE-KMS with a dedicated key (`axiom-{env}-hipaa`) for CloudTrail decrypt auditing
 - S3 archive bucket (finalized engagements): SSE-KMS with the HIPAA key
-- Backups: encrypted with the same KMS key as the source
+- Backups encrypted with the same KMS key as source
 
 ### Multi-Tenancy Isolation
 
-PostgreSQL RLS as described in Section 5. `firm_id` indexed on every tenant-scoped table. `SET app.current_firm_id` set at session start, never mutable mid-session. RLS policies enforce the firm boundary at the database layer — defense in depth against application-layer bugs. Engagement-level access control and client-user scoping enforced at the application layer (Go middleware: `WithEngagementAccess`, `WithClientScoping`) as described in Section 7.
+PostgreSQL RLS with `firm_id` indexed on every tenant-scoped table. `SET app.current_firm_id` set at session start. Application-layer middleware enforces engagement team membership and client-user scoping. Penetration testing on multi-tenant isolation is part of the pre-Series A security review package.
 
-Penetration testing on the multi-tenancy isolation (cross-tenant data leakage scenarios) is part of the pre-Series A security review package.
+### Audit Log
 
-### Audit Log (Immutable, Append-Only)
+`AuditLog` is PostgreSQL insert-only (`RULE` preventing UPDATE / DELETE). All significant events: engagement status changes, workpaper saves, sign-offs, access grants, AIDecision outcomes, deletion-request responses, archival events. Sequential bigint IDs for unambiguous temporal ordering.
 
-The `AuditLog` table is PostgreSQL insert-only, with a `RULE` preventing `UPDATE` and `DELETE` statements. All significant application events are written here: engagement status changes, workpaper saves, sign-off events, user access grants, AI decision outcomes, deletion request responses, and system-triggered archival events. Log entries use sequential bigint IDs (not UUIDs) for unambiguous temporal ordering.
+### Cryptographic Evidence and AI Provenance (Category Differentiator)
 
-The `AuditLog` serves dual purposes: regulatory compliance audit trail (PCAOB inspection readiness) and security audit trail (access anomaly detection, incident investigation).
+Axiom signs every AI output and every connector-captured evidence artifact at creation using **AWS KMS `ECC_NIST_P256`** (`SIGN_VERIFY`, non-exportable, verifiable via public key). The signature + envelope + raw output/artifact are written to an S3 bucket with **Object Lock in COMPLIANCE mode** — no user, including AWS root, can delete or overwrite until retention elapses (minimum 7 years; per-object retention set to the engagement's `retention_deadline`). This implements evidence and AI-output immutability at the storage layer, not just the application layer.
 
-### S3 Object Lock for Finalized Engagements
+Every finalized AI output is signed and WORM-stored. On retrieval, the `ProvenanceRecord` is re-verified (hash match + signature valid + lock status intact). Reports cannot be rendered if any cited artifact fails chain verification. A public verification endpoint and CLI let any party — EQR reviewer, ISO CB technical reviewer, client procurement, regulator — verify the signature independently. The provenance-signing key material is non-exportable; `kms:Sign` is restricted to the isolated `provenance-signer` ECS task role.
 
-When an engagement transitions to `Archived` (after the assembly window closes), all workpaper and evidence files associated with that engagement are copied to a dedicated S3 bucket configured with **Object Lock in COMPLIANCE mode**. In COMPLIANCE mode, no user — including AWS root — can delete or overwrite objects until the retention period (5 or 7 years) elapses. This implements PCAOB AS 1215 and AU-C 230 immutability requirements at the storage layer, not just the application layer.
+This is the data-path answer to the March 2026 agentic-compliance trust crisis. See [`ai-architecture-design.md §7`](ai-architecture-design.md#7-cryptographic-provenance-for-ai-outputs) and [`infrastructure-design.md §4`](infrastructure-design.md).
 
-The retention period is set per object at archive time using the engagement's `retention_deadline` field. When the deadline passes, objects transition to standard S3 lifecycle policies and are deleted automatically, satisfying both the legal retention obligation and the GDPR/CCPA obligation to delete once the retention period expires.
+### Axiom's Own Certifications (Day-One Posture)
+
+Axiom targets from day one: **SOC 2 Type 2**, **ISO 27001**, **ISO 42001**. The AIDecision ledger, three-tier HITL policy, and cryptographic provenance are Axiom's own ISO 42001 controls, not just features it sells. Customers can inspect the dogfooding artifacts as part of procurement.
 
 ### HIPAA BAA
 
-Axiom executes a HIPAA Business Associate Agreement with AWS. The AWS BAA covers all AWS services used by the platform: RDS, S3, Bedrock (AI model inference), Step Functions (workflow execution), and SES (transactional email). The BAA is in place before any HIPAA engagement data is processed, regardless of customer tier. HIPAA engagement files are stored in S3 buckets with SSE-KMS (not SSE-S3) and with more restrictive IAM policies.
-
-Axiom also makes a HIPAA BAA available to audit firm customers who require one for their own compliance documentation. The standard HIPAA BAA is available to Growth and Scale tier customers on request (self-serve download from the customer portal). Enterprise customers receive dedicated BAA review and negotiation, plus a HIPAA compliance documentation package.
+Axiom executes a HIPAA Business Associate Agreement with AWS. The AWS BAA covers RDS, S3, Bedrock, Step Functions, SES, and KMS. HIPAA-flagged engagement files use SSE-KMS with more restrictive IAM. Axiom makes a HIPAA BAA available to customer firms (self-serve for Growth/Scale; dedicated negotiation for Enterprise).
 
 ---
 
 ## 11. User Journeys
 
-Full journey maps with stage-by-stage detail (user actions, touchpoints, emotional states, competitor context, pain points, and opportunities) are in [`docs/user-journeys/all-journeys.md`](../user-journeys/all-journeys.md). The table below summarizes each journey and the personas, goals, and key system gates involved.
+Full journey maps with stage-by-stage detail (user actions, touchpoints, emotional states, competitor context, pain points, and opportunities) are in [`docs/user-journeys/all-journeys.md`](../user-journeys/all-journeys.md). The table below summarizes each journey.
 
 | # | Persona | Goal | Key System Gates / Entities | AI Touchpoints |
 |---|---------|------|-----------------------------|----------------|
-| 1 | FirmAdmin | Set up firm and launch first engagement | `Firm`, `MethodologyTemplate`, `Engagement` scaffold, 5-step onboarding checklist, 14-day trial clock | — |
-| 2 | Staff Auditor | Join platform and reach first task | Magic link auth, role assignment, 5-step guided tour, `EngagementTeamMember` assignment | — |
-| 3 | Partner | Create and scope a new engagement | `ClientAcceptance` gate (Planning → Fieldwork blocked until signed), EQR independence validation, framework version lock after Fieldwork | Control mapping (Feature 2, Tier 2), risk category suggestions (Feature 6, Tier 2) |
-| 4 | Staff Auditor | Import and analyze a trial balance | `TrialBalanceAccount` import, account mapping confirmation, lead schedule generation, sampling calculator (ISA 530 / AU-C 530) | Account mapping (Feature 3, Tier 2), anomaly detection (Feature 7, Tier 1 / Tier 2 for PCAOB) |
-| 5 | Staff Auditor | Test controls and prepare workpapers | `TestProcedure` status progression (NotStarted → InProgress → Complete), AI content tracking gate, sign-off hierarchy (preparer → reviewer → partner) | Evidence link suggestions (Feature 5, Tier 2), workpaper narrative draft (Feature 4, Tier 2) |
-| 6 | Manager | Review workpapers and advance the engagement | Review notes (immutable, block advancement until resolved), `ReviewComplete` sign-off, phase transition guards (Fieldwork → Review → Reporting) | — |
-| 7 | Staff Auditor | Manage document requests and collect evidence | `DocumentRequest` lifecycle, AI review queue (sorted by confidence), automated reminder state machine, `EvidenceLink` on acceptance | Document completeness review (Feature 1, Tier 2), evidence link suggestion (Feature 5, Tier 2) |
-| 8 | Client Contact | Fulfill audit document requests | Tokenized Client Hub link (no login, engagement-scoped, 90-day expiry), `ClientAdmin` delegation (single-request scoped), post-archive read-only access | — |
-| 9 | Partner | Generate report, finalize, and archive | Report issuance triggers assembly deadline + retention computation, Finalized state locks all content, S3 Object Lock WORM archival, addendum workflow (AU-C 230 §.16) | Report section draft (Feature 8, Tier 2) |
-| 10 | EQR Reviewer | Conduct engagement quality review | Read-only access (not `EngagementTeamMember`), `EngagementQualityReview` sign-off gate (Review → Reporting blocked until signed), immutable EQR record | — |
+| 1 | FirmAdmin | Set up firm and launch first engagement | `Firm`, `MethodologyTemplate`, `Engagement` scaffold, 5-step onboarding, 14-day trial clock | — |
+| 2 | Staff Auditor | Join platform and reach first task | Magic link auth, role assignment, guided tour, `EngagementTeamMember` | — |
+| 3 | Partner | Create and scope a new engagement | `ClientAcceptance` gate, EQR independence validation (where applicable), framework version lock after Fieldwork | Risk category (Feature 6), Framework migration (Feature 7), Gap analysis (Feature 3) |
+| 4 | ClientAdmin | **Cross-framework evidence mapping** — upload one artifact, see which `FrameworkRequirement` nodes it satisfies across every in-scope framework | `EvidenceItem` → `EvidenceItemSupports` → `CommonControl` → `CommonControlSatisfies` → `FrameworkRequirement`, period-aware staleness, partial-satisfaction percentages with gap lists | Evidence → CommonControl mapping (Feature 2), Gap analysis (Feature 3), Framework migration (Feature 7) |
+| 5 | Staff Auditor | Test controls and prepare workpapers | `TestProcedure` status progression, AI content tracking gate, sign-off hierarchy | Evidence link (Feature 5), Workpaper draft (Feature 4) |
+| 6 | Manager | Review workpapers and advance the engagement | `ReviewNote` (immutable), phase transition guards | Findings triage (Feature 8) |
+| 7 | Staff Auditor | Manage document requests and collect evidence | `DocumentRequest` lifecycle, AI review queue sorted by confidence, reminder state machine | Document completeness (Feature 1), Evidence link (Feature 5), Evidence → CommonControl mapping (Feature 2) |
+| 8 | Client Contact | Fulfill audit document requests | Tokenized Client Hub link (no login, engagement-scoped), `ClientAdmin` delegation | Document completeness (Feature 1), Evidence → CommonControl mapping (Feature 2) |
+| 9 | Partner | Generate report, finalize, and archive | Report issuance triggers retention computation; Finalized locks content; S3 Object Lock WORM archival; addendum workflow | Report section draft (Feature 11), Findings triage (Feature 8), Management-response drafting (Feature 10) |
+| 10 | EQR Reviewer | Conduct engagement quality review | Read-only (not `EngagementTeamMember`), `EngagementQualityReview` sign-off gate, immutable EQR record, AI edit substantiveness summaries | — |
+| 11 | Partner | **Multi-framework integrated engagement** — scope SOC 2 + ISO 27001 + ISO 27701 in one engagement; one control tested once, evidence satisfies all in-scope frameworks via `CommonControl` graph; separate opinion per framework at reporting | `EngagementFramework` (multiple per `Engagement`), shared `CommonControl` library, reconciled sampling windows | Gap analysis (Feature 3), Evidence → CommonControl mapping (Feature 2) |
+| 12 | ClientAdmin | **Continuous assurance** — respond to drift alerts, auto-retest affected controls, update risk register, notify auditor when drift is material | Drift detection on connector-sourced configs, period-window thresholds, `Notification (DriftDetected / EvidenceExpiring)`, auto-enqueued re-test jobs | Drift-triggered re-testing (Feature 9), Findings triage (Feature 8), Management-response drafting (Feature 10) |
 
-### Regulatory constraints by journey
+### Regulatory / methodology constraints by journey
 
 | Constraint | Standard | Journeys |
 |-----------|----------|----------|
-| Client acceptance before fieldwork | SQMS 1 | 3 |
-| EQR reviewer independence | SQMS 2 / PCAOB AS 1220 | 3, 10 |
-| Framework version locked after fieldwork begins | Section 4 requirement | 3 |
-| Sign-off hierarchy enforced at data layer | SQMS 1, AU-C 220 | 5, 6 |
-| AI-drafted sections must be substantively edited before sign-off | PCAOB AS 1105 | 5, 9 |
-| Review notes cannot be deleted | AU-C 230 | 6 |
-| Period coverage check for SOC 2 Type II evidence | AT-C 320 | 7 |
-| All AI decisions logged as `AIDecision` records | PCAOB AS 1105 | 3, 4, 5, 7, 9 |
-| Anomaly detection flags documented for PCAOB engagements | PCAOB AS 1105 | 4 |
-| Sampling documentation requirements | AU-C 530 / PCAOB AS 2315 | 4 |
-| Assembly deadline enforcement | AU-C 230, PCAOB AS 1215 | 9 |
-| WORM archival | PCAOB AS 1215, SOX §802 | 9 |
-| Retention periods per engagement type | AU-C 230, PCAOB, HIPAA | 9 |
-| Addenda require documented reason and partner sign-off | AU-C 230 §.16 | 9 |
+| Client acceptance before fieldwork | AICPA SQMS 1 / internal equivalent for ISO | 3 |
+| EQR / internal-reviewer independence | SQMS 2 (SOC) / ISO 17021-1 §9.6 analog | 3, 10 |
+| Framework version locked after fieldwork begins | §4 | 3, 4 |
+| Sign-off hierarchy enforced at data layer | SQMS 1 / equivalent | 5, 6 |
+| AI-drafted sections must be substantively edited before sign-off | ISO 42001 §7–9 + firm quality policies | 5, 9 |
+| Review notes cannot be deleted | Evidence preservation standards | 6 |
+| Period coverage check for SOC 2 Type II evidence | AT-C 320 | 7, 12 |
+| Framework-specific evidence staleness (ASV 90d, pen test 1y, etc.) | PCI DSS v4.0.1, vendor frameworks | 4, 7, 12 |
+| All AI decisions logged as `AIDecision` records + signed `ProvenanceRecord` | ISO 42001 + firm AI governance | 3, 4, 5, 6, 7, 9, 12 |
+| Assembly deadline enforcement (SOC attestations) | AU-C 230 | 9 |
+| WORM archival | AICPA retention + ISO record-keeping + PCI 12.10 | 9 |
+| Retention periods per engagement type | Per §4 | 9 |
 | Client upload tokens expire and require re-generation | Security policy | 7, 8 |
+| Integrated multi-framework engagement produces separate opinion per framework | AT-C 105 / ISO 17021-1 / PCI QSA | 11 |
+| Drift-triggered re-test results feed AIDecision ledger before any control status change | ISO 42001 + evidence-integrity | 12 |
 
 ---
 
 ## 12. Flows Without Competitor Equivalent
 
-These flows represent genuine Axiom innovation — no competitor (Fieldguide, CaseWare, DataSnipper, Yak) currently offers them. Full design detail is in the journey maps linked above.
+These flows represent genuine Axiom differentiation — no competitor (Drata, Vanta, Secureframe, Hyperproof, AuditBoard CrossComply, Sprinto, Thoropass, Agentive) currently offers them.
 
-1. **Cross-framework evidence satisfaction display** (Journeys 3, 5) — one piece of evidence simultaneously satisfying SOC 2, ISO 27001, and HIPAA requirements, shown in real-time during testing
-2. **AI document completeness review with client-facing gap explanations** (Journeys 7, 8) — AI analyzes uploaded documents against request requirements and auto-drafts specific gap explanations for the client
-3. **Section-level AI content tracking and edit gate** (Journeys 5, 6, 9, 10) — AI-drafted content tracked per section with modification ratios; unedited AI sections block sign-off; EQR reviewers see engagement-wide AI edit substantiveness summaries, implementing PCAOB AS 1105 at the data layer
-4. **EQR independence enforcement** (Journey 10) — system-level validation that the quality reviewer is not on the engagement team
-5. **Post-finalization addendum workflow** (Journey 9) — proper AU-C 230 §.16 implementation with immutable original content and versioned addenda
-6. **Full-population analytics as alternative to sampling** (Journey 4) — testing entire transaction datasets rather than statistical samples
-7. **Automatic assembly deadline computation and WORM archival** (Journey 9) — computed at report issuance, enforced via S3 Object Lock COMPLIANCE mode
+1. **Cross-framework evidence mapping (STRM-grade, period-aware)** (Journeys 4, 11) — top-level product differentiator. One `EvidenceItem` flows coverage through `EvidenceItemSupports → CommonControl → CommonControlSatisfies → FrameworkRequirement` with NIST STRM relationship vocabulary, strength scores, coverage percentages, and effective-dated windows that honor framework-specific staleness (ASV 90d, pen test 1y, background check 1y, SOC 2 Type II periods, ISO surveillance cycles). Never a green checkmark on partial coverage — percentages and gap lists only.
+2. **Cryptographic AIDecision provenance** (all AI-producing journeys) — every AI output signed with AWS KMS at emission and WORM-stored with a public verification endpoint. Post–March-2026 category differentiator; a direct answer to the trust crisis.
+3. **Both-sided auditor + auditee workspace** (Journeys 4, 7, 8, 11, 12) — the auditor-side engagement workflow and the auditee-side Client Hub / continuous-monitoring workspace operate on the same data model. Competitors are one-sided.
+4. **ISO 42001-native HITL ledger** (all AI journeys) — three-tier HITL policy, impact-assessment records per feature, model-change-management workflow, prompt/model/context/confidence/reviewer/override as first-class columns on `AIDecision`. Axiom dogfoods its own framework.
+5. **Agentic management-response drafting with round-trip remediation** (Journeys 9, 12) — drafts management response to a finding, assigns owner, opens a ticket in Jira / Linear / GitHub, tracks closure evidence back through the `Finding → ManagementResponse → CorrectiveActionPlan` chain, and re-tests when remediation is declared complete. Each staged action is a signed `AIDecision` with explicit human approval.
+6. **Drift-triggered continuous re-testing** (Journey 12) — connector-sourced configuration drift detection enqueues autonomous re-test jobs; proposed control-status changes require Tier 2 human approval. Converts a point-in-time audit into a continuous-attestation posture without giving up auditor-defensible human-in-the-loop.
+7. **Section-level AI content tracking and edit gate** (Journeys 5, 6, 9, 10) — AI-drafted content tracked per section via `ai_content_metadata` with modification ratios; unedited AI sections block sign-off; soft-warning gate at <5% modification; EQR reviewers see engagement-wide AI edit substantiveness summaries.
+8. **EQR / internal-reviewer independence enforcement** (Journey 10) — system-level validation that the quality reviewer is not on the engagement team.
+9. **Post-finalization addendum workflow** (Journey 9) — proper implementation with immutable original content and versioned addenda signed into the provenance chain.
+10. **Automatic retention computation and WORM archival** (Journey 9) — retention deadline computed per engagement type at report issuance, enforced via S3 Object Lock COMPLIANCE mode with signed manifests.
 
 ---
 
 ## 13. Out of Scope at Launch
 
-The following capabilities are explicitly excluded from the MVP. Each exclusion is a deliberate decision, not an oversight.
+The following capabilities are explicitly excluded from the MVP. Each exclusion is deliberate.
 
 | Capability | Rationale for Exclusion |
 |---|---|
-| **Enterprise-tier-only features** (SAML/enterprise SSO, custom SLA, security review package, dedicated CSM) | OAuth SSO with Microsoft and Google is available at all tiers at launch. SAML-based enterprise SSO (for firms with their own IdP), negotiated SLAs, dedicated CSMs, and security review packages are Enterprise-only. The full enterprise procurement motion is not cost-effective before achieving product-market fit in the mid-market. |
-| **Internal audit / SOX compliance workflows** | AuditBoard's established territory. Different workflow (continuous monitoring vs. point-in-time engagement), different buyer (internal audit director vs. external CPA), different regulatory framework (IIA standards, not AICPA). Building for this segment dilutes the ICP focus without improving the core product. |
-| **ESG / sustainability reporting** | Fieldguide and Workiva are moving into this space with enterprise-grade content. Not a pain point for the target ICP. Frameworks (GRI, ISSB, SASB) would require significant content investment with no immediate revenue. |
-| **White-labeling / reseller channels** | Adds multi-tenancy complexity at the branding layer; requires reseller agreement infrastructure; dilutes the Axiom brand before it is established. |
-| **Custom AI model training per firm** | Insufficient training data at launch to produce a meaningfully differentiated firm-specific model. Standard Claude models with firm methodology context (via RAG) achieve the same functional goal at launch scale. Revisit at year 3 when engagement history volume is sufficient. |
-| **On-device / local model execution** | Not required for the target ICP's security posture. Adds significant infrastructure complexity. Revisit if enterprise customer demand signals an on-premise deployment requirement. |
-| **Multi-agent AI orchestration** | LangGraph, CrewAI, and similar frameworks add debugging overhead without adding value for the eight defined AI features (see [ai-architecture-design.md](ai-architecture-design.md)), all of which are single-step or multi-step-with-human-gates. Add orchestration when genuinely needed by a specific feature, not as a framework choice. |
-| **AI auto-finalization of any audit content** | Outside the human-in-the-loop policy. Creates professional liability exposure. The regulatory environment (PCAOB AS 1105) requires human review of AI outputs. |
-| **Direct ERP/accounting system API integrations (NetSuite, Sage, Xero)** | CSV/Excel import covers the MVP use case without the engineering and maintenance cost of direct integrations. Direct QBO integration is the only accounting API integration in the first 6-month roadmap. NetSuite and Sage are deferred to 6–18 months. |
-| **Direct cloud infrastructure integrations (AWS IAM, Okta, GitHub)** | Axiom is on the auditor side. The Drata/Vanta abstraction covers these at a higher value per integration. Direct infrastructure integrations are Tier 3 and evaluated only on firm-expressed demand. |
-| **Practice management billing integration** | Karbon API integration (first 6 months) syncs engagement status only — not billing, invoicing, or time tracking. Billing integration involves financial data, firm-specific billing configurations, and significant scope; deferred to year 2. |
-| **Mobile application** | The audit workflow is desktop-intensive: reviewing large documents, managing trial balances, sign-off workflows. A mobile-first experience would require a substantially different UX design investment. Web-responsive design is the priority; native mobile apps are year 2+. |
-| **Public REST / GraphQL API** | The internal REST API is not versioned or documented for external consumption. A public API surface (versioning, rate limiting, API key management) is in the 6–18 month roadmap alongside webhooks. At launch, the Karbon integration is built as a first-party integration, not via a public API. |
-| **PCAOB firm registration and inspection workflows** | PCAOB inspection preparation (assembling inspection packages, tracking inspection findings) is a distinct workflow from engagement management. The target ICP has few or no PCAOB-registered engagements. Revisit when firm base includes enough PCAOB-registered firms to justify the scope. |
-| **Multi-office / global firm management** | A single firm with multiple geographic offices (e.g., a US firm with a Canadian subsidiary) can operate in Axiom as one tenant. Cross-office engagement assignment and jurisdiction-specific methodology management are deferred — the ICP is primarily single-office or single-country. |
-| **EU/APAC data residency** | US and Canada at launch (AWS us-east-1). EU data residency (Frankfurt) and APAC (Sydney) offered as Enterprise tier options in year 2, after the product is validated in the primary market. |
+| **Financial audit / GAAS** | Exited vertical. No trial balance, sampling, materiality, or financial-statement workpapers. |
+| **PCAOB public-company audits** | Out of scope. Different audit regime, different liability profile, different buyer. |
+| **SOX internal controls / internal audit / enterprise GRC** | AuditBoard's market. Different buyer (internal audit director vs. external attestation partner), different workflow (continuous monitoring vs. point-in-time engagement with sign-off hierarchy). |
+| **Certification Body (CB) issuance workflows** | Axiom supports firms *preparing* for ISO certification; issuance is an ISO 17021-1 accredited function that Axiom does not become. |
+| **QSA ROC signing workflows** | Axiom supports PCI DSS gap assessment and evidence assembly; ROC sign-off is a PCI SSC–accredited QSA function. |
+| **HITRUST CSF r2 (full assessment mode)** | De facto market standard for HIPAA-heavy environments but requires HITRUST Authorized External Assessor partnership. Post-MVP per compliance-pivot-findings decision 8. |
+| **ESG / sustainability reporting** | Adjacent category, different buyer, content investment not justified by immediate revenue. |
+| **White-labeling / reseller channels** | Adds multi-tenancy complexity at the branding layer; dilutes brand before established. |
+| **Custom AI model training per firm** | Insufficient training data at launch. RAG over firm methodology achieves the same functional goal. Revisit at year 3. |
+| **On-device / local model execution** | Not required for the target ICP. Adds significant infrastructure complexity. |
+| **Multi-agent AI orchestration (LangGraph, CrewAI)** | Staged pipelines in Feature 10 are implemented as River-scheduled Tier-gated steps. Orchestration frameworks add debugging overhead with no benefit for the 11 defined features. |
+| **AI auto-finalization of any audit content** | Outside the three-tier HITL policy. Professional liability exposure. ISO 42001 Tier 3 actions are human-initiated only. |
+| **AI-issued certification / attestation / QSA / HITRUST AEA sign-offs** | Professional licensure responsibility; not delegable to software. |
+| **Mobile application** | Desktop-intensive workflow (document review, coverage dashboards, sign-off). Web-responsive design is the priority; native mobile is year 2+. |
+| **Public REST / GraphQL API at launch** | The internal REST API is not versioned or documented for external consumption. Public API + webhooks are in the 6–18 month roadmap. |
+| **Multi-office / global firm management** | A single firm with multiple offices can operate in Axiom as one tenant. Cross-office assignment and jurisdiction-specific methodology are deferred. |
+| **EU/APAC data residency** | US and Canada at launch (AWS us-east-1). EU (Frankfurt), UK (London), and APAC (Sydney) residency are Enterprise-tier options in year 2. |
 
 ---
 
-*End of Axiom Product Specification v2*
+*End of Axiom Product Specification (compliance/assurance pivot)*

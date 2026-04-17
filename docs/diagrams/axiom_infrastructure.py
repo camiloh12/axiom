@@ -77,7 +77,7 @@ with Diagram(
     # ══════════════════════════════════════════════════════════════════════════
     with Cluster("axiom-tooling account"):
         github   = Github("GitHub Actions\n(OIDC federation)")
-        ecr      = ECR("ECR\n3 repositories\n(immutable tags)")
+        ecr      = ECR("ECR\n4 repositories\n(immutable tags)")
         tf_state = S3("S3 + DynamoDB\nTerraform state")
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -98,13 +98,17 @@ with Diagram(
             with Cluster("ECS Fargate Cluster  (Service Connect)"):
                 axiom_api = ECS(
                     "Axiom API\nGo modular monolith\n"
-                    "identity · auditcore · trialbalance\n"
+                    "identity · auditcore · frameworks\n"
                     "workpaper · reporting · ai\n"
                     "1024 CPU / 2 GB  ×2–8"
                 )
                 doc_proc = ECS(
                     "Doc Processing\nPython + Tesseract\n"
                     "1024 CPU / 2 GB  ×1–4"
+                )
+                prov_sign = ECS(
+                    "Provenance Signer\nGo · KMS Sign-only\n"
+                    "512 CPU / 1 GB  ×2–4"
                 )
 
             # Data layer
@@ -118,7 +122,8 @@ with Diagram(
                     "Secrets Manager\nDB creds · JWT keys\nOAuth secrets\n30-day auto-rotation"
                 )
                 kms = KMS(
-                    "AWS KMS\naxiom-prod-default\naxiom-prod-hipaa\naxiom-prod-rds"
+                    "AWS KMS\naxiom-prod-default\naxiom-prod-hipaa\naxiom-prod-rds\n"
+                    "axiom-prod-provenance-signing\n(ECC_NIST_P256)"
                 )
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -131,9 +136,10 @@ with Diagram(
 
     with Cluster("S3 Storage"):
         s3_spa      = S3("SPA assets\n(CloudFront OAC\nprivate)")
-        s3_evidence = S3("evidence\nSSE-KMS (HIPAA key)\nversioned + cross-region\nreplication (prod)")
+        s3_evidence = S3("evidence\nSSE-KMS (HIPAA key)\nsigned artifacts\nObject Lock COMPLIANCE")
         s3_archive  = S3("archive\nObject Lock COMPLIANCE\nWORM  SSE-KMS")
-        s3_reports  = S3("reports\nSSE-S3  versioned\nIA after 30d")
+        s3_reports  = S3("reports\nObject Lock COMPLIANCE\nSSE-KMS  IA after 30d")
+        s3_scf      = S3("scf-catalog\nSCF · OSCAL · AICPA\nCIS crosswalks\nquarterly import")
 
     # ══════════════════════════════════════════════════════════════════════════
     # OBSERVABILITY
@@ -161,6 +167,9 @@ with Diagram(
     # Axiom API → Doc Processing (internal HTTP via Service Connect)
     axiom_api >> doc_proc
 
+    # Axiom API → Provenance Signer (internal HTTP via Service Connect)
+    axiom_api >> prov_sign
+
     # Axiom API → RDS (PgBouncer sidecar, connects to :5432)
     axiom_api >> rds
 
@@ -168,6 +177,11 @@ with Diagram(
     axiom_api >> s3_evidence
     axiom_api >> s3_archive
     axiom_api >> s3_reports
+    axiom_api >> s3_scf
+
+    # Provenance Signer → KMS (Sign-only IAM surface)
+    prov_sign >> Edge(**DASHED) >> kms
+    prov_sign >> s3_evidence
 
     # AI inference (via Bedrock VPC endpoint)
     axiom_api >> bedrock
@@ -185,6 +199,7 @@ with Diagram(
     kms >> Edge(**DASHED) >> rds
     kms >> Edge(**DASHED) >> s3_evidence
     kms >> Edge(**DASHED) >> s3_archive
+    kms >> Edge(**DASHED) >> s3_reports
     kms >> Edge(**DASHED) >> cw
 
     # CI/CD pipeline
@@ -192,12 +207,15 @@ with Diagram(
     github   >> tf_state
     ecr >> Edge(**DASHED) >> axiom_api
     ecr >> Edge(**DASHED) >> doc_proc
+    ecr >> Edge(**DASHED) >> prov_sign
 
     # Telemetry → observability
     axiom_api >> Edge(**DASHED) >> cw
     doc_proc  >> Edge(**DASHED) >> cw
+    prov_sign >> Edge(**DASHED) >> cw
 
     axiom_api >> Edge(**DASHED) >> xray
+    prov_sign >> Edge(**DASHED) >> xray
 
     # Alarms → SNS → ops
     cw >> sns
