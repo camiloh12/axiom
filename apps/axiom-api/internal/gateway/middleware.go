@@ -9,10 +9,6 @@ import (
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
 )
 
-type contextKey string
-
-const claimsKey contextKey = "claims"
-
 type Middleware struct {
 	jwtIssuer *identity.JWTIssuer
 }
@@ -21,9 +17,9 @@ func NewMiddleware(jwtIssuer *identity.JWTIssuer) *Middleware {
 	return &Middleware{jwtIssuer: jwtIssuer}
 }
 
+// GetClaims is retained for existing callers; prefer identity.ClaimsFromContext.
 func GetClaims(ctx context.Context) *identity.Claims {
-	claims, _ := ctx.Value(claimsKey).(*identity.Claims)
-	return claims
+	return identity.ClaimsFromContext(ctx)
 }
 
 func (m *Middleware) Auth(next http.Handler) http.Handler {
@@ -46,7 +42,7 @@ func (m *Middleware) Auth(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), claimsKey, claims)
+		ctx := identity.ContextWithClaims(r.Context(), claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -58,7 +54,7 @@ func (m *Middleware) WithRole(roles ...string) func(http.Handler) http.Handler {
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims := GetClaims(r.Context())
+			claims := identity.ClaimsFromContext(r.Context())
 			if claims == nil {
 				platform.WriteError(w, platform.ErrUnauthorized("no claims in context"))
 				return

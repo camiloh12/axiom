@@ -77,10 +77,11 @@ func main() {
 	})
 
 	identityHandler.RegisterRoutes(r)
+	identityHandler.RegisterInvitationPublicRoutes(r)
 
 	r.Group(func(r chi.Router) {
 		r.Use(gw.Auth)
-		// Authenticated identity endpoints will be added in Task 13.
+		identityHandler.RegisterAuthenticatedRoutes(r, gw)
 	})
 
 	slog.Info("starting server", "port", cfg.Port)
