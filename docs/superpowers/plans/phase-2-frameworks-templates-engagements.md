@@ -611,6 +611,12 @@ git push
 Create `apps/axiom-api/migrations/000006_engagements.up.sql`:
 
 ```sql
+-- Period semantics:
+--   - Type 1 (point-in-time) engagements (SOC 1 Type I, SOC 2 Type I): period_start = period_end (single as-of date).
+--   - Type 2 (continuous period) engagements (SOC 1 Type II, SOC 2 Type II): period_end > period_start;
+--     SOC Type 2 must cover 3 to 12 months; outside this range requires a partner-override marker
+--     enforced at the application layer (engagement creation service).
+--   - ISO and PCI engagements use the framework's native window.
 CREATE TABLE engagements (
   id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   firm_id                   uuid NOT NULL REFERENCES firms(id),
@@ -628,7 +634,8 @@ CREATE TABLE engagements (
   retention_deadline        date,
   finalized_at              timestamptz,
   archived_at               timestamptz,
-  created_at                timestamptz NOT NULL DEFAULT now()
+  created_at                timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT engagements_period_valid CHECK (period_end >= period_start)
 );
 
 CREATE INDEX idx_engagements_firm ON engagements(firm_id);
@@ -2616,6 +2623,10 @@ Key rules:
 - **RLS context.** Call `SET LOCAL app.current_firm_id = $1` inside the transaction before any RLS-scoped write.
 - **Scaffolding** reads `template_controls` and `template_test_procedures` joined to the template, then inserts a `controls` row per template control (carrying `firm_control_objective_id`) and a `test_procedures` row per template procedure (cascading the `control_id` that was just inserted).
 - Preserve `sort_order` in procedures.
+- **Period validation** is enforced before the transaction begins:
+  - For SOC Type 1 engagements (`engagement_type` SOC1 or SOC2 *and* `report_type` SOC*Type1` from the wizard), require `period_start == period_end`. Reject otherwise.
+  - For SOC Type 2 engagements, require `period_end > period_start` AND `period_end - period_start BETWEEN 90 AND 366 days` (3 to 12 months). Outside this range, require an explicit `partner_override_reason` field on the input; record the override in the audit log.
+  - For ISO certification cycles and PCI engagements, validate per the framework's native window rules.
 
 Skeleton:
 

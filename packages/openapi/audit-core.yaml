@@ -3384,7 +3384,14 @@ components:
 
     EngagementType:
       type: string
-      description: The compliance or assurance framework category for the engagement.
+      description: |
+        The compliance or assurance framework category for the engagement. The distinction
+        between SOC Type 1 (point-in-time) and SOC Type 2 (continuous period) is encoded
+        via the `period_start`/`period_end` fields rather than as separate enum values:
+        Type 1 engagements have `period_start == period_end` (single "as of" date); Type 2
+        engagements have `period_end > period_start` (continuous period of 3 to 12 months
+        for SOC). The final report type (SOC2Type1, SOC2Type2, etc.) is selected at the
+        reporting stage.
       enum:
         - SOC1
         - SOC2
@@ -3694,13 +3701,22 @@ components:
         period_start:
           type: string
           format: date
-          description: Start of the audit period.
+          description: |
+            Start of the audit period. For Type 1 (point-in-time) engagements (SOC 1 Type I,
+            SOC 2 Type I), this equals `period_end` — both fields hold the single "as of" date.
+            For Type 2 (continuous-period) engagements, this is the start of the examination
+            period; SOC Type 2 requires a continuous period of 3 to 12 months ending at
+            `period_end`.
           examples:
             - "2025-01-01"
         period_end:
           type: string
           format: date
-          description: End of the audit period.
+          description: |
+            End of the audit period. For Type 1 (point-in-time) engagements, this equals
+            `period_start` — the single "as of" date. For SOC Type 2, this must be 3 to 12
+            months after `period_start` (validated server-side; outside-range values require
+            partner override with documented reason).
           examples:
             - "2025-12-31"
         status:
@@ -5030,13 +5046,22 @@ components:
         period_start:
           type: string
           format: date
-          description: Start of the audit period.
+          description: |
+            Start of the audit period. For Type 1 (point-in-time) engagements (SOC 1 Type I,
+            SOC 2 Type I), this equals `period_end` — both fields hold the single "as of" date.
+            For Type 2 (continuous-period) engagements, this is the start of the examination
+            period; SOC Type 2 requires a continuous period of 3 to 12 months ending at
+            `period_end`.
           examples:
             - "2025-01-01"
         period_end:
           type: string
           format: date
-          description: End of the audit period.
+          description: |
+            End of the audit period. For Type 1 (point-in-time) engagements, this equals
+            `period_start` — the single "as of" date. For SOC Type 2, this must be 3 to 12
+            months after `period_start` (validated server-side; outside-range values require
+            partner override with documented reason).
           examples:
             - "2025-12-31"
         firm_name:
@@ -5459,13 +5484,22 @@ components:
         period_start:
           type: string
           format: date
-          description: Start of the audit period.
+          description: |
+            Start of the audit period. For Type 1 (point-in-time) engagements (SOC 1 Type I,
+            SOC 2 Type I), this equals `period_end` — both fields hold the single "as of" date.
+            For Type 2 (continuous-period) engagements, this is the start of the examination
+            period; SOC Type 2 requires a continuous period of 3 to 12 months ending at
+            `period_end`.
           examples:
             - "2025-01-01"
         period_end:
           type: string
           format: date
-          description: End of the audit period.
+          description: |
+            End of the audit period. For Type 1 (point-in-time) engagements, this equals
+            `period_start` — the single "as of" date. For SOC Type 2, this must be 3 to 12
+            months after `period_start` (validated server-side; outside-range values require
+            partner override with documented reason).
           examples:
             - "2025-12-31"
         methodology_template_id:

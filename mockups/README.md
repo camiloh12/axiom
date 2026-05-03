@@ -157,7 +157,9 @@ Following the compliance pivot (see `docs/specs/compliance-pivot-findings.md`), 
 | `journey-01-firm-setup/06-create-engagement.html` | Engagement-type selector — remove financial audit options; same roster as above. |
 | `journey-03-engagement-scoping/01-new-engagement-type.html` | Same engagement-type roster update. |
 | `journey-03-engagement-scoping/04-ai-control-mapping.html` | Extend to show STRM relationship types (equivalent-to / subset-of / intersects-with), cross-framework coverage %, and partial-satisfaction gap lists. |
-| `journey-09-reporting/*` | Report-type selector should cover SOC 2 Type 1/2, ISO 27001/27701/42001 certificate support letters, PCI ROC/AOC, HIPAA attestation — not financial-audit opinions. |
+| `journey-09-reporting/*` | Report-type selector should cover SOC 2 Type 1/2, ISO 27001/27701/42001 certificate support letters, **ISO Certificate (template draft)** for accredited Certification Body customer firms, PCI ROC/AOC, **PCI ROC (template draft)** and **PCI AOC (template draft)** for QSA customer firms, HIPAA attestation — not financial-audit opinions. The "(template draft)" types are deliverable artifacts the licensed firm signs; Axiom does not act as the issuing CB or QSA. |
+| `journey-03-engagement-scoping/02-engagement-details.html` | Period picker must branch on report type: Type 1 engagements show a single "as of" date picker; Type 2 engagements show a date-range picker validating 3–12 month duration for SOC. |
+| `journey-06-workpaper-review/*` | Workpaper review and sign-off UI must be expanded to a four-level reviewer chain (Tester / Detailed Reviewer / General Reviewer / Final Reviewer) with a sign-off ladder visualization, level-aware review note creation (`raised_at_level`), and supersession indicators when higher-level reviewers return the workpaper. EQR remains a separate engagement-level track. |
 | `journey-10-eqr/*` | Generalize "EQR" language for non-SOC engagements; for ISO work the equivalent is firm-level internal QA, not PCAOB-style EQR. |
 
 ### New screens required for Journey 11 (Multi-Framework Integrated Engagement)

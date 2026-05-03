@@ -223,7 +223,8 @@ River workers:
 
 Owns:
 - `Workpaper`, `WorkpaperVersion`
-- `ReviewNote` — structured reviewer feedback anchored to workpaper content (cannot be deleted — AU-C 230)
+- `WorkpaperSignOff` — append-only sign-off ledger; one row per (`workpaper_id`, `reviewer_level`) for the four-level sign-off hierarchy (Tester / DetailedReviewer / GeneralReviewer / FinalReviewer). Server enforces sign-off ordering, signer-cannot-be-preparer at non-Tester levels, and firm-policy role-to-level eligibility. Supersession on rework is recorded via `superseded_at` and `superseded_by_event`. EQR (`EngagementQualityReview`) remains a separate engagement-level review track owned by `auditcore`.
+- `ReviewNote` — structured reviewer feedback anchored to workpaper content (cannot be deleted — AU-C 230); carries `raised_at_level` so supersession of prior sign-offs on rework is deterministic
 - Yjs document awareness state (in-memory per document, persisted to database on save)
 
 Handles WebSocket connections for Yjs real-time collaboration on a dedicated route group (`/api/v1/workpapers/ws/*`). The ALB natively supports WebSocket upgrade requests.
@@ -249,6 +250,8 @@ Report generation is an async operation. When a report is requested, a River job
 4. Verifies provenance for every cited artifact via the provenance module (function call); reports cannot be rendered if any cited artifact fails chain verification.
 5. Renders the report using a Go template.
 6. Stores the rendered report in S3 and the metadata in the database.
+
+**Report types include template-generated drafts for accreditation deliverables** — `ISOCertificateDraft` for accredited Certification Body customer firms (drafts the certificate document; the legal certification decision and signature remain with the CB under ISO 17021-1), and `PCIROCDraft` for QSA customer firms (drafts the Report on Compliance; legal sign-off remains with the accredited QSA under PCI SSC). Axiom is not a CB and not a QSA — these report types produce the deliverable artifact for the licensed firm to sign.
 
 River workers:
 - `reporting.report-generate` — assembles and renders reports as described above.
@@ -314,7 +317,7 @@ Each module owns specific tables and accesses them via its own sqlc queries. Cro
 | Audit Core | `engagements`, `engagement_team_members`, `engagement_frameworks`, `client_acceptances`, `engagement_quality_reviews`, `eqr_findings`, `controls`, `test_procedures`, `findings`, `management_responses`, `corrective_action_plans`, `evidence_items`, `evidence_embeddings`, `document_requests`, `client_hub_tokens`, `delegation_tokens`, `ai_decisions`, `audit_logs`, `notifications` |
 | Frameworks | `frameworks`, `framework_versions`, `framework_requirements`, `framework_requirement_embeddings`, `common_controls`, `common_control_versions`, `common_control_embeddings`, `common_control_satisfies`, `evidence_item_supports`, `policy_library`, `policy_library_embeddings` |
 | Provenance | `provenance_records`, `signed_screenshots`, `hashed_dom_snapshots`, `ai_decision_provenance` |
-| Workpaper | `workpapers`, `workpaper_versions`, `review_notes` |
+| Workpaper | `workpapers`, `workpaper_sign_offs`, `workpaper_versions`, `review_notes` |
 | Reporting | `reports`, `report_versions` |
 
 Foreign keys that cross module boundaries (e.g., `controls.common_control_id → common_controls.id`, `evidence_item_supports.evidence_item_id → evidence_items.id`, `ai_decision_provenance.ai_decision_id → ai_decisions.id`) are enforced at the database level — a significant advantage over the previous multi-database design where these were plain UUID references without referential integrity.

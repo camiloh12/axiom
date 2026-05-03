@@ -774,7 +774,17 @@ components:
 
     ReportType:
       type: string
-      description: The type of compliance/assurance report being produced.
+      description: |
+        The type of compliance/assurance report being produced.
+
+        `ISOCertificateDraft` is a template-generated draft of the certification certificate,
+        produced for accredited Certification Body (CB) customer firms. The legal certification
+        decision and signature remain with the CB under ISO 17021-1 — Axiom does not issue
+        accredited certificates.
+
+        `PCIROCDraft` is a template-generated draft of the PCI Report on Compliance, produced
+        for QSA customer firms. Legal sign-off remains with the accredited QSA under PCI SSC
+        accreditation — Axiom does not act as a QSA.
       enum:
         - SOC1Type1
         - SOC1Type2
@@ -783,9 +793,11 @@ components:
         - ISO27001Certification
         - ISO27701Certification
         - ISO42001Certification
+        - ISOCertificateDraft
         - HIPAAReport
         - PCIDSS_ROC
         - PCIDSS_AOC
+        - PCIROCDraft
         - AgreedUponProcedures
         - ManagementLetter
 
