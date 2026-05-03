@@ -43,7 +43,7 @@ Alternatives under consideration for a future rename (not prioritized at this ti
 
 ### What Axiom Is
 
-Axiom is an AI-native compliance and assurance platform built for mid-market CPA firms and compliance-first consultancies that deliver SOC 2, ISO 27001, ISO 27701, ISO 42001, HIPAA, PCI DSS, and SOC 1 attestation work. It is deliberately **both-sided**: the auditor-side workspace (engagement scoping, fieldwork, workpapers, reporting) and the auditee-side workspace (Client Hub with continuous monitoring, policy library, drift-triggered re-testing) operate on the same `CommonControl` graph, so one evidence artifact clears requirements across every in-scope framework simultaneously. The AI layer is ISO 42001-native by construction and every AI output is cryptographically signed and WORM-stored — auditor-defensible by the data path, not by marketing claim. Axiom is designed to be operational within one week of signup, without an implementation consultant.
+Axiom is an AI-native **audit management and evidence collection** platform built for mid-market CPA firms, compliance-first consultancies, accredited ISO Certification Bodies, and PCI QSA firms that deliver SOC 2, ISO 27001, ISO 27701, ISO 42001, HIPAA, PCI DSS, and SOC 1 engagement work. It is deliberately **both-sided**: the auditor-side workspace (engagement scoping, fieldwork, workpapers, reporting) and the auditee-side workspace (Client Hub with continuous monitoring, policy library, drift-triggered re-testing) operate on the same `CommonControl` graph, so one evidence artifact clears requirements across every in-scope framework simultaneously. The AI layer is ISO 42001-native by construction and every AI output is cryptographically signed and WORM-stored — auditor-defensible by the data path, not by marketing claim. Axiom is designed to be operational within one week of signup, without an implementation consultant.
 
 ### Target ICP
 
@@ -51,7 +51,7 @@ Axiom is an AI-native compliance and assurance platform built for mid-market CPA
 
 **Firm size:** 20–60 professional staff.
 
-**Practice mix:** Compliance and assurance work across SOC 2 Type I/II, ISO 27001:2022, ISO 27701:2019, ISO 42001:2023, HIPAA Security Rule (with HITRUST CSF r2 path post-MVP), PCI DSS v4.0.1, and SOC 1 Type I/II. **Not** Certification Bodies (ISO CBs do not fit the engagement-workspace model), **not** QSA firms (QSA ROC signing is out of scope), **not** internal audit / SOX / enterprise GRC (AuditBoard's territory), **not** financial audit.
+**Practice mix:** Compliance and assurance work across SOC 2 Type I/II, ISO 27001:2022, ISO 27701:2019, ISO 42001:2023, HIPAA Security Rule (with HITRUST CSF r2 path post-MVP), PCI DSS v4.0.1, and SOC 1 Type I/II. **In scope as customer firms:** AICPA-licensed CPA firms delivering SOC attestations, compliance-first consultancies delivering ISO readiness / ISO 42001 engagements, **accredited ISO Certification Bodies (CBs) under ISO 17021-1**, **PCI Qualified Security Assessor (QSA) firms**, and firms delivering HIPAA / HITRUST-r2 (post-MVP) engagements. Axiom serves the engagement-delivery and evidence-collection workflow for these firms; the legal sign-off authority (CB-issued certificates, QSA-signed ROCs, AICPA-licensed attestation opinions) remains with the licensed firm. **Out of scope:** internal audit / SOX / enterprise GRC (AuditBoard's territory) and financial audit.
 
 **Geography:** US and Canada at launch. AWS us-east-1.
 
@@ -63,17 +63,17 @@ Axiom is an AI-native compliance and assurance platform built for mid-market CPA
 
 **Primary differentiator:** Axiom is a **both-sided (auditor + auditee) AI-native compliance platform with STRM-grade cross-framework evidence mapping, cryptographic AIDecision provenance, and ISO 42001-native human-in-the-loop AI governance.** Each of those is concrete:
 
-- **Both-sided** — auditor-side tooling (engagement lifecycle, workpapers, EQR, reporting, archival) and a full auditee GRC workspace (Client Hub continuous monitoring, policy library, drift-triggered re-testing) operate on the same data model. Drata / Vanta / Secureframe / Delve are auditee-only. Agentive is auditor-only. None cover both.
+- **Both-sided** — auditor-side tooling (engagement lifecycle, workpapers, multi-level sign-off, reporting, archival) and a full auditee GRC workspace (Client Hub continuous monitoring, policy library, drift-triggered re-testing) operate on the same data model. Fieldguide, Agentive, and Yak are auditor-only. Drata / Vanta / Secureframe / Delve are auditee-only. None cover both.
 - **STRM-grade cross-framework evidence mapping** — the `CommonControl` graph uses NIST Secure Controls Framework (SCF) crosswalks with NIST STRM relationship vocabulary (`equivalent-to | subset-of | superset-of | intersects-with | no-relationship`), strength scores, and effective-dated edges. One evidence artifact flows coverage through the `EvidenceItemSupports → CommonControl → CommonControlSatisfies → FrameworkRequirement` chain to every mapped framework, with period-aware staleness checks (ASV scan 90d, pen test 1y, background check 1y, SOC 2 Type II windows, ISO surveillance cycles) applied per-framework. Axiom never shows a green checkmark on partial coverage — percentages and gap lists only.
 - **Cryptographic AIDecision provenance** — every AI output is signed with an AWS KMS asymmetric key (`ECC_NIST_P256`, `SIGN_VERIFY`) at emission and written to S3 Object Lock (WORM) with the provenance envelope (`artifact_id`, `model_id`, `model_version`, `prompt_hash`, `input_content_hashes`, `output_hash`, `generated_at`, reviewer identity, reviewer action). Any party — EQR reviewer, ISO CB technical reviewer, client procurement, regulator — can recompute and verify the signature. This is the direct answer to the March 2026 agentic-compliance trust crisis.
 - **ISO 42001-native HITL AI governance** — Axiom dogfoods ISO 42001. The three-tier HITL policy, `AIDecision` ledger, and `ai_content_metadata` tracking are the operational realization of ISO 42001 clauses 6–9 for Axiom as a deployer of AI. Impact-assessment records, model-change-management logs, prompt/model/context/confidence/reviewer/override auditability are first-class platform features, not a policy PDF.
 
-**Secondary differentiator:** Self-serve onboarding with time-to-first-engagement under one week. No implementation consultant required for standard SOC 2, ISO 27001/27701, HIPAA, ISO 42001, PCI DSS, or SOC 1 methodologies. This is a structural sales advantage against incumbents (Drata / Vanta Enterprise, AuditBoard, Hyperproof) whose ACVs require sales-led procurement cycles.
+**Secondary differentiator:** Self-serve onboarding with time-to-first-engagement under one week. No implementation consultant required for standard SOC 2, ISO 27001/27701, HIPAA, ISO 42001, PCI DSS, or SOC 1 methodologies. This is a structural sales advantage against auditor-side incumbents (Fieldguide enterprise sales motion) and against GRC adjacencies (AuditBoard, Hyperproof) whose ACVs require sales-led procurement cycles. Axiom's integration roadmap (cloud, identity, dev tools, evidence-bridge ingestion from Drata / Vanta / Sprinto / Hyperproof) makes it a strong contender in the **audit management and evidence collection** category positioning, not just in the auditor-workspace niche.
 
 ### What Axiom Does NOT Do at Launch
 
-- **Certification Body (CB) issuance** — Axiom supports firms *preparing and assisting* with ISO 27001/27701/42001; the certificate itself is issued by an accredited CB, which Axiom does not become.
-- **QSA/QSI PCI ROC signing** — Axiom supports PCI DSS gap assessment, evidence collection, and ROC preparation; final ROC/AOC signing requires an accredited QSA, and that sign-off is the licensed firm's responsibility.
+- **Issue ISO certificates on behalf of a Certification Body** — accredited CBs are valid customer firms and Axiom supports their engagement-delivery workflow, including generating the certificate document from a template. The legal certification decision and signature remain with the CB under ISO 17021-1; Axiom does not become an accreditation body and does not replace CB technical-review authority.
+- **Sign PCI ROCs on behalf of a QSA firm** — accredited QSA firms are valid customer firms and Axiom supports their gap-assessment, evidence-collection, and ROC-assembly workflow, including generating the ROC and AOC from templates. Legal ROC/AOC sign-off remains with the QSA under PCI SSC accreditation; Axiom does not become a QSA.
 - **PCAOB public-company audits** — Axiom does not support issuer audits under PCAOB standards.
 - **Financial audit / GAAS** — no trial balance, sampling, materiality, or financial-statement workpapers. This is a deliberate exit from the audit vertical.
 - **Internal audit / SOX compliance / enterprise GRC** — AuditBoard's market; different buyer, different workflow, different regulatory framework (IIA vs. AICPA / ISO).
@@ -91,39 +91,61 @@ Axiom is an AI-native compliance and assurance platform built for mid-market CPA
 
 ### One-Paragraph Positioning
 
-**Drata, Vanta, and Secureframe** are auditee-only — they automate control implementation and evidence collection for the company being audited, and hand off a report package to whichever external auditor the client brings. **Agentive** (YC S23, ~$500K seed, ~6 people) is auditor-only — a narrow workpaper-drafting surface with no framework intelligence and no cross-mapping. **AuditBoard CrossComply** and **Hyperproof** license UCF / pivot to SCF for crosswalks but carry internal-audit-GRC baggage that mis-fits mid-market attestation firms. **Sprinto** and **Thoropass** compete in mid-market auditee SaaS, with Thoropass owning an audit practice (an independence concern for external-auditor buyers). The March 2026 trust crisis in the agentic-compliance category made unverifiable AI output commercially toxic, and no competitor today produces cryptographically signed AI outputs with a reviewer-attested ledger. Axiom is the only platform that (a) serves both auditor and auditee sides on one data model, (b) rides SCF/OSCAL/AICPA/CIS crosswalks with STRM-grade period-aware edges, (c) signs every AI output at emission and WORM-stores it, and (d) is ISO 42001-native by construction — and does so at mid-market self-serve pricing.
+Axiom's primary competition is **auditor-side**: **Fieldguide** (Series-funded AI-native audit-engagement platform; the most capitalized auditor-AI player in the market), **Agentive** (YC S23, ~$500K seed, ~6 people; narrow workpaper-drafting surface with no framework intelligence), and **Yak** (auditor-side AI tooling; smaller and less established). **AuditBoard CrossComply** and **Hyperproof** are GRC-side adjacencies that license UCF / pivot to SCF for crosswalks but carry internal-audit baggage that mis-fits mid-market attestation firms. **Drata, Vanta, and Secureframe** sit in the *auditee* category and are not the primary comparison set — they automate control implementation and evidence collection for the company being audited and hand off a report package to whichever external auditor the client brings; Axiom appears alongside them on the auditee-side workspace (Client Hub) but the buying decision happens on the auditor-side workspace, where they have no product. **Sprinto** and **Thoropass** are mid-market auditee SaaS, with Thoropass owning an audit practice (an independence concern for external-auditor buyers). The March 2026 trust crisis in the agentic-compliance category made unverifiable AI output commercially toxic, and no competitor today produces cryptographically signed AI outputs with a reviewer-attested ledger. Axiom is the only platform that (a) serves both auditor and auditee sides on one data model, (b) rides SCF/OSCAL/AICPA/CIS crosswalks with STRM-grade period-aware edges, (c) signs every AI output at emission and WORM-stores it, and (d) is ISO 42001-native by construction — and does so at mid-market self-serve pricing.
 
 ### Competitor Set
+
+The competitor set is grouped by where the buying decision sits. Axiom's primary competition is on the **auditor side**; auditee-side and GRC-adjacent platforms are secondary.
+
+**Primary — auditor-side platforms (the actual head-to-head):**
+
+| Competitor | Scope | Strengths | Gap vs. Axiom |
+|---|---|---|---|
+| **Fieldguide** | Auditor-side AI audit-engagement platform | Best-funded auditor-AI player; strong workpaper automation and PBC workflow; established mid-market traction | No both-sided workspace (no auditee-facing Client Hub / continuous monitoring); no STRM-grade cross-framework graph; no cryptographic AI provenance / WORM at emission; not ISO 42001-native by construction |
+| **Agentive** (YC S23) | Auditor-only workpaper drafting | Narrow PBC/workpaper UX | Tiny (~$500K funding, ~6 people); no framework intelligence, no cross-mapping, no both-sided surface, no signed AI provenance |
+| **Yak Tech** (yaktech.io) | Auditor-side AI audit-lifecycle platform; SOC 1 and SOC 2 only | Founded 2024, ~7 employees, Portland OR. Founder Shannon Smith (CISA); CTO Saxon D'Aubin. "Built by auditors for auditors." Features: AI Reviewer (document evaluation), one-click report generation, control mapping, evidence request workflow, client communication. Won 2025 Accounting Today Top New Product and 2025 Columbia River Pitch Best Overall | **SOC 1/2 only** — no ISO 27001, ISO 27701, ISO 42001, HIPAA, or PCI DSS support; no STRM-grade cross-framework mapping (single-framework architecture); no auditee-side workspace / Client Hub for continuous monitoring; no cryptographic AI provenance; not ISO 42001-native; capital-constrained relative to Fieldguide |
+
+**Secondary — GRC adjacencies (mis-fit on workflow, not direct competitors but show up in evaluations):**
+
+| Competitor | Scope | Strengths | Gap vs. Axiom |
+|---|---|---|---|
+| **AuditBoard CrossComply** | Enterprise GRC + UCF license | Strongest internal-audit pedigree, UCF crosswalk | Internal-audit workflow mis-fit for mid-market attestation; enterprise sales cycle |
+| **Hyperproof** | GRC with 142 frameworks | SCF-pivot crosswalk, breadth | Internal-audit tilt; no both-sided product; no signed provenance |
+
+**Tertiary — auditee-side platforms (not the buying decision; appear alongside Axiom's Client Hub):**
 
 | Competitor | Scope | Strengths | Gap vs. Axiom |
 |---|---|---|---|
 | **Drata** | Auditee-only | 30+ frameworks, DCF proprietary control framework, strong SOC 2 auditor hand-off | No auditor workspace, no cross-mapping UX for external auditors, no signed AI provenance |
 | **Vanta** | Auditee-only | 35+ frameworks, strongest enterprise adoption, Vanta Control Framework (VCF) launched March 2026 | Auditee-only; enterprise pricing; AI features unsigned |
 | **Secureframe** | Auditee-only | 40+ frameworks, similar depth to Vanta | Auditee-only; weaker enterprise story |
-| **AuditBoard CrossComply** | Enterprise GRC + UCF license | Strongest internal-audit pedigree, UCF crosswalk | Internal-audit workflow mis-fit for mid-market attestation; enterprise sales cycle |
-| **Hyperproof** | GRC with 142 frameworks | SCF-pivot crosswalk, breadth | Internal-audit tilt; no both-sided product; no signed provenance |
 | **Sprinto** | Mid-market auditee | "Magic Mapping", fast-to-SOC-2 | Auditee-only |
 | **Thoropass** | Mid-market auditee + audit practice | Bundled audit + tooling | Owns audit practice — independence concerns for external-auditor buyers |
-| **Agentive** (YC S23) | Auditor-only workpaper drafting | Narrow PBC/workpaper UX | Tiny (~$500K funding, ~6 people); no framework intelligence, no cross-mapping, no both-sided surface |
-| *(post–March 2026 agentic-compliance trust crisis)* | — | — | The crisis makes unverifiable AI output commercially untenable. Axiom's response is signed, reviewer-attested AIDecisions. Axiom does not name this competitor in-product. |
+
+**Category context — March 2026 agentic-compliance trust crisis:** Across all three tiers, no competitor today produces cryptographically signed AI outputs with a reviewer-attested ledger. The crisis makes unverifiable AI output commercially untenable; Axiom's response is signed, reviewer-attested `AIDecision` records. Axiom does not name the crisis-implicated competitor in-product.
 
 ### The Switching Trigger
 
 A firm evaluates Axiom when one or more of the following occurs:
 
-1. **Incumbent renewal sticker shock.** A firm receives a Drata / Vanta / Hyperproof renewal at $50K+/year and re-examines whether they are paying for features they actually use. Particularly acute when the firm is on the auditor side and realizes the tool is auditee-centric.
+1. **Auditor-side platform limits.** A firm is using Fieldguide, Agentive, or Yak and hits a ceiling — no cross-framework evidence graph, no auditee-facing Client Hub for continuous monitoring, no cryptographic AI provenance. A multi-framework engagement or a post–March-2026 procurement review surfaces these gaps.
 2. **Failed audit on evidence gaps.** A firm's engagement goes sideways because evidence staleness, period coverage, or partial-satisfaction gaps were not caught. A platform that surfaces these automatically is an easy budget conversation.
 3. **Continuous-monitoring drift not caught.** An incumbent tool flagged a drift but didn't tie it to re-testing; the auditor only discovered during fieldwork that a control had silently broken mid-period.
-4. **Multi-framework expansion.** A firm picking up a SOC 2 + ISO 27001 + ISO 27701 integrated engagement, or adding ISO 42001 to the offering, needs cross-mapping and cannot get it cleanly from an auditee-only tool.
+4. **Multi-framework expansion.** A firm picking up a SOC 2 + ISO 27001 + ISO 27701 integrated engagement, or adding ISO 42001 to the offering, needs cross-mapping and cannot get it cleanly from an auditor-side tool that lacks a STRM graph.
 5. **Post-crisis AI scrutiny.** After the March 2026 category trust crisis, a partner asks "how do we prove our AI-assisted work is defensible?" Signed provenance + AIDecision ledger is the answer.
+6. **Auditee-side renewal review (secondary).** A firm receives a Drata / Vanta / Hyperproof renewal at $50K+/year and re-examines whether they are paying for features they actually use. This trigger now matters mainly for firms that bought an auditee tool and tried to retrofit it for auditor workflow; Axiom's both-sided model means they don't have to.
 
 The 14-day trial exploits triggers 1 and 4: a firm can sign up, load a real SOC 2 Type II template, upload one piece of evidence, and watch the cross-framework coverage dashboard update live — before committing to any payment.
 
-### Why Drata and Vanta Won't Respond Downmarket-Auditor-Side
+### Why Auditor-Side Incumbents Won't Close the Gap Quickly
 
-Drata is a unicorn ($2B+ valuation) and Vanta is the category leader both raised to sustain enterprise-auditee growth. Their strategic incentive is to expand **upmarket within the auditee segment** — larger customers, more frameworks, more integrations, deeper verticals — not to launch an auditor-side workspace that would (a) require a separate product motion, (b) create a conflict of interest with their installed base (they serve the auditees their auditor customers audit), and (c) dilute their core message. A both-sided pivot by an incumbent would require organizational duplication that enterprise SaaS companies at this stage rarely execute successfully.
+**Fieldguide** is well-capitalized but has built around the auditor workflow as the singular surface. Adding an auditee-facing Client Hub with continuous monitoring and drift-triggered re-testing is a separate product motion with separate buyer behavior; the cross-framework STRM graph and cryptographic provenance are foundational data-model decisions, not features that bolt on. A retrofit takes a year-plus of platform work that the team hasn't signaled.
 
-Agentive has the reverse constraint: capital-constrained, no framework intelligence, narrow auditor-side surface. They can grow within PBC/workpaper drafting but cannot cross into cross-mapping + auditee workspace without a ground-up rebuild.
+**Agentive** is capital-constrained (~$500K seed, ~6 people), with no framework intelligence and a narrow auditor-side surface. They can grow within PBC/workpaper drafting but cannot cross into cross-mapping + auditee workspace without a ground-up rebuild.
+
+**Yak Tech** is small (~7 employees, founded 2024) and currently SOC-only. To compete on Axiom's multi-framework footprint they would need to build out ISO 27001/27701/42001, HIPAA, and PCI DSS framework intelligence, plus a STRM-grade cross-mapping graph, plus an auditee-side workspace — multi-year platform work for a 7-person team. The auditor-AI category as a whole has not yet absorbed the post–March-2026 provenance requirement.
+
+**Drata and Vanta** sit in the auditee category and won't respond downmarket-auditor-side. Drata is a unicorn ($2B+ valuation) and Vanta is the category leader; both are raised to sustain enterprise-auditee growth. Their strategic incentive is to expand **upmarket within the auditee segment** — larger customers, more frameworks, more integrations, deeper verticals — not to launch an auditor-side workspace that would (a) require a separate product motion, (b) create a conflict of interest with their installed base (they serve the auditees their auditor customers audit), and (c) dilute their core message. A both-sided pivot by an incumbent would require organizational duplication that enterprise SaaS companies at this stage rarely execute successfully.
 
 ---
 
@@ -220,7 +242,7 @@ With overage revenue (5–15% of ACV) and NRR of 110–120%, realistic ARR at 50
 |---|---|---|---|---|---|---|---|
 | **Governing standard** | AICPA AT-C 105/205/320 (SSAE 18) | AICPA AT-C 105/205/320 (SSAE 18) | ISO/IEC 27001:2022 | ISO/IEC 27701:2019 | ISO/IEC 42001:2023 | HIPAA Security Rule (45 CFR §§164.302–318) | PCI DSS v4.0.1 |
 | **Sign-off authority** | CPA firm partner + EQR (SQMS 2 where applicable) | CPA firm partner + EQR (SQMS 2 where applicable) | Accredited CB (ISO 17021-1) — Axiom supports readiness; CB issues certificate | Accredited CB — Axiom supports readiness | Accredited CB — Axiom supports readiness; dogfooded internally | Firm attestation or internal audit; HITRUST r2 via Authorized External Assessor (post-MVP) | QSA (accredited by PCI SSC) signs ROC; Axiom supports gap assessment and evidence assembly |
-| **Period coverage** | Full examination period (Type II: 6 or 12 months minimum) | Full examination period (Type II: 6 or 12 months minimum) | Certification cycle (initial + annual surveillance + triennial full) | Certification cycle + privacy-program surveillance | Certification cycle; AI-lifecycle management-system scope | Ongoing compliance point-in-time | Annual assessment; ASV scans quarterly; pen test annually |
+| **Period coverage** | Type I: point-in-time as-of date (single date). Type II: continuous examination period of **3 to 12 months** | Type I: point-in-time as-of date (single date). Type II: continuous examination period of **3 to 12 months** | Certification cycle (initial + annual surveillance + triennial full) | Certification cycle + privacy-program surveillance | Certification cycle; AI-lifecycle management-system scope | Ongoing compliance point-in-time | Annual assessment; ASV scans quarterly; pen test annually |
 | **Retention period** | 5 years from report date | 5 years from report date | Ongoing ISMS records | Ongoing PIMS records | Ongoing AIMS records | 6 years from creation / last effective date | 3 years minimum (some evidence longer) |
 | **Workpaper assembly deadline** | 60 days after report issuance | 60 days after report issuance | N/A (ongoing ISMS) | N/A | N/A | N/A | N/A |
 | **Immutable lock trigger** | After 60-day assembly window closes | After 60-day assembly window closes | On certificate issuance | On certificate issuance | On certificate issuance | Policy-driven point-in-time | On ROC issuance |
@@ -228,7 +250,13 @@ With overage revenue (5–15% of ACV) and NRR of 110–120%, realistic ARR at 50
 
 ### Explicit Scope Boundary
 
-Axiom does **not** issue ISO certificates (that is a CB function under ISO 17021-1), **not** sign PCI ROCs (that is a QSA function), and **not** issue attestation opinions on behalf of any firm. The platform supports firms *preparing* and *assisting* with these engagements — specifically: AICPA-licensed CPA firms for SOC attestations, compliance-first consultancies for ISO readiness and ISO 42001 engagements, QSA firms for PCI gap assessment and ROC evidence assembly, and firms delivering HIPAA/HITRUST-r2 (post-MVP) engagements. Final attestation, certification, and ROC sign-off are the licensed firm's responsibility. This boundary is also stated in the MSA and in product in-app.
+Axiom is the engagement-delivery and evidence-collection platform for licensed firms; it is **not** an accreditation authority. Specifically:
+
+- **Axiom does not issue ISO certificates.** ISO certification is a Certification Body (CB) function under ISO 17021-1. Accredited CBs are valid customer firms — Axiom supports their engagement workflow and **generates the certificate document from a template** as a deliverable artifact, but the certification decision and signature remain with the CB.
+- **Axiom does not sign PCI ROCs or AOCs.** ROC/AOC sign-off is a PCI SSC–accredited QSA function. QSA firms are valid customer firms — Axiom supports their gap-assessment, evidence-collection, and ROC-assembly workflow and **generates the ROC and AOC documents from templates** as deliverable artifacts, but the legal sign-off remains with the QSA.
+- **Axiom does not issue attestation opinions on behalf of any firm.** Attestation opinions remain the licensed firm's responsibility (AICPA-licensed CPA firms for SOC attestations).
+
+Customer firm types in scope: AICPA-licensed CPA firms for SOC attestations, compliance-first consultancies for ISO readiness and ISO 42001 engagements, accredited ISO Certification Bodies for ISO certification engagements, QSA firms for PCI gap assessment / ROC assembly, and firms delivering HIPAA/HITRUST-r2 (post-MVP) engagements. This boundary is also stated in the MSA and in product in-app.
 
 ### Firm Quality Management + Internal Inspection
 
@@ -279,7 +307,7 @@ Six bounded contexts and three cross-cutting concerns, derived from the [user jo
 | 2 | Regulatory Framework & Common Controls | Framework, FrameworkVersion, FrameworkRequirement, CommonControl, CommonControlSatisfies (STRM), EvidenceItemSupports | `internal/frameworks` |
 | 3 | Firm Methodology | MethodologyTemplate, FirmControlObjective, template items | `internal/identity` |
 | 4 | Audit Core | Engagement, EngagementFramework, Control, TestProcedure, EvidenceItem, EvidenceLink, DocumentRequest, ClientAcceptance, EngagementQualityReview, Finding, ManagementResponse, CorrectiveActionPlan | `internal/auditcore` |
-| 5 | Workpaper Authoring | Workpaper, WorkpaperVersion, ReviewNote | `internal/workpaper` |
+| 5 | Workpaper Authoring | Workpaper, WorkpaperSignOff, WorkpaperVersion, ReviewNote | `internal/workpaper` |
 | 6 | Reporting & Archival | Report, ReportVersion | `internal/reporting` |
 | — | Cross-cutting | AIDecision, AuditLog, Notification, ProvenanceRecord | `internal/auditcore` + `internal/provenance` |
 
@@ -630,8 +658,8 @@ Full journey maps with stage-by-stage detail (user actions, touchpoints, emotion
 | 2 | Staff Auditor | Join platform and reach first task | Magic link auth, role assignment, guided tour, `EngagementTeamMember` | — |
 | 3 | Partner | Create and scope a new engagement | `ClientAcceptance` gate, EQR independence validation (where applicable), framework version lock after Fieldwork | Risk category (Feature 6), Framework migration (Feature 7), Gap analysis (Feature 3) |
 | 4 | ClientAdmin | **Cross-framework evidence mapping** — upload one artifact, see which `FrameworkRequirement` nodes it satisfies across every in-scope framework | `EvidenceItem` → `EvidenceItemSupports` → `CommonControl` → `CommonControlSatisfies` → `FrameworkRequirement`, period-aware staleness, partial-satisfaction percentages with gap lists | Evidence → CommonControl mapping (Feature 2), Gap analysis (Feature 3), Framework migration (Feature 7) |
-| 5 | Staff Auditor | Test controls and prepare workpapers | `TestProcedure` status progression, AI content tracking gate, sign-off hierarchy | Evidence link (Feature 5), Workpaper draft (Feature 4) |
-| 6 | Manager | Review workpapers and advance the engagement | `ReviewNote` (immutable), phase transition guards | Findings triage (Feature 8) |
+| 5 | Staff Auditor | Test controls and prepare workpapers | `TestProcedure` status progression, AI content tracking gate, four-level sign-off (Tester → Detailed Reviewer → General Reviewer → Final Reviewer) via `WorkpaperSignOff` | Evidence link (Feature 5), Workpaper draft (Feature 4) |
+| 6 | Manager | Review workpapers and advance the engagement | `ReviewNote` (immutable), `WorkpaperSignOff` reviewer-level enforcement, phase transition guards | Findings triage (Feature 8) |
 | 7 | Staff Auditor | Manage document requests and collect evidence | `DocumentRequest` lifecycle, AI review queue sorted by confidence, reminder state machine | Document completeness (Feature 1), Evidence link (Feature 5), Evidence → CommonControl mapping (Feature 2) |
 | 8 | Client Contact | Fulfill audit document requests | Tokenized Client Hub link (no login, engagement-scoped), `ClientAdmin` delegation | Document completeness (Feature 1), Evidence → CommonControl mapping (Feature 2) |
 | 9 | Partner | Generate report, finalize, and archive | Report issuance triggers retention computation; Finalized locks content; S3 Object Lock WORM archival; addendum workflow | Report section draft (Feature 11), Findings triage (Feature 8), Management-response drafting (Feature 10) |
@@ -646,7 +674,7 @@ Full journey maps with stage-by-stage detail (user actions, touchpoints, emotion
 | Client acceptance before fieldwork | AICPA SQMS 1 / internal equivalent for ISO | 3 |
 | EQR / internal-reviewer independence | SQMS 2 (SOC) / ISO 17021-1 §9.6 analog | 3, 10 |
 | Framework version locked after fieldwork begins | §4 | 3, 4 |
-| Sign-off hierarchy enforced at data layer | SQMS 1 / equivalent | 5, 6 |
+| Four-level sign-off hierarchy enforced at data layer (Tester → Detailed Reviewer → General Reviewer → Final Reviewer) | SQMS 1 / equivalent firm quality frameworks | 5, 6 |
 | AI-drafted sections must be substantively edited before sign-off | ISO 42001 §7–9 + firm quality policies | 5, 9 |
 | Review notes cannot be deleted | Evidence preservation standards | 6 |
 | Period coverage check for SOC 2 Type II evidence | AT-C 320 | 7, 12 |
@@ -663,7 +691,7 @@ Full journey maps with stage-by-stage detail (user actions, touchpoints, emotion
 
 ## 12. Flows Without Competitor Equivalent
 
-These flows represent genuine Axiom differentiation — no competitor (Drata, Vanta, Secureframe, Hyperproof, AuditBoard CrossComply, Sprinto, Thoropass, Agentive) currently offers them.
+These flows represent genuine Axiom differentiation — no competitor (Fieldguide, Agentive, Yak, AuditBoard CrossComply, Hyperproof, Drata, Vanta, Secureframe, Sprinto, Thoropass) currently offers them.
 
 1. **Cross-framework evidence mapping (STRM-grade, period-aware)** (Journeys 4, 11) — top-level product differentiator. One `EvidenceItem` flows coverage through `EvidenceItemSupports → CommonControl → CommonControlSatisfies → FrameworkRequirement` with NIST STRM relationship vocabulary, strength scores, coverage percentages, and effective-dated windows that honor framework-specific staleness (ASV 90d, pen test 1y, background check 1y, SOC 2 Type II periods, ISO surveillance cycles). Never a green checkmark on partial coverage — percentages and gap lists only.
 2. **Cryptographic AIDecision provenance** (all AI-producing journeys) — every AI output signed with AWS KMS at emission and WORM-stored with a public verification endpoint. Post–March-2026 category differentiator; a direct answer to the trust crisis.
@@ -687,8 +715,8 @@ The following capabilities are explicitly excluded from the MVP. Each exclusion 
 | **Financial audit / GAAS** | Exited vertical. No trial balance, sampling, materiality, or financial-statement workpapers. |
 | **PCAOB public-company audits** | Out of scope. Different audit regime, different liability profile, different buyer. |
 | **SOX internal controls / internal audit / enterprise GRC** | AuditBoard's market. Different buyer (internal audit director vs. external attestation partner), different workflow (continuous monitoring vs. point-in-time engagement with sign-off hierarchy). |
-| **Certification Body (CB) issuance workflows** | Axiom supports firms *preparing* for ISO certification; issuance is an ISO 17021-1 accredited function that Axiom does not become. |
-| **QSA ROC signing workflows** | Axiom supports PCI DSS gap assessment and evidence assembly; ROC sign-off is a PCI SSC–accredited QSA function. |
+| **Replacing CB accreditation authority** | CBs are valid customer firms; Axiom supports their engagement-delivery workflow and generates draft certificate documents from templates, but does not become an accreditation authority and does not replace the CB's certification decision under ISO 17021-1. |
+| **Replacing QSA accreditation authority** | QSA firms are valid customer firms; Axiom supports their gap assessment, evidence collection, and ROC/AOC assembly (including template-generated ROC and AOC drafts), but does not become a QSA and does not replace QSA legal sign-off under PCI SSC accreditation. |
 | **HITRUST CSF r2 (full assessment mode)** | De facto market standard for HIPAA-heavy environments but requires HITRUST Authorized External Assessor partnership. Post-MVP per compliance-pivot-findings decision 8. |
 | **ESG / sustainability reporting** | Adjacent category, different buyer, content investment not justified by immediate revenue. |
 | **White-labeling / reseller channels** | Adds multi-tenancy complexity at the branding layer; dilutes brand before established. |

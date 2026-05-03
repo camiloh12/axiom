@@ -458,8 +458,8 @@ One engagement = one client, one primary framework, one audit period. The centra
 | engagement_type | enum | SOC1, SOC2, ISO27001, ISO27701, ISO42001, HIPAA, PCI_DSS, AgreedUponProcedures, Advisory |
 | primary_framework_id | uuid | FK → Framework |
 | primary_framework_version_id | uuid | FK → FrameworkVersion — locked at Planning → Fieldwork transition |
-| period_start | date | |
-| period_end | date | |
+| period_start | date | For Type 1 engagements (SOC 1 Type I, SOC 2 Type I), the as-of date — period_start equals period_end. For Type 2 / continuous engagements, the start of the examination period. |
+| period_end | date | For Type 1 engagements, equals period_start (single as-of date). For SOC Type 2, an examination period of 3–12 months from period_start. For ISO surveillance and PCI-style point-in-time, set per the framework's native window. |
 | status | enum | Planning, Fieldwork, Review, Reporting, Finalized, Archived |
 | prior_engagement_id | uuid | FK → Engagement, nullable — for rollforward |
 | methodology_template_id | uuid | FK → methodology_templates (identity module) |
@@ -507,6 +507,7 @@ Emergency path:
 - Assembly deadline and retention deadline are computed at report issuance, never manually set.
 - Once Finalized, no workpaper content can be modified — addenda only.
 - Once Archived, no state changes are possible.
+- **Period semantics by engagement subtype:** Type 1 engagements (SOC 1 Type I, SOC 2 Type I) are point-in-time — `period_start = period_end` (a single as-of date). SOC Type 2 engagements (SOC 1 Type II, SOC 2 Type II) cover a continuous examination period of **3–12 months** (`period_end > period_start`; range validated at engagement creation). ISO certification cycles use surveillance windows; PCI assessments use the framework's annual cycle with 90-day ASV scan validity. Engagement creation UI and validation must branch on the report-type to enforce these.
 
 #### EngagementTeamMember
 
@@ -848,32 +849,67 @@ A document in the engagement file.
 | workpaper_type | enum | LeadSchedule, TestPaper, Memo, ConfirmationLetter, SamplingWorksheet, ManagementLetter, AnalyticalProcedures, Other |
 | title | text | |
 | content | jsonb | Structured rich text |
-| status | enum | Draft, PreparedPendingReview, InReview, ReviewNotesOpen, ReviewComplete, SignedOff |
-| prepared_by_id | uuid | |
-| reviewed_by_id | uuid | |
-| signed_off_by_id | uuid | |
+| status | enum | Draft, PreparedPendingReview, DetailedReviewInProgress, GeneralReviewInProgress, FinalReviewInProgress, ReviewNotesOpen, ReviewComplete, SignedOff |
+| prepared_by_id | uuid | The Tester (Staff or Manager performing the test procedure) |
+| current_reviewer_level | enum | nullable — `DetailedReviewer`, `GeneralReviewer`, `FinalReviewer`. Tracks where the workpaper currently sits in the four-level review chain. |
+| signed_off_by_id | uuid | Populated when the Final Reviewer signs off. |
 | is_locked | boolean | True after engagement finalization |
 | prior_workpaper_id | uuid | FK → Workpaper, nullable — for rollforward |
 | created_at | timestamptz | |
 
-**Status lifecycle:**
+**Status lifecycle (four-level sign-off):**
 
 ```
 Draft
-  → PreparedPendingReview  [Staff submits; system validates all AI sections human_edited = true; soft gate on modification_ratio < 0.05]
-  → InReview               [Manager opens for review]
-  → ReviewNotesOpen        [Manager raises notes; returns to Staff]
-  → InReview               [Staff addresses notes; resubmits]
-  → ReviewComplete         [Manager clears; all notes resolved]
-  → SignedOff              [Partner final sign-off]
+  → PreparedPendingReview        [Tester submits; system validates all AI sections human_edited = true; soft gate on modification_ratio < 0.05]
+  → DetailedReviewInProgress     [Detailed Reviewer opens for review]
+  → ReviewNotesOpen              [Detailed Reviewer raises notes; returns to Tester]
+  → DetailedReviewInProgress     [Tester addresses notes; resubmits]
+  → GeneralReviewInProgress      [Detailed Reviewer signs off; General Reviewer opens]
+  → ReviewNotesOpen              [General Reviewer raises notes; returns to Tester or Detailed Reviewer]
+  → GeneralReviewInProgress      [notes resolved; resubmitted]
+  → FinalReviewInProgress        [General Reviewer signs off; Final Reviewer opens]
+  → ReviewNotesOpen              [Final Reviewer raises notes; returns]
+  → FinalReviewInProgress        [notes resolved; resubmitted]
+  → ReviewComplete               [Final Reviewer clears; all notes resolved across all levels]
+  → SignedOff                    [Final Reviewer records sign-off]
 ```
+
+The four reviewer levels (Tester, Detailed Reviewer, General Reviewer, Final Reviewer) are workflow positions on the workpaper, not user roles — see `WorkpaperSignOff` below. Engagement Quality Review (EQR) under SQMS 2 / ISO 17021-1 §9.6 remains a separate independent track (`EngagementQualityReview`), gating Review → Reporting at the engagement level.
 
 **Invariants:**
 - Submit for review is blocked if ai_content_metadata contains any section with ai_generated = true AND human_edited = false (ISO 42001 human-in-the-loop, AICPA SSAE 21 / ISAE 3000 documentation standards, and Axiom provenance policy). Sections with modification_ratio < 0.05 trigger a confirmable warning ("Section [name] has minimal edits to AI-generated content") — soft gate, not a hard block.
-- Once submitted, the workpaper is locked for the preparer — only the reviewer can modify or return it.
+- Once submitted, the workpaper is locked for the preparer — only the assigned reviewer at the current level can modify or return it.
 - After engagement finalization, is_locked = true — modifications require an addendum.
-- Sign-off creates a timestamped, named AuditLog entry — cannot be backdated.
-- Sign-off hierarchy enforced: Staff prepares → Manager reviews → Partner signs off (AICPA SQMS 1, ISO 17021-1 competence requirements, ISAE 3000 (Revised)).
+- Sign-off at every reviewer level creates a timestamped, named AuditLog entry via `WorkpaperSignOff` — cannot be backdated.
+- **Four-level sign-off hierarchy** enforced at the data layer (Tester → Detailed Reviewer → General Reviewer → Final Reviewer). The `current_reviewer_level` advances strictly forward; level skipping is rejected. Firm policy maps each reviewer level to eligible firm roles (e.g., Final Reviewer typically Partner; General Reviewer typically Partner or senior Manager; Detailed Reviewer typically Manager). Grounded in AICPA SQMS 1, ISO 17021-1 competence requirements, and ISAE 3000 (Revised).
+
+### WorkpaperSignOff
+
+Append-only sign-off ledger. One row per reviewer level signed off on a workpaper. Encodes the four-level review hierarchy as workflow attributes orthogonal to user roles.
+
+| Attribute | Type | Description |
+|---|---|---|
+| id | uuid | |
+| workpaper_id | uuid | FK → Workpaper |
+| firm_id | uuid | For tenant isolation |
+| reviewer_level | enum | `Tester`, `DetailedReviewer`, `GeneralReviewer`, `FinalReviewer` — the workflow level being signed off |
+| signed_by_id | uuid | The user signing off at this level (engagement team member; their UserRole and engagement_role are recorded for audit) |
+| signed_by_role_at_signoff | enum | Snapshot of signer's UserRole at sign-off time (FirmAdmin, Partner, Manager, Staff, EQReviewer) — for historical auditability when roles change |
+| signed_off_at | timestamptz | System-set; cannot be backdated |
+| comments | text | Optional reviewer commentary attached to the sign-off |
+| superseded_at | timestamptz | Nullable — set when the workpaper is returned to a prior level (e.g., review notes raised at a higher level invalidate lower sign-offs); the prior sign-off must be re-recorded after rework |
+| superseded_by_event | text | Reason the sign-off was superseded (e.g., "review_notes_raised_by_general_reviewer") |
+| created_at | timestamptz | |
+
+**Invariants:**
+- One active (non-superseded) `WorkpaperSignOff` per (`workpaper_id`, `reviewer_level`) at any time.
+- Sign-off ordering is enforced — `DetailedReviewer` cannot sign off before `Tester`; `GeneralReviewer` cannot sign off before `DetailedReviewer`; `FinalReviewer` cannot sign off before `GeneralReviewer`.
+- The signer cannot equal the preparer (`signed_by_id ≠ workpaper.prepared_by_id`) for any non-Tester level — a tester cannot review their own work. Independence at higher levels is firm-policy driven and configurable per engagement.
+- Eligibility constraints (which `UserRole` is allowed at which `reviewer_level`) are firm-policy driven; the platform records the firm's chosen mapping in firm settings and validates at sign-off time.
+- When higher-level review surfaces notes and the workpaper is returned, the affected lower-level sign-offs are marked `superseded_at` (with `superseded_by_event` populated). Sign-offs must be re-recorded after rework — preserving an immutable timeline of every sign-off action and revocation.
+- Each row creates an `AuditLog` entry (`workpaper.signed_off`).
+- EQR is a separate track recorded in `EngagementQualityReview`, not in `WorkpaperSignOff`.
 
 ### WorkpaperVersion
 
@@ -939,7 +975,7 @@ The engagement's final deliverable.
 | id | uuid | |
 | engagement_id | uuid | Plain UUID ref |
 | firm_id | uuid | For tenant isolation |
-| report_type | enum | SOC2Type1, SOC2Type2, SOC1Type1, SOC1Type2, ISO27001Certification, ISO27701Certification, ISO42001Certification, HIPAAReport, PCIDSS_ROC, AgreedUponProcedures, ManagementLetter |
+| report_type | enum | SOC2Type1, SOC2Type2, SOC1Type1, SOC1Type2, ISO27001Certification, ISO27701Certification, ISO42001Certification, ISOCertificateDraft, HIPAAReport, PCIDSS_ROC, PCIDSS_AOC, PCIROCDraft, AgreedUponProcedures, ManagementLetter. **Note:** `ISOCertificateDraft` is a template-generated draft of the certification certificate produced for accredited Certification Body customers — the legal certification decision and signature remain with the CB under ISO 17021-1, and Axiom does not issue accredited certificates. `PCIROCDraft` and `PCIDSS_AOC` similarly produce QSA-deliverable templates; sign-off remains with the accredited QSA under PCI SSC. |
 | status | enum | Draft, ClientReview, FirmReview, Issued, Archived |
 | content | jsonb | Structured rich text |
 | template_id | uuid | Nullable — firm-customizable report template used |
@@ -1143,8 +1179,11 @@ CREATE TYPE workpaper_type AS ENUM (
   'LeadSchedule','TestPaper','Memo','ConfirmationLetter',
   'SamplingWorksheet','ManagementLetter','AnalyticalProcedures','Other');
 CREATE TYPE workpaper_status AS ENUM (
-  'Draft','PreparedPendingReview','InReview',
+  'Draft','PreparedPendingReview',
+  'DetailedReviewInProgress','GeneralReviewInProgress','FinalReviewInProgress',
   'ReviewNotesOpen','ReviewComplete','SignedOff');
+CREATE TYPE reviewer_level AS ENUM (
+  'Tester','DetailedReviewer','GeneralReviewer','FinalReviewer');
 CREATE TYPE review_note_severity AS ENUM ('Question','Suggestion','RequiredChange');
 CREATE TYPE review_note_status AS ENUM ('Open','Responded','Resolved');
 ```
@@ -1155,8 +1194,14 @@ CREATE TYPE review_note_status AS ENUM ('Open','Responded','Resolved');
 CREATE TYPE report_type AS ENUM (
   'SOC2Type1','SOC2Type2','SOC1Type1','SOC1Type2',
   'ISO27001Certification','ISO27701Certification','ISO42001Certification',
-  'HIPAAReport','PCIDSS_ROC',
+  'ISOCertificateDraft',
+  'HIPAAReport','PCIDSS_ROC','PCIDSS_AOC','PCIROCDraft',
   'AgreedUponProcedures','ManagementLetter');
+-- ISOCertificateDraft: template-generated certificate for accredited Certification Body
+-- customers; legal certification decision and signature remain with the CB under
+-- ISO 17021-1.
+-- PCIROCDraft / PCIDSS_AOC: template-generated ROC and Attestation of Compliance for
+-- QSA firm customers; legal sign-off remains with the accredited QSA under PCI SSC.
 CREATE TYPE report_status AS ENUM ('Draft','ClientReview','FirmReview','Issued','Archived');
 ```
 
@@ -1254,11 +1299,13 @@ All tables below carry `firm_id uuid NOT NULL` with an index. RLS policy: `USING
 
 Application-layer isolation.
 
-**workpapers** — `id (uuid PK)`, `engagement_id (uuid NOT NULL)`, `firm_id (uuid NOT NULL)`, `control_id (uuid)`, `workpaper_type (workpaper_type NOT NULL)`, `title (text NOT NULL)`, `content (jsonb NOT NULL DEFAULT '{}')`, `status (workpaper_status NOT NULL DEFAULT 'Draft')`, `prepared_by_id (uuid)`, `reviewed_by_id (uuid)`, `signed_off_by_id (uuid)`, `is_locked (boolean NOT NULL DEFAULT false)`, `prior_workpaper_id (uuid FK → workpapers)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(firm_id)`, `(engagement_id)`, `(engagement_id, status)`.
+**workpapers** — `id (uuid PK)`, `engagement_id (uuid NOT NULL)`, `firm_id (uuid NOT NULL)`, `control_id (uuid)`, `workpaper_type (workpaper_type NOT NULL)`, `title (text NOT NULL)`, `content (jsonb NOT NULL DEFAULT '{}')`, `status (workpaper_status NOT NULL DEFAULT 'Draft')`, `prepared_by_id (uuid)`, `current_reviewer_level (reviewer_level)`, `signed_off_by_id (uuid)`, `is_locked (boolean NOT NULL DEFAULT false)`, `prior_workpaper_id (uuid FK → workpapers)`, `created_at (timestamptz NOT NULL)`. **Indexes:** `(firm_id)`, `(engagement_id)`, `(engagement_id, status)`. **Note:** `signed_off_by_id` is populated when the `FinalReviewer` records sign-off; per-level sign-offs are recorded in `workpaper_sign_offs`.
+
+**workpaper_sign_offs** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `workpaper_id (uuid FK → workpapers NOT NULL)`, `reviewer_level (reviewer_level NOT NULL)`, `signed_by_id (uuid NOT NULL)`, `signed_by_role_at_signoff (user_role NOT NULL)`, `signed_off_at (timestamptz NOT NULL DEFAULT now())`, `comments (text)`, `superseded_at (timestamptz)`, `superseded_by_event (text)`, `created_at (timestamptz NOT NULL DEFAULT now())`. **Unique:** `(workpaper_id, reviewer_level) WHERE superseded_at IS NULL` — at most one active sign-off per workpaper per reviewer level. **Indexes:** `(workpaper_id)`, `(firm_id, signed_by_id)`. **Immutability:** `CREATE RULE workpaper_sign_offs_no_update AS ON UPDATE TO workpaper_sign_offs DO INSTEAD NOTHING;` — sign-offs cannot be edited; supersession is achieved by updating `superseded_at` only via a designated function. `CREATE RULE workpaper_sign_offs_no_delete AS ON DELETE TO workpaper_sign_offs DO INSTEAD NOTHING;` — append-only ledger. **Application-layer constraints:** sign-off ordering enforced (Tester → DetailedReviewer → GeneralReviewer → FinalReviewer); signer cannot equal preparer at non-Tester levels (independence); firm-policy maps each `reviewer_level` to eligible `user_role` values, validated at sign-off time.
 
 **workpaper_versions** — `id (uuid PK)`, `workpaper_id (uuid FK → workpapers NOT NULL)`, `version_number (integer NOT NULL)`, `content (jsonb NOT NULL)`, `saved_by_id (uuid NOT NULL)`, `saved_at (timestamptz NOT NULL)`, `is_ai_draft (boolean NOT NULL DEFAULT false)`, `ai_content_metadata (jsonb)`, `is_addendum (boolean NOT NULL DEFAULT false)`, `addendum_reason (text)`. **Check:** `(is_addendum = false OR addendum_reason IS NOT NULL)`. **Unique:** `(workpaper_id, version_number)`. **Note:** `is_ai_draft` is a derived convenience field — true when `ai_content_metadata` contains any section with `ai_generated = true AND human_edited = false`.
 
-**review_notes** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `workpaper_id (uuid FK → workpapers NOT NULL)`, `content_anchor (jsonb)`, `created_by_id (uuid NOT NULL)`, `description (text NOT NULL)`, `severity (review_note_severity NOT NULL)`, `status (review_note_status NOT NULL DEFAULT 'Open')`, `response (text)`, `responded_by_id (uuid)`, `responded_at (timestamptz)`, `resolved_by_id (uuid)`, `resolved_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Immutability:** `CREATE RULE review_notes_no_delete AS ON DELETE TO review_notes DO INSTEAD NOTHING;`. **Indexes:** `(workpaper_id, status)`.
+**review_notes** — `id (uuid PK)`, `firm_id (uuid NOT NULL)`, `workpaper_id (uuid FK → workpapers NOT NULL)`, `raised_at_level (reviewer_level NOT NULL)`, `content_anchor (jsonb)`, `created_by_id (uuid NOT NULL)`, `description (text NOT NULL)`, `severity (review_note_severity NOT NULL)`, `status (review_note_status NOT NULL DEFAULT 'Open')`, `response (text)`, `responded_by_id (uuid)`, `responded_at (timestamptz)`, `resolved_by_id (uuid)`, `resolved_at (timestamptz)`, `created_at (timestamptz NOT NULL)`. **Immutability:** `CREATE RULE review_notes_no_delete AS ON DELETE TO review_notes DO INSTEAD NOTHING;`. **Indexes:** `(workpaper_id, status)`. **Note:** `raised_at_level` records which review level raised the note — informs which prior `WorkpaperSignOff` rows must be superseded when notes return the workpaper to the preparer.
 
 #### Reporting Module
 
@@ -1278,7 +1325,7 @@ All tables reside in `axiom_db`. RLS is enabled on all tenant-scoped tables.
 |---|---|---|---|
 | Identity | 11 (includes firm_control_objective_embeddings) | Yes | Yes |
 | Audit Core | 27 (9 system reference + 18 tenant-scoped) | Yes (tenant tables) | Yes (tenant tables); `common_controls` has partial RLS — NULL-firm rows shared across tenants |
-| Workpaper | 3 | Yes | Yes |
+| Workpaper | 4 (workpapers, workpaper_sign_offs, workpaper_versions, review_notes) | Yes | Yes |
 | Reporting | 2 | Yes | Yes |
 
 The three authorization dimensions:
@@ -1299,8 +1346,8 @@ System-wide reference tables (`frameworks`, `framework_versions`, `framework_req
 | 2: Staff Onboarding | Staff Auditor | User, Invitation, Notification, EngagementTeamMember |
 | 3: Engagement Scoping | Partner | Engagement, EngagementTeamMember, EngagementFramework, Client, Control, TestProcedure, ClientAcceptance, EngagementQualityReview, FirmControlObjectiveMapping, AIDecision |
 | 4: Cross-Framework Mapping | Manager / FirmAdmin | CommonControl, CommonControlSatisfies, FrameworkRequirement, FrameworkVersion, FirmControlObjective, FirmControlObjectiveMapping, AIDecision (EvidenceControlMapping, GapAnalysis, FrameworkMigration) |
-| 5: Control Testing | Staff Auditor | Control, TestProcedure, EvidenceItem, EvidenceLink, EvidenceItemSupports, CommonControl, Workpaper, WorkpaperVersion, AIDecision |
-| 6: Workpaper Review | Manager | Workpaper, WorkpaperVersion, ReviewNote, AuditLog, Notification |
+| 5: Control Testing | Staff Auditor | Control, TestProcedure, EvidenceItem, EvidenceLink, EvidenceItemSupports, CommonControl, Workpaper, WorkpaperVersion, WorkpaperSignOff, AIDecision |
+| 6: Workpaper Review | Detailed / General / Final Reviewer | Workpaper, WorkpaperVersion, WorkpaperSignOff, ReviewNote, AuditLog, Notification |
 | 7: Document Requests | Staff Auditor | DocumentRequest, ClientHubToken, EvidenceItem, EvidenceLink, EvidenceItemSupports, AIDecision, AuditLog |
 | 8: Client Fulfillment | Client Contact | DocumentRequest, ClientHubToken, DelegationToken, EvidenceItem, AuditLog |
 | 9: Reporting & Archive | Partner | Engagement, Report, ReportVersion, Workpaper, WorkpaperVersion, AuditLog |
@@ -1310,9 +1357,9 @@ System-wide reference tables (`frameworks`, `framework_versions`, `framework_req
 
 ### Entity Count Summary
 
-- **Total domain entities:** ~46 (seven added: FrameworkVersion, CommonControl, CommonControlSatisfies, CommonControlEmbedding, EvidenceItemSupports; four removed: TrialBalance, TrialBalanceAccount, TrialBalanceAdjustment, ColumnMappingProfile)
-- **Total tables in `axiom_db`:** ~46
+- **Total domain entities:** ~47 (added: FrameworkVersion, CommonControl, CommonControlSatisfies, CommonControlEmbedding, EvidenceItemSupports, WorkpaperSignOff; removed: TrialBalance, TrialBalanceAccount, TrialBalanceAdjustment, ColumnMappingProfile)
+- **Total tables in `axiom_db`:** ~47
 - **Identity module:** 11 (includes firm_control_objective_embeddings; pgvector required)
 - **Audit Core module:** 27 (9 system reference + 18 tenant-scoped; system tables include framework_requirement_embeddings, common_control_embeddings, control_objective_library_embeddings)
-- **Workpaper module:** 3
+- **Workpaper module:** 4 (workpapers, workpaper_sign_offs, workpaper_versions, review_notes)
 - **Reporting module:** 2

@@ -2,7 +2,7 @@
 
 Task-level user journey maps for every major platform workflow, organized by persona and goal. Referenced from Sections 11–12 of the [product spec](../specs/axiom-spec-design.md).
 
-Competitor workflows (Drata, Vanta, Secureframe, Delve, Agentive, Hyperproof, AuditBoard) informed the pain points and opportunities throughout. Axiom's ICP is compliance and assurance work (SOC 2, ISO 27001, ISO 27701, ISO 42001, HIPAA, PCI DSS, and optional SOC 1) — CPA firms delivering compliance attestations and compliance-first consultancies (the tier below Schellman / A-LIGN). The platform is both-sided: auditor-side tooling plus a full auditee GRC workspace extending from the Client Hub. Certification Bodies and QSA firms are out of scope at launch. Where Axiom introduces flows with no competitor equivalent, those are called out explicitly.
+Competitor workflows (auditor-side: Fieldguide, Agentive, Yak; auditee-side: Drata, Vanta, Secureframe, Sprinto, Thoropass; GRC adjacencies: AuditBoard CrossComply, Hyperproof) informed the pain points and opportunities throughout. Axiom's ICP is compliance and assurance work (SOC 2, ISO 27001, ISO 27701, ISO 42001, HIPAA, PCI DSS, and optional SOC 1). Customer firm types in scope: CPA firms delivering compliance attestations, compliance-first consultancies (the tier below Schellman / A-LIGN), accredited ISO Certification Bodies (CBs), and PCI QSA firms. Axiom supports their engagement-delivery and evidence-collection workflow; legal sign-off authority (CB-issued certificates, QSA-signed ROCs/AOCs, AICPA-licensed attestation opinions) remains with the licensed firm. The platform is both-sided: auditor-side tooling plus a full auditee GRC workspace extending from the Client Hub. Where Axiom introduces flows with no competitor equivalent, those are called out explicitly.
 
 ---
 
@@ -11,10 +11,10 @@ Competitor workflows (Drata, Vanta, Secureframe, Delve, Agentive, Hyperproof, Au
 | Role | Description | Journeys |
 |------|-------------|----------|
 | **FirmAdmin** | Managing partner or designated admin. Configures the firm, manages billing and staff. | 1 |
-| **Partner** | Engagement partner. Creates engagements, approves quality documentation, signs off on reports. 10+ years experience. | 3, 9, 11 |
-| **Manager** | Engagement manager. Reviews staff work, manages review notes, advances engagement phases. 5–8 years experience. | 6 |
-| **Staff Auditor** | Performs hands-on compliance and assurance work — control testing, evidence review, workpaper drafting. 1–3 years experience. | 2, 5, 7 |
-| **EQR Reviewer** | Independent quality reviewer per SQMS 2 (for SOC attestations) and equivalent ISO 17021-1 review expectations for ISO engagements. Not on the engagement team. | 10 |
+| **Partner** | Engagement partner. Creates engagements, approves quality documentation, signs off on reports. Typically serves as the **General Reviewer** and/or **Final Reviewer** in the four-level workpaper sign-off hierarchy. 10+ years experience. | 3, 9, 11 |
+| **Manager** | Engagement manager. Typically serves as the **Detailed Reviewer** in the four-level workpaper sign-off hierarchy; may serve as **General Reviewer** depending on firm policy. Manages review notes, advances engagement phases. 5–8 years experience. | 6 |
+| **Staff Auditor** | Performs hands-on compliance and assurance work — control testing, evidence review, workpaper drafting. Acts as the **Tester** in the four-level sign-off hierarchy. 1–3 years experience. | 2, 5, 7 |
+| **EQR Reviewer** | Independent quality reviewer per SQMS 2 (for SOC attestations) and equivalent ISO 17021-1 review expectations for ISO engagements. Not on the engagement team. Independent of the four-level reviewer chain — EQR is a separate engagement-level review track. | 10 |
 | **Client Contact / ClientUser** | Security, compliance, IT, HR, or privacy lead at the audited company. Non-auditor. | 8, 12 |
 | **ClientAdmin** | Elevated client role. Owns the auditee GRC workspace, delegates document requests, manages continuous monitoring. | 4, 8, 12 |
 
@@ -459,7 +459,11 @@ Define the engagement scope and get the right people assigned.
 
 ### User Actions
 - Enters client name (autocomplete from existing Client records, or creates a new one)
-- Sets audit period dates (period_start, period_end)
+- Sets the audit period — the wizard branches by report type:
+  - **Type 1 (point-in-time)** engagements (SOC 1 Type I, SOC 2 Type I): a single "as of" date picker, e.g. "as of 2026-12-31". The system stores `period_start = period_end = as-of date`.
+  - **Type 2 (continuous-period)** engagements (SOC 1 Type II, SOC 2 Type II): a date-range picker validating that the period is between **3 and 12 months** (the SOC Type 2 minimum is 3 months; longer continuous periods up to 12 months are common; periods outside this range require partner override with documented reason).
+  - **ISO certification cycles**: surveillance window per framework cycle.
+  - **PCI DSS**: annual cycle with 90-day ASV scan validity surfaced in scope reminders.
 - For rollforward engagements: prior_engagement_id is set, and the system surfaces prior year data
 - Assigns engagement team: selects users by name, assigns engagement-level roles
 - System creates: Engagement (Planning status), EngagementTeamMember records, EngagementFramework records, Control records cloned from template, TestProcedure records, draft Workpaper shells, empty ClientAcceptance record
@@ -1059,34 +1063,37 @@ Transform the AI draft (or blank workpaper) into a complete, auditor-authored wo
 ## Stage 6: Submit Workpaper for Review
 
 ### Sub-goal
-Mark the workpaper as ready for manager review, triggering the sign-off workflow.
+Record the Tester sign-off on the workpaper and submit it into the four-level review chain (Detailed Reviewer → General Reviewer → Final Reviewer).
 
 ### User Actions
 - Reviews the workpaper one final time
-- Clicks "Submit for Review" — status changes to PreparedPendingReview
+- Clicks "Submit for Review" — system records a `WorkpaperSignOff` row at `reviewer_level = Tester`, status changes to `PreparedPendingReview`, `current_reviewer_level` advances to `DetailedReviewer`
 - System validates: is_ai_draft must be false (if an AI draft was generated, the auditor must have edited it)
-- The assigned manager receives a notification
-- The workpaper is now locked for the preparer — only the reviewer can make changes or return it
+- The assigned Detailed Reviewer (typically Manager) receives a notification
+- The workpaper is now locked for the preparer — only the reviewer at the current level can make changes or return it
 
 ### Touchpoints
 - "Submit for Review" button with validation check
 - Validation error if is_ai_draft = true: "This workpaper contains an unedited AI draft. You must review and edit the AI-generated content before submitting."
-- Notification to assigned manager
-- Workpaper status badge updates
+- Notification to the assigned Detailed Reviewer
+- Workpaper status badge updates with current reviewer level
+- Sign-off ledger panel: "Tester sign-off recorded — [name] at [timestamp]"
 
 ### Thoughts & Emotions
 - **Accomplished** — a completed workpaper represents meaningful professional output
-- **Hopeful** — "I hope the manager doesn't have too many review notes"
+- **Hopeful** — "I hope the reviewers don't have too many review notes"
 - **Trusting** — the system validation (AI draft check) gives the auditor confidence that they're not submitting incomplete work
 
 ### Pain Points
-- **Competitor context:** Agentive, Hyperproof, and AuditBoard have digital sign-off workflows but enforcement varies by firm configuration. No competitor enforces the AI-draft-must-be-edited gate at the data layer — this is a core Axiom differentiator grounded in the ISO 42001 HITL discipline and the post–Delve-scandal provenance bet.
-- If the manager review takes days (a common audit bottleneck), the auditor's momentum stalls
-- The "locked for preparer" state must be communicated clearly — the auditor needs to know they can't make further edits until the manager returns it or clears it
+- **Competitor context:** Agentive, Hyperproof, and AuditBoard have digital sign-off workflows but enforcement varies by firm configuration. None enforces a four-level reviewer chain (Tester → Detailed → General → Final) at the data layer. None enforces the AI-draft-must-be-edited gate at the data layer — together these are core Axiom differentiators grounded in ISO 42001 HITL discipline, AICPA SQMS 1 / ISO 17021-1 firm quality frameworks, and the post–Delve-scandal provenance bet.
+- If review at any level takes days (a common audit bottleneck), the auditor's momentum stalls
+- The "locked for preparer" state must be communicated clearly — the auditor needs to know they can't make further edits until a reviewer returns the workpaper for rework
+- A workpaper returned from a higher level (e.g., General Reviewer raising notes after the Detailed Reviewer signed off) supersedes lower sign-offs, which can feel demoralizing — UI must communicate the workflow rationale
 
 ### Opportunities
-- Show estimated review queue time: "Manager [name] has 4 workpapers ahead of yours in the review queue"
-- Allow the auditor to add notes for the reviewer: "FYI — this is a new control this year. Prior year test procedure was different."
+- Show estimated review queue time per reviewer level: "Detailed Reviewer [name] has 4 workpapers ahead of yours in the review queue"
+- Allow the auditor to add notes for the reviewer chain: "FYI — this is a new control this year. Prior year test procedure was different."
+- Sign-off ledger panel showing each reviewer level (Tester, Detailed, General, Final) with status, signer name, and timestamp; supersession history shown inline so the workflow is fully transparent
 
 ---
 
@@ -1120,15 +1127,15 @@ Begins with orientation and planning (reviewing assignments), builds through the
 # Journey 6: Review Workpapers and Advance the Engagement
 
 ## Overview
-- **Persona:** Manager — 5–8 years experience, responsible for reviewing staff work and managing the engagement's progression through its phases
-- **Goal:** Review all submitted workpapers, provide feedback via review notes, clear completed workpapers for partner sign-off, and advance the engagement from Fieldwork through Review to Reporting
-- **Trigger:** Staff auditor submits a workpaper for review (PreparedPendingReview status)
+- **Persona:** Reviewer at one of three levels in the four-level sign-off hierarchy — **Detailed Reviewer** (typically Manager, 5–8 years experience), **General Reviewer** (Manager or Partner, depending on firm policy and engagement risk), or **Final Reviewer** (typically Partner). The same person may serve different levels on different workpapers within the same engagement; firm policy maps each `reviewer_level` to eligible `UserRole` values.
+- **Goal:** Review all submitted workpapers at the assigned level, provide feedback via review notes, sign off when satisfied, and (for the engagement-managing reviewer) advance the engagement from Fieldwork through Review to Reporting
+- **Trigger:** A workpaper enters the reviewer's level — `current_reviewer_level` matches the reviewer's assignment (Detailed at submit, General after Detailed sign-off, Final after General sign-off)
 - **Stages:**
-  1. Triage the review queue
+  1. Triage the review queue (filtered by reviewer level assignment)
   2. Review workpaper content and evidence
   3. Raise and manage review notes
-  4. Clear workpaper for partner sign-off
-  5. Advance engagement status
+  4. Sign off at the current reviewer level (advances workpaper to the next level, or to ReviewComplete after Final)
+  5. Advance engagement status (engagement-managing reviewer only)
 
 ## Stage 1: Triage the Review Queue
 
@@ -1234,37 +1241,42 @@ Document specific feedback, questions, or required changes as structured review 
 
 ---
 
-## Stage 4: Clear Workpaper for Partner Sign-Off
+## Stage 4: Sign Off at the Current Reviewer Level
 
 ### Sub-goal
-Advance the workpaper from InReview to ReviewComplete, signaling to the partner that the manager's review is satisfied.
+Record the reviewer's sign-off (`WorkpaperSignOff` row at the current `reviewer_level`) and advance the workpaper to the next level — or to `ReviewComplete` after the Final Reviewer signs off.
 
 ### User Actions
-- Confirms all review notes are resolved (open notes block advancement)
-- Changes workpaper status to ReviewComplete
+- Confirms all review notes raised at the current level are resolved (open notes at this level block advancement)
+- Clicks "Sign off at [level]" — system creates a `WorkpaperSignOff` row at the current `reviewer_level` and advances `current_reviewer_level` to the next position:
+  - Detailed Reviewer signs → workpaper moves to General Reviewer (`GeneralReviewInProgress`)
+  - General Reviewer signs → workpaper moves to Final Reviewer (`FinalReviewInProgress`)
+  - Final Reviewer signs → workpaper status becomes `ReviewComplete` then `SignedOff`; `signed_off_by_id` populated
 - The sign-off action creates a timestamped, named AuditLog entry — it cannot be backdated
-- The engagement partner is notified that the workpaper is ready for final sign-off
-- The partner reviews the manager's cleared notes and signs off the workpaper (SignedOff status)
+- The next-level reviewer (or, after Final, the partner managing the engagement) is notified
 
 ### Touchpoints
-- Review status advancement button (disabled if open notes exist)
-- Sign-off confirmation with name and timestamp
-- Notification to engagement partner
-- AuditLog entry: "Workpaper [name] reviewed by [Manager] at [timestamp]"
+- "Sign off at [level]" button (disabled if open notes at this level exist)
+- Sign-off confirmation with name, level, and timestamp
+- Notification to next-level reviewer
+- AuditLog entry: "Workpaper [name] signed off at [level] by [Reviewer] at [timestamp]"
+- Sign-off ledger panel showing all four levels with status (Pending / Signed / Superseded), signer name, and timestamp
 
 ### Thoughts & Emotions
-- **Confident** — the workpaper meets professional standards
+- **Confident** — the workpaper meets professional standards at this review level
 - **Relieved** — one more item cleared from the review queue
-- **Professional pride** — the sign-off carries their reputation
+- **Professional pride** — the sign-off at this level carries the reviewer's reputation
 
 ### Pain Points
-- **Competitor context:** Hyperproof and AuditBoard have configurable sign-off schemes but enforcement varies. Agentive has digital sign-off. No competitor enforces the sign-off hierarchy at the data layer as strictly as Axiom specifies (cannot advance states out of order — grounded in SQMS 1 / ISO 17021-1 / internal firm quality frameworks).
-- If the partner sign-off takes additional days, the manager's work sits idle
+- **Competitor context:** Hyperproof and AuditBoard have configurable sign-off schemes but enforcement varies. Agentive has digital sign-off. **No competitor enforces a four-level reviewer chain (Tester → Detailed → General → Final) at the data layer** with strict ordering, supersession on rework, and per-level eligibility validation — this is grounded in SQMS 1 / ISO 17021-1 / internal firm quality frameworks and is a core Axiom differentiator.
+- If sign-off at any later level takes additional days, the prior reviewer's work sits idle
 - Bulk sign-off scenarios (many workpapers completing simultaneously) need efficiency without sacrificing individual attention
+- Supersession when a higher level returns the workpaper can be confusing — the UI must clearly indicate which prior sign-offs were invalidated and why
 
 ### Opportunities
-- Partner review queue mirroring the manager review queue — cross-engagement visibility
-- Allow the partner to batch-sign low-risk workpapers with individual confirmation: "Sign off on 8 workpapers? Each will be individually timestamped."
+- Per-level review queue mirroring the prior-level review queue — cross-engagement visibility for each reviewer level
+- Allow Final Reviewers to batch-sign low-risk workpapers with individual confirmation: "Sign off on 8 workpapers at Final level? Each will be individually timestamped."
+- Visual sign-off ladder showing the four-level chain with completion status — helps reviewers understand workflow position at a glance
 
 ---
 
@@ -1305,9 +1317,11 @@ Move the engagement from Fieldwork to Review, and from Review to Reporting, once
 
 | From | To | Information Transferred | Trigger |
 |------|-----|------------------------|---------|
-| Manager | Staff Auditor (Journey 5) | Review notes requiring response | Notes raised |
-| Manager | Partner (Journey 9) | Reviewed workpaper ready for sign-off | ReviewComplete status |
-| Manager | EQR Reviewer (Journey 10) | Engagement ready for quality review | Review phase reached |
+| Detailed / General / Final Reviewer | Tester (Journey 5) | Review notes requiring response | Notes raised at any level |
+| Detailed Reviewer | General Reviewer (this journey, next level) | Workpaper signed off at Detailed level | DetailedReviewer sign-off recorded |
+| General Reviewer | Final Reviewer (this journey, next level) | Workpaper signed off at General level | GeneralReviewer sign-off recorded |
+| Final Reviewer | Partner (Journey 9) | Workpaper SignedOff; report assembly can proceed | All four levels signed; engagement reaches ReviewComplete |
+| Engagement-managing Partner | EQR Reviewer (Journey 10) | Engagement ready for quality review | Review phase reached |
 
 ---
 
@@ -1780,7 +1794,7 @@ Create a first draft of the engagement report populated with engagement data.
 
 ### User Actions
 - Opens the Reporting section of the engagement
-- Selects report type: SOC 2 Type I, SOC 2 Type II, SOC 1 Type I, SOC 1 Type II, ISO 27001 certificate support letter, ISO 27701 certificate support letter, ISO 42001 certificate support letter, HIPAA attestation letter (with optional HITRUST CSF r2 validated assessment report, post-MVP), PCI DSS Report on Compliance (ROC) + Attestation of Compliance (AOC), Agreed-Upon Procedures, or Management Letter
+- Selects report type: SOC 2 Type I, SOC 2 Type II, SOC 1 Type I, SOC 1 Type II, ISO 27001 certificate support letter, ISO 27701 certificate support letter, ISO 42001 certificate support letter, **ISO Certificate (template draft)** for accredited Certification Body customers, HIPAA attestation letter (with optional HITRUST CSF r2 validated assessment report, post-MVP), PCI DSS Report on Compliance (ROC) + Attestation of Compliance (AOC), **PCI ROC (template draft)** and **PCI AOC (template draft)** for QSA firm customers, Agreed-Upon Procedures, or Management Letter. **Note:** the "(template draft)" report types produce the deliverable document for the licensed firm to review and sign — Axiom does not act as the issuing CB or QSA. Legal certification decisions and ROC/AOC sign-offs remain with the accredited firm under ISO 17021-1 / PCI SSC accreditation.
 - The report template is pre-populated with: client name, audit period, framework, controls summary, exception summary, testing results
 - A ReportVersion record is created for the initial draft
 - Optionally, requests an AI draft of the "Description of Tests of Controls" section (Tier 2 AI — same rules as workpaper draft: labeled, human must edit and sign off)
@@ -2256,7 +2270,7 @@ Define the integrated engagement with explicit framework tracks, without letting
 ## Stage 2: Reconcile Sampling Windows Across Frameworks
 
 ### Sub-goal
-Handle the fact that SOC 2 Type II wants a continuous period (say 6 months or 12 months), ISO 27001 surveillance samples at a point in time, and PCI DSS wants 90-day ASV scan validity — a single calendar plan must honor all three.
+Handle the fact that SOC 2 Type II wants a continuous period (3–12 months; commonly 6 or 12), SOC 2 Type I is a single as-of date, ISO 27001 surveillance samples at a point in time, and PCI DSS wants 90-day ASV scan validity — a single calendar plan must honor all of these.
 
 ### User Actions
 - Opens the sampling window reconciliation view
@@ -2631,7 +2645,7 @@ These Axiom flows represent genuine innovation — no competitor currently offer
 | Client acceptance before fieldwork | SQMS 1 (SOC) / ISO 17021-1 §9.1–9.4 (ISO) / PCI DSS scoping worksheet | 3, 11 |
 | EQR reviewer independence | SQMS 2 (SOC) / ISO 17021-1 §9.6 (ISO) / firm policy | 3, 10 |
 | Framework version locked after fieldwork begins | Section 4 requirement | 3, 11 |
-| Sign-off hierarchy enforced at data layer | SQMS 1, ISO 17021-1 | 5, 6 |
+| Four-level sign-off hierarchy enforced at data layer (Tester → Detailed Reviewer → General Reviewer → Final Reviewer; supersession on rework) | SQMS 1, ISO 17021-1, ISAE 3000 (Revised), firm quality frameworks | 5, 6 |
 | AI draft must be edited before sign-off | ISO 42001 HITL discipline, AICPA AT-C AI guidance | 5 |
 | Review notes cannot be deleted | AICPA AT-C, ISO 17021-1, HIPAA §164.312(b), PCI §12.10 | 6 |
 | Period coverage check per framework | AT-C 320 (SOC 2 Type II), ISO surveillance cycle, PCI ASV 90-day validity, HIPAA risk-analysis refresh | 4, 7, 11, 12 |

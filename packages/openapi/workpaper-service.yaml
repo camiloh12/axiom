@@ -18,25 +18,41 @@ info:
     The gateway middleware injects `X-User-Id`, `X-Firm-Id`, and `X-User-Role` headers on
     every inbound request after JWT verification. These headers must be present on all calls.
 
-    ## Status Lifecycle
+    ## Status Lifecycle (Four-Level Sign-Off)
 
-    Workpapers move through a linear review pipeline. Only the transitions listed below are
-    permitted; all others return 409 Conflict.
+    Workpapers move through a four-level review pipeline (Tester → Detailed Reviewer →
+    General Reviewer → Final Reviewer). Only the transitions listed below are permitted;
+    all others return 409 Conflict. Each sign-off creates an immutable `WorkpaperSignOff`
+    record at the corresponding `reviewer_level`.
 
     ```
     Draft
-      → PreparedPendingReview   POST /submit           (Staff)
-                                  Guard: all AI-generated sections must be human-edited
-                                  (ISO 42001 human-in-the-loop, AICPA SSAE 21 / ISAE 3000,
-                                  ISO 17021-1 documentation)
-      → InReview                POST /start-review     (Manager)
-      → ReviewNotesOpen         POST /return           (Manager)
-      → InReview                POST /resubmit         (Staff)
-      → ReviewComplete          POST /complete-review  (Manager)
-                                  Guard: all ReviewNotes must be Resolved
-      → SignedOff               POST /sign-off         (Partner)
-                                  Side-effect: AuditLog entry written via audit core module call
+      → PreparedPendingReview        POST /submit             (Tester records sign-off at Tester level)
+                                       Guard: all AI-generated sections must be human-edited
+                                       (ISO 42001 human-in-the-loop, AICPA SSAE 21 / ISAE 3000,
+                                       ISO 17021-1 documentation)
+                                       Side-effect: WorkpaperSignOff at reviewer_level=Tester
+      → DetailedReviewInProgress     POST /start-review       (Detailed Reviewer)
+      → ReviewNotesOpen              POST /return             (any active reviewer)
+      → [back to prior level]        POST /resubmit           (Tester or lower reviewer)
+                                       Side-effect: prior sign-offs at affected levels are
+                                       marked superseded with reason event
+      → GeneralReviewInProgress      POST /sign-off           (Detailed Reviewer signs off)
+                                       Side-effect: WorkpaperSignOff at reviewer_level=DetailedReviewer
+      → FinalReviewInProgress        POST /sign-off           (General Reviewer signs off)
+                                       Side-effect: WorkpaperSignOff at reviewer_level=GeneralReviewer
+      → ReviewComplete               POST /sign-off           (Final Reviewer signs off; all notes Resolved)
+                                       Side-effect: WorkpaperSignOff at reviewer_level=FinalReviewer
+                                       Guard: all ReviewNotes Resolved across all levels
+      → SignedOff                    [system: ReviewComplete + Final sign-off recorded]
+                                       Side-effect: AuditLog entry written via audit core module call
     ```
+
+    Firm policy maps each `reviewer_level` to eligible `UserRole` values (e.g., Final Reviewer
+    typically Partner; General Reviewer typically Partner or senior Manager; Detailed Reviewer
+    typically Manager). The signer at any non-Tester level cannot equal the workpaper's preparer.
+    Engagement Quality Review (EQR) under SQMS 2 / ISO 17021-1 §9.6 remains a separate
+    independent track at the engagement level (not part of this workpaper sign-off chain).
 
     Once a workpaper reaches **SignedOff** and is locked (`is_locked = true`) via `POST /lock`,
     the content field is immutable. Subsequent content contributions must go through
@@ -62,7 +78,17 @@ tags:
   - name: Workpapers
     description: |
       Core workpaper CRUD and lifecycle state-transition operations.
-      Roles: Staff (prepare/submit/resubmit), Manager (review/return/complete), Partner (sign-off/lock/addendum).
+      Workflow positions: Tester (prepare/submit/resubmit), Detailed Reviewer (start-review/return/sign-off),
+      General Reviewer (sign-off), Final Reviewer (sign-off/lock/addendum). Each `reviewer_level`
+      is a workflow attribute orthogonal to the user's `UserRole`; firm policy maps roles to
+      eligible levels.
+  - name: WorkpaperSignOffs
+    description: |
+      Append-only sign-off ledger. One row per (`workpaper_id`, `reviewer_level`) — Tester,
+      DetailedReviewer, GeneralReviewer, FinalReviewer. Sign-offs cannot be edited; supersession
+      on rework is recorded via `superseded_at` and `superseded_by_event`. The four-level
+      hierarchy is enforced server-side (ordering, signer-cannot-be-preparer at non-Tester levels,
+      firm-policy eligibility).
   - name: WorkpaperVersions
     description: |
       Immutable version history for workpaper content. A new version is auto-created on every
@@ -371,13 +397,20 @@ paths:
   /api/v1/workpapers/{workpaperId}/start-review:
     post:
       operationId: startWorkpaperReview
-      summary: Open workpaper for review
+      summary: Open workpaper for review at the next reviewer level
       description: |
-        Transitions status: `PreparedPendingReview → InReview`.
+        Advances the workpaper into the next reviewer level's `*InProgress` status.
 
-        The calling Manager (or Partner) is recorded as `reviewed_by_id` if not already set.
+        Transitions handled:
+        - `PreparedPendingReview` → `DetailedReviewInProgress` (Detailed Reviewer opens for review)
 
-        **Allowed roles:** Manager, Partner
+        Subsequent level handoffs (DetailedReviewInProgress → GeneralReviewInProgress and
+        GeneralReviewInProgress → FinalReviewInProgress) happen automatically as part of
+        `POST /sign-off` at the prior level — no separate `/start-review` call is required
+        between levels.
+
+        **Allowed roles:** firm-policy-driven; the calling user must be eligible for the
+        target `reviewer_level` per firm-policy mapping.
       tags:
         - Workpapers
       parameters:
@@ -392,7 +425,7 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Review started; status is now InReview.
+          description: Review started; status is now DetailedReviewInProgress.
           content:
             application/json:
               schema:
@@ -417,13 +450,20 @@ paths:
       operationId: returnWorkpaper
       summary: Return workpaper to preparer with review notes
       description: |
-        Transitions status: `InReview → ReviewNotesOpen`.
+        Transitions any active `*InProgress` status (`DetailedReviewInProgress`,
+        `GeneralReviewInProgress`, `FinalReviewInProgress`) to `ReviewNotesOpen`.
 
-        Used when the reviewer has raised one or more `ReviewNote` items that require the
-        preparer's attention before review can continue. The workpaper is unlocked for the
-        preparer after this transition.
+        Used when the reviewer has raised one or more `ReviewNote` items that require
+        rework before review can continue. The workpaper is unlocked for the preparer
+        after this transition.
 
-        **Allowed roles:** Manager, Partner
+        When invoked from a higher reviewer level (General or Final) with notes that
+        require return all the way to the Tester, the prior `WorkpaperSignOff` rows at
+        affected lower levels are marked superseded with `superseded_by_event` describing
+        which higher-level review raised the notes. The workpaper must re-progress
+        through the chain after rework.
+
+        **Allowed roles:** firm-policy-driven (the active reviewer at the current level).
       tags:
         - Workpapers
       parameters:
@@ -450,7 +490,7 @@ paths:
         '404':
           $ref: './common.yaml#/components/responses/NotFound'
         '409':
-          description: Workpaper is not in `InReview` status.
+          description: Workpaper is not in any active `*InProgress` status.
           content:
             application/json:
               schema:
@@ -463,13 +503,17 @@ paths:
       operationId: resubmitWorkpaper
       summary: Resubmit workpaper after addressing review notes
       description: |
-        Transitions status: `ReviewNotesOpen → InReview`.
+        Transitions `ReviewNotesOpen` back to the appropriate `*InProgress` status — the
+        level matching the workpaper's `current_reviewer_level` (which is preserved across
+        the return-and-rework cycle).
 
-        Called by the preparer after addressing all or some of the open review notes. The
-        reviewer then evaluates the responses and either clears the review (`complete-review`)
-        or returns again.
+        Called by the preparer (or, in supersession scenarios, by a lower-level reviewer)
+        after addressing all or some of the open review notes. The active reviewer then
+        evaluates the responses and either signs off (`/sign-off`) or returns again
+        (`/return`).
 
-        **Allowed roles:** Staff, Manager, Partner
+        **Allowed roles:** Staff, Manager, Partner (the workpaper's preparer or any user
+        with rework responsibility for the current level).
       tags:
         - Workpapers
       parameters:
@@ -484,7 +528,7 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Workpaper resubmitted; status is now InReview.
+          description: Workpaper resubmitted; status is now the `*InProgress` status matching `current_reviewer_level`.
           content:
             application/json:
               schema:
@@ -507,9 +551,15 @@ paths:
   /api/v1/workpapers/{workpaperId}/complete-review:
     post:
       operationId: completeWorkpaperReview
-      summary: Complete review (Manager clears the workpaper)
+      summary: (Deprecated) Complete review — use POST /sign-off at FinalReviewer level instead
+      deprecated: true
       description: |
-        Transitions status: `InReview → ReviewComplete`.
+        **Deprecated.** With the four-level sign-off model, `ReviewComplete` is reached
+        when the FinalReviewer signs off via `POST /sign-off`. This endpoint is retained
+        for transitional client compatibility and behaves as an alias for `/sign-off` when
+        the workpaper is in `FinalReviewInProgress`.
+
+        Transitions status: `FinalReviewInProgress → ReviewComplete → SignedOff`.
 
         **Guard:** All `ReviewNote` rows associated with this workpaper must have
         `status = Resolved`. If any note is `Open` or `Responded`, the transition is
@@ -543,7 +593,7 @@ paths:
         '404':
           $ref: './common.yaml#/components/responses/NotFound'
         '409':
-          description: Workpaper is not in `InReview` status.
+          description: Workpaper is not in `FinalReviewInProgress` (deprecated `InReview`) status.
           content:
             application/json:
               schema:
@@ -562,18 +612,28 @@ paths:
   /api/v1/workpapers/{workpaperId}/sign-off:
     post:
       operationId: signOffWorkpaper
-      summary: Partner sign-off
+      summary: Sign off at the current reviewer level
       description: |
-        Transitions status: `ReviewComplete → SignedOff`.
+        Records a `WorkpaperSignOff` row at the workpaper's `current_reviewer_level` and
+        advances the workpaper to the next level (or to `SignedOff` after Final).
 
-        Records the signing Partner as `signed_off_by_id`. After the status transition
-        the service makes a synchronous call to the audit core module to write an `AuditLog`
-        entry recording the sign-off event, user, timestamp, and workpaper reference.
+        Status transitions handled by this endpoint:
+        - `DetailedReviewInProgress` → `GeneralReviewInProgress` (DetailedReviewer signs off)
+        - `GeneralReviewInProgress` → `FinalReviewInProgress` (GeneralReviewer signs off)
+        - `FinalReviewInProgress` → `ReviewComplete` then `SignedOff` (FinalReviewer signs off; all notes must be Resolved)
 
-        **Sign-off hierarchy:** Staff prepares → Manager reviews → Partner signs off.
-        This endpoint enforces the final step. A Manager may not sign off (403 returned).
+        After the transition the service makes a synchronous call to the audit core module
+        to write an `AuditLog` entry recording the sign-off event, user, level, timestamp,
+        and workpaper reference.
 
-        **Allowed roles:** Partner
+        **Server-enforced rules:**
+        - Sign-off ordering: levels must be signed in order (Tester → Detailed → General → Final).
+        - Independence: the signer cannot equal the workpaper's preparer at any non-Tester level.
+        - Eligibility: the calling user's `UserRole` must satisfy the firm's role-to-level mapping.
+        - Final-level guard: all `ReviewNotes` raised at any level must be `Resolved` before
+          the FinalReviewer can sign off.
+
+        **Allowed roles:** firm-policy-driven, validated against the current `reviewer_level`.
       tags:
         - Workpapers
       parameters:
@@ -588,7 +648,7 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Workpaper signed off; status is now SignedOff.
+          description: Sign-off recorded; status advanced to the next level (or SignedOff after Final).
           content:
             application/json:
               schema:
@@ -600,11 +660,60 @@ paths:
         '404':
           $ref: './common.yaml#/components/responses/NotFound'
         '409':
-          description: Workpaper is not in `ReviewComplete` status.
+          description: Workpaper is not in a `*InProgress` status that admits sign-off.
           content:
             application/json:
               schema:
                 $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '422':
+          description: |
+            Business rule violation. Common codes:
+            - `UNRESOLVED_REVIEW_NOTES` — open notes exist at the current level (or any level for Final sign-off).
+            - `SIGNER_IS_PREPARER` — the calling user prepared the workpaper and cannot sign off at a non-Tester level.
+            - `INELIGIBLE_ROLE_FOR_LEVEL` — the calling user's role is not mapped to this `reviewer_level` per firm policy.
+          content:
+            application/json:
+              schema:
+                $ref: './common.yaml#/components/schemas/ErrorResponse'
+        '500':
+          $ref: './common.yaml#/components/responses/InternalServerError'
+
+  /api/v1/workpapers/{workpaperId}/sign-offs:
+    get:
+      operationId: listWorkpaperSignOffs
+      summary: List sign-offs for a workpaper
+      description: |
+        Returns the full sign-off ledger for a workpaper, including superseded sign-offs.
+        Used to render the four-level sign-off ladder UI.
+
+        **Allowed roles:** FirmAdmin, Partner, Manager, Staff, EQReviewer, ViewOnly
+      tags:
+        - WorkpaperSignOffs
+      parameters:
+        - $ref: './common.yaml#/components/parameters/X-User-Id'
+        - $ref: './common.yaml#/components/parameters/X-Firm-Id'
+        - $ref: './common.yaml#/components/parameters/X-User-Role'
+        - name: workpaperId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Sign-off ledger for the workpaper.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkpaperSignOff'
+        '401':
+          $ref: './common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: './common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: './common.yaml#/components/responses/NotFound'
         '500':
           $ref: './common.yaml#/components/responses/InternalServerError'
 
@@ -943,8 +1052,10 @@ paths:
         `content_anchor` is an opaque JSONB object that the frontend uses to anchor the
         note to a specific location in the Yjs document (e.g., node ID, character offset).
 
-        Review notes can only be created while the workpaper is in `InReview` or
-        `ReviewNotesOpen` status.
+        Review notes can only be created while the workpaper is in any active
+        `*InProgress` status (`DetailedReviewInProgress`, `GeneralReviewInProgress`,
+        `FinalReviewInProgress`) or in `ReviewNotesOpen` status. The note records
+        `raised_at_level` to capture which reviewer level raised it.
 
         **Immutability:** Once created, a review note cannot be deleted (AU-C 230).
 
@@ -983,7 +1094,7 @@ paths:
         '404':
           $ref: './common.yaml#/components/responses/NotFound'
         '409':
-          description: Workpaper is not in a status that allows review note creation (InReview or ReviewNotesOpen).
+          description: Workpaper is not in a status that allows review note creation (any active `*InProgress` status or `ReviewNotesOpen`).
           content:
             application/json:
               schema:
@@ -1297,20 +1408,96 @@ components:
       enum:
         - Draft
         - PreparedPendingReview
-        - InReview
+        - DetailedReviewInProgress
+        - GeneralReviewInProgress
+        - FinalReviewInProgress
         - ReviewNotesOpen
         - ReviewComplete
         - SignedOff
       description: |
-        Current lifecycle status of the workpaper.
+        Current lifecycle status of the workpaper. The four-level review chain (Tester →
+        Detailed Reviewer → General Reviewer → Final Reviewer) is reflected in the
+        status enum and tracked alongside the `current_reviewer_level` field.
 
         Permitted transitions (all others return 409):
-        - Draft → PreparedPendingReview (submit)
-        - PreparedPendingReview → InReview (start-review)
-        - InReview → ReviewNotesOpen (return)
-        - ReviewNotesOpen → InReview (resubmit)
-        - InReview → ReviewComplete (complete-review; all notes must be Resolved)
-        - ReviewComplete → SignedOff (sign-off; Partner only)
+        - Draft → PreparedPendingReview (Tester submit; records WorkpaperSignOff at Tester level)
+        - PreparedPendingReview → DetailedReviewInProgress (Detailed Reviewer start-review)
+        - DetailedReviewInProgress → ReviewNotesOpen (return)
+        - ReviewNotesOpen → DetailedReviewInProgress (resubmit; affected sign-offs superseded)
+        - DetailedReviewInProgress → GeneralReviewInProgress (Detailed Reviewer sign-off)
+        - GeneralReviewInProgress → ReviewNotesOpen (return; supersedes Detailed sign-off)
+        - GeneralReviewInProgress → FinalReviewInProgress (General Reviewer sign-off)
+        - FinalReviewInProgress → ReviewNotesOpen (return; supersedes Detailed and General sign-offs)
+        - FinalReviewInProgress → ReviewComplete (Final Reviewer sign-off; all notes Resolved)
+        - ReviewComplete → SignedOff (system; final state)
+
+    ReviewerLevel:
+      type: string
+      enum:
+        - Tester
+        - DetailedReviewer
+        - GeneralReviewer
+        - FinalReviewer
+      description: |
+        Workflow position in the four-level workpaper sign-off chain. Orthogonal to
+        `UserRole` — firm policy maps each level to one or more eligible roles.
+
+    WorkpaperSignOff:
+      type: object
+      description: |
+        A single sign-off record at one reviewer level. Append-only — sign-offs cannot be
+        edited. Supersession (e.g., higher-level reviewer raises notes that invalidate a
+        lower-level sign-off) is recorded via `superseded_at` and `superseded_by_event`;
+        the affected sign-off must be re-recorded after rework.
+      required:
+        - id
+        - workpaper_id
+        - firm_id
+        - reviewer_level
+        - signed_by_id
+        - signed_by_role_at_signoff
+        - signed_off_at
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        workpaper_id:
+          type: string
+          format: uuid
+        firm_id:
+          type: string
+          format: uuid
+        reviewer_level:
+          $ref: '#/components/schemas/ReviewerLevel'
+        signed_by_id:
+          type: string
+          format: uuid
+          description: User who signed off at this level.
+        signed_by_role_at_signoff:
+          type: string
+          description: Snapshot of the signer's UserRole at the time of sign-off, for historical auditability.
+        signed_off_at:
+          type: string
+          format: date-time
+        comments:
+          type:
+            - string
+            - "null"
+        superseded_at:
+          type:
+            - string
+            - "null"
+          format: date-time
+          description: Set when a higher-level reviewer's notes invalidate this sign-off.
+        superseded_by_event:
+          type:
+            - string
+            - "null"
+          description: Reason this sign-off was superseded (e.g., "review_notes_raised_by_general_reviewer").
+        created_at:
+          type: string
+          format: date-time
 
     ReviewNoteSeverity:
       type: string
@@ -1379,19 +1566,23 @@ components:
         prepared_by_id:
           type: string
           format: uuid
-          description: UUID of the user who prepared (created) the workpaper.
-        reviewed_by_id:
+          description: UUID of the Tester who prepared (created) the workpaper.
+        current_reviewer_level:
           type:
             - string
             - "null"
-          format: uuid
-          description: UUID of the Manager or Partner assigned as reviewer.
+          description: |
+            The reviewer level currently active on this workpaper, if any. One of
+            `DetailedReviewer`, `GeneralReviewer`, `FinalReviewer`. Null when the workpaper
+            is in `Draft` (no review yet) or `SignedOff` (review complete).
+          allOf:
+            - $ref: '#/components/schemas/ReviewerLevel'
         signed_off_by_id:
           type:
             - string
             - "null"
           format: uuid
-          description: UUID of the Partner who signed off the workpaper.
+          description: UUID of the Final Reviewer who signed off the workpaper at the FinalReviewer level.
         created_at:
           type: string
           format: date-time
@@ -1556,6 +1747,7 @@ components:
         - id
         - firm_id
         - workpaper_id
+        - raised_at_level
         - created_by_id
         - description
         - severity
@@ -1574,6 +1766,13 @@ components:
           type: string
           format: uuid
           description: UUID of the workpaper this note is attached to.
+        raised_at_level:
+          $ref: '#/components/schemas/ReviewerLevel'
+          description: |
+            The reviewer level that raised this note. Determines which prior `WorkpaperSignOff`
+            rows are superseded when the workpaper is returned for rework — e.g., a note raised
+            at `GeneralReviewer` supersedes the `DetailedReviewer` sign-off and requires
+            re-signing after rework.
         content_anchor:
           type:
             - object

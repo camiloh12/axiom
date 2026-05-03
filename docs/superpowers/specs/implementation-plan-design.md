@@ -580,36 +580,41 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
 
 ## 7. Phase 4 — Workpapers & Review Workflow
 
-**Goal:** Auditors can create and edit rich-text workpapers, submit them for review, managers can add review notes, and the sign-off hierarchy is enforced.
+**Goal:** Auditors can create and edit rich-text workpapers, submit them for review, reviewers at four levels (Tester / DetailedReviewer / GeneralReviewer / FinalReviewer) can add notes and sign off, and the four-level sign-off hierarchy is enforced.
 
 **Journeys covered:** 5 (Control Testing — workpaper creation), 6 (Workpaper Review)
 
 ### Backend
 
 **Migrations:**
-- `workpapers` (with workpaper_type and workpaper_status enums)
+- `workpapers` (with workpaper_type and workpaper_status enums; status enum includes `DetailedReviewInProgress`, `GeneralReviewInProgress`, `FinalReviewInProgress`)
+- `workpaper_sign_offs` (with `reviewer_level` enum — Tester / DetailedReviewer / GeneralReviewer / FinalReviewer; append-only via PostgreSQL RULE; unique constraint on `(workpaper_id, reviewer_level)` filtered to `superseded_at IS NULL`)
 - `workpaper_versions` (with ai_content_metadata jsonb — populated in Phase 7)
-- `review_notes` (with severity and status enums, DELETE rule for immutability)
+- `review_notes` (with `raised_at_level`, severity and status enums, DELETE rule for immutability)
 
 **Workpaper module** (`internal/workpaper`):
 - Workpaper CRUD: create per engagement (optionally linked to a control), update content, list per engagement
 - Content storage: jsonb (ProseMirror document format) — stored in `workpapers.content` for current state
 - Version creation: on each save, insert a new `workpaper_versions` row with content snapshot and version_number
-- Status lifecycle enforcement:
-  - Draft → PreparedPendingReview: Staff submits. Checks all content is non-empty. (AI content gate added in Phase 7.)
-  - PreparedPendingReview → InReview: Manager opens for review.
-  - InReview → ReviewNotesOpen: Manager creates a review note. Auto-transitions.
-  - ReviewNotesOpen → InReview: Staff addresses all notes and resubmits.
-  - InReview → ReviewComplete: Manager marks review complete. Guard: all review notes resolved.
-  - ReviewComplete → SignedOff: Partner signs off. Creates audit log entry.
-- Sign-off hierarchy enforcement:
-  - Submit for review: only `prepared_by_id` (Staff or above)
-  - Review actions: only Manager or Partner (not the preparer)
-  - Sign-off: only Partner
+- Status lifecycle enforcement (four-level sign-off):
+  - Draft → PreparedPendingReview: Tester submits; system records `WorkpaperSignOff` at level Tester. (AI content gate added in Phase 7.)
+  - PreparedPendingReview → DetailedReviewInProgress: Detailed Reviewer opens for review.
+  - `*InProgress` → ReviewNotesOpen: any active reviewer raises a note (auto-transitions). Notes record `raised_at_level`.
+  - ReviewNotesOpen → previous `*InProgress`: Tester addresses notes and resubmits.
+  - DetailedReviewInProgress → GeneralReviewInProgress: Detailed Reviewer signs off. Records `WorkpaperSignOff` at level DetailedReviewer.
+  - GeneralReviewInProgress → FinalReviewInProgress: General Reviewer signs off. Records sign-off at GeneralReviewer.
+  - FinalReviewInProgress → ReviewComplete → SignedOff: Final Reviewer signs off. Records sign-off at FinalReviewer. Guard: all review notes resolved across all levels. Creates audit log entry.
+- Four-level sign-off hierarchy enforcement (server-side):
+  - Submit: only `prepared_by_id` (Tester level).
+  - Sign-off ordering: levels must be signed in order; advancing skips are rejected.
+  - Independence: signer cannot equal preparer at any non-Tester level.
+  - Eligibility: firm-policy maps each `reviewer_level` to eligible `UserRole` values; service validates the calling user against this mapping (firm policy stored in firm settings).
+  - Supersession: when a higher-level reviewer raises notes that return the workpaper to the preparer, the affected lower-level sign-offs are marked `superseded_at` with a reason event; sign-offs must be re-recorded after rework.
 - Locking: after engagement finalization, `is_locked = true` on all workpapers
+- Engagement Quality Review (EQR) under SQMS 2 / ISO 17021-1 §9.6 remains a separate engagement-level review track (`EngagementQualityReview` in `auditcore`), not part of the four-level workpaper chain.
 
 **Review notes** (in `internal/workpaper`):
-- Create: reviewer creates note with severity (Question, Suggestion, RequiredChange) and content anchor
+- Create: reviewer creates note with `raised_at_level` (current reviewer level), severity (Question, Suggestion, RequiredChange) and content anchor
 - Respond: staff writes response text
 - Resolve: reviewer marks as resolved
 - Immutability: PostgreSQL RULE prevents DELETE on review_notes
@@ -620,15 +625,17 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
 - `POST /api/v1/engagements/:id/workpapers` — create workpaper
 - `GET /api/v1/workpapers/:id` — get workpaper with current content
 - `PUT /api/v1/workpapers/:id/content` — save content (creates new version)
-- `POST /api/v1/workpapers/:id/submit-for-review` — advance to PreparedPendingReview
-- `POST /api/v1/workpapers/:id/start-review` — advance to InReview
-- `POST /api/v1/workpapers/:id/complete-review` — advance to ReviewComplete
-- `POST /api/v1/workpapers/:id/sign-off` — advance to SignedOff
-- `POST /api/v1/workpapers/:id/return-to-staff` — return to ReviewNotesOpen
+- `POST /api/v1/workpapers/:id/submit` — Tester sign-off; advance to PreparedPendingReview
+- `POST /api/v1/workpapers/:id/start-review` — Detailed Reviewer opens; advance to DetailedReviewInProgress
+- `POST /api/v1/workpapers/:id/sign-off` — record sign-off at the current reviewer level; advance to next level (or to SignedOff after Final)
+- `GET /api/v1/workpapers/:id/sign-offs` — sign-off ledger (including superseded entries)
+- `POST /api/v1/workpapers/:id/complete-review` — DEPRECATED; alias for `/sign-off` at FinalReviewer level
+- `POST /api/v1/workpapers/:id/return` — return workpaper to preparer; supersede affected sign-offs
+- `POST /api/v1/workpapers/:id/resubmit` — preparer resubmits after rework
 - `GET /api/v1/workpapers/:id/versions` — version history
 - `GET /api/v1/workpapers/:id/versions/:version` — specific version content
 - `GET /api/v1/workpapers/:id/review-notes` — list review notes
-- `POST /api/v1/workpapers/:id/review-notes` — create review note
+- `POST /api/v1/workpapers/:id/review-notes` — create review note (records `raised_at_level`)
 - `POST /api/v1/review-notes/:id/respond` — staff responds
 - `POST /api/v1/review-notes/:id/resolve` — reviewer resolves
 
@@ -641,19 +648,20 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
   - Section-based document structure (each H2 defines a section boundary — important for AI content tracking in Phase 7)
   - Auto-save on idle (debounced, creates version)
   - Manual save button
-  - Status bar showing current status and available actions
-- **Submit for review** action button (with confirmation)
-- **Review interface** (Manager/Partner view):
+  - Status bar showing current status, current reviewer level, and available actions
+- **Sign-off ladder UI** — visualizes the four reviewer levels (Tester, Detailed, General, Final) with status (Pending / Active / Signed / Superseded), signer name, and timestamp. Renders prominently in the workpaper header so reviewers see exactly where the workpaper sits in the chain.
+- **Submit for review** action button (with confirmation; records Tester sign-off)
+- **Review interface** (level-aware view for Detailed / General / Final reviewers):
   - Read workpaper content with review note anchors visible
-  - Review note creation: select text → add note with severity dropdown and description
-  - Review note list sidebar: grouped by status (Open, Responded, Resolved)
-  - "Complete Review" and "Return to Staff" actions
+  - Review note creation: select text → add note with severity dropdown and description; system records `raised_at_level` automatically
+  - Review note list sidebar: grouped by status (Open, Responded, Resolved); filter chips for level that raised the note
+  - "Sign off at [level]" and "Return" actions, level-aware
 - **Staff response interface:**
-  - See review notes inline in the editor
+  - See review notes inline in the editor (with badge showing which level raised each note)
   - Response text field per note
-  - "Resubmit" action when all notes are responded to
+  - "Resubmit" action when all notes are responded to (supersession history shown so the preparer understands which prior sign-offs need re-recording)
 - **Version history:** Timeline of saves, click to view any prior version (read-only)
-- **Sign-off action** (Partner only, with confirmation dialog)
+- **Sign-off action** (level-aware, with confirmation dialog showing which `WorkpaperSignOff` row will be created and the next reviewer who will be notified)
 
 ### Testable Outcome
 
@@ -785,7 +793,7 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
 ### Backend
 
 **Migrations:**
-- Enum types: `report_type` (`SOC1_TypeII`, `SOC2_TypeI`, `SOC2_TypeII`, `ISO27001_CertificateSupportLetter`, `ISO27701_CertificateSupportLetter`, `ISO42001_CertificateSupportLetter`, `PCIDSS_ROC`, `PCIDSS_AOC`, `HIPAA_Attestation`, `AgreedUponProcedures`, `Advisory`), `report_status`
+- Enum types: `report_type` (`SOC1_TypeI`, `SOC1_TypeII`, `SOC2_TypeI`, `SOC2_TypeII`, `ISO27001_CertificateSupportLetter`, `ISO27701_CertificateSupportLetter`, `ISO42001_CertificateSupportLetter`, `ISOCertificateDraft`, `PCIDSS_ROC`, `PCIDSS_AOC`, `PCIROCDraft`, `HIPAA_Attestation`, `AgreedUponProcedures`, `Advisory`), `report_status`. **Note:** `ISOCertificateDraft` and `PCIROCDraft` are template-generated drafts of the certification certificate / ROC for accredited CB and QSA customer firms respectively — Axiom does not act as the issuing CB or QSA; legal sign-off remains with the licensed firm.
 - `reports` (with ai_content_metadata jsonb — populated in Phase 7)
 - `report_versions` (with ai_content_metadata jsonb — populated in Phase 7)
 - `provenance_records` (`content_hash`, `signature`, `signing_key_id`, `signed_at`, `worm_reference` nullable until Phase 10)
