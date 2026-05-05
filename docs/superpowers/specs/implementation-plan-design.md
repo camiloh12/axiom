@@ -180,6 +180,50 @@ AI features are a separate phase rather than woven into each module. Rationale: 
 
 ---
 
+## 2.1. Launch Posture: `CLIENT_HUB_ENABLED` Feature Flag
+
+The both-sided architecture is built into the platform from day one (per the product spec §1 differentiator), but **at launch the auditee-side surface is gated behind a global feature flag and disabled by default.** All auditee-side capabilities are still implemented per their assigned phase; they are simply not user-visible until the flag is flipped on.
+
+**Flag definition:**
+
+- **Name:** `CLIENT_HUB_ENABLED` (env var, also exposed via `/api/v1/config` to the React app)
+- **Type:** boolean
+- **Default:** `false`
+- **Where set:** environment variable on the API container; surfaced as `window.__AXIOM_CONFIG__.clientHubEnabled` in the SPA
+
+**What the flag gates:**
+
+| Surface | Behavior when flag is `false` (launch default) | Behavior when flag is `true` |
+|---|---|---|
+| Client Hub portal routes (`/api/v1/client-hub/:token/*`) | Return `410 Gone` with `{ error: "CLIENT_HUB_DISABLED" }` | Function as specified |
+| Client hub token generation (`POST /api/v1/engagements/:id/client-hub-token`) | Returns `410 Gone` with `{ error: "CLIENT_HUB_DISABLED" }` | Function as specified |
+| `ClientAdmin` and `ClientUser` invitation (`POST /api/v1/invitations`) | Returns `422` with `{ error: "CLIENT_HUB_DISABLED", message: "Client roles cannot be invited while the Client Hub is disabled." }` | Function as specified |
+| Continuous-monitoring dashboard, drift alerts (auditee view) | Routes return `410 Gone`; UI hides the navigation entry | Function as specified |
+| Cross-framework evidence mapping for auditee users (Journey 4 client-side view) | Auditee view hidden; auditor-side dashboard remains functional | Function as specified |
+| Drift detection River workers (`frameworks.drift-detection`) | Continue running on the auditor side; do not emit auditee notifications | Notifications surface to auditees |
+| React SPA navigation entries for "Client Hub", "Continuous Monitoring", "Drift Alerts" | Hidden | Visible per role |
+
+**What stays on regardless:**
+
+- Engagement lifecycle, methodology templates, control testing, workpapers with four-level sign-off, EQR, reporting, and archival (auditor-side flow).
+- Cross-framework `CommonControl` graph and STRM-grade evidence mapping — used internally by auditors; only the auditee-facing dashboard is hidden.
+- AI features producing signed `AIDecision` records and cryptographic provenance for AI outputs.
+- Connector-based evidence ingestion (auditor-side; auditees do not yet log in).
+
+**Implementation pattern:**
+
+- A single `internal/platform/featureflag` package exposes `featureflag.ClientHubEnabled() bool`. It reads the env var once at startup and exposes typed getters.
+- API gateway middleware: `WithClientHubFlag(handler)` — returns `410 Gone` for any route in the client-hub group when the flag is off. Applied to the route group `/api/v1/client-hub/*` and to the specific endpoints that issue tokens / invite client roles.
+- Service-layer guards (defense-in-depth): `auditcore.GenerateClientHubToken` and `identity.InviteUser` both check the flag and reject with the same error code.
+- React: a `useClientHubEnabled()` hook reads `window.__AXIOM_CONFIG__.clientHubEnabled`. Conditionally renders nav items, route guards, and dashboard sections.
+- Tests: every Phase 3 / Phase 5 / Phase 7 / Phase 9 client-side feature has paired tests for `flag=false` (returns 410 / 422) and `flag=true` (works). The default test environment runs with `flag=true` so the existing test corpus continues to validate the full feature; a small set of "launch-posture" tests pin `flag=false` and assert the gating.
+
+**Future expansion (not built now):** a per-firm override `firms.client_hub_enabled` column will let Axiom selectively enable the client-side surface for pilot firms. Adding the column is a one-line migration and a single service-layer change to consult `firm.client_hub_enabled OR global.client_hub_enabled`. Defer until the global flag is flipped on or until the first selective-enablement requirement appears.
+
+**No schema changes** are required to gate the feature. The `ClientAdmin` and `ClientUser` roles, `client_hub_tokens` table, `delegation_tokens` table, and all auditee-side migrations land per their original phase plan; the flag controls runtime visibility only.
+
+---
+
 ## 3. Phase 0 — Dev Environment & Project Scaffold
 
 **Goal:** Go from nothing installed to a running Go API and React dev server, connected to a local Postgres database.
@@ -508,6 +552,8 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
 - Client upload: via token, creates EvidenceItem + sets DocumentRequest.status to Submitted
 - Delegation: ClientAdmin creates DelegationToken for a single request → delegate can upload for that request only
 
+**Feature flag gating** (per §2.1 Launch Posture): all Client Hub endpoints and the token-generation endpoint check `featureflag.ClientHubEnabled()` and return `410 Gone` with `{ error: "CLIENT_HUB_DISABLED" }` when the flag is off (default at launch). Service-layer guards in `auditcore.GenerateClientHubToken` and the token-validation handler enforce the same. Tests cover both flag states.
+
 **Python doc-processing service** (`apps/doc-processing/`):
 - FastAPI + uvicorn
 - `POST /extract` — accepts file bytes, returns extracted text + metadata
@@ -558,12 +604,12 @@ Local filesystem implementation writes to `./local-storage/evidence/`. S3 implem
   - On test procedure detail: "Link Evidence" panel showing available evidence items
   - Click to link with optional notes
   - View linked evidence per procedure
-- **Client Hub portal** (separate route `/client-hub/:token`, no auth required):
+- **Client Hub portal** (separate route `/client-hub/:token`, no auth required) — *route renders a "Client Hub disabled" page when `CLIENT_HUB_ENABLED=false`; otherwise:*
   - Engagement name and firm branding
   - Table of document requests (pending, submitted, accepted, rejected)
   - Per-request: view instructions, upload files, see status
   - Delegation action for ClientAdmin (enter colleague's email → generates link)
-- **Generate client hub link** button on engagement detail page (copies tokenized URL)
+- **Generate client hub link** button on engagement detail page (copies tokenized URL) — *button is hidden when `CLIENT_HUB_ENABLED=false`; the engagement detail page surfaces the underlying `DocumentRequest` items via the auditor-side workflow regardless*
 
 ### Testable Outcome
 
@@ -1031,6 +1077,7 @@ All eleven features create `AIDecision` records (where they don't live in Tier 1
 - Model: Claude Haiku for drift classification; Claude Sonnet when drift crosses a severity threshold
 - Output: when drift exceeds threshold, enqueue a re-test job (new document request or re-execution of the test procedure), create an `AIDecision`
 - Human review: auditor accepts the re-test enqueue; Tier 1 informational drift below threshold is logged but not elevated
+- **Feature flag gating** (per §2.1): the auditor-side detection workflow runs regardless of `CLIENT_HUB_ENABLED`; auditee-facing notifications (`Notification` rows of type `DriftDetected` / `EvidenceExpiring` delivered to `ClientAdmin` / `ClientUser`) are suppressed when the flag is off. Auditor users continue to receive drift signals.
 
 **Feature 10 — Agentic Management-Response Drafting:**
 - River worker: `auditcore.ai-management-response-drafter`
@@ -1090,7 +1137,7 @@ All eleven features create `AIDecision` records (where they don't live in Tier 1
 - **Engagement coverage tab:** Cross-framework gap analysis results with remediation suggestions — accept a suggestion to open a document request or queue a test procedure
 - **Framework migration UI:** AI-proposed edge remappings alongside the deterministic diff (from Phase 5) — bulk confirm/reject
 - **Findings detail:** AI triage panel with proposed severity, cross-framework impact surface, suggested remediation owner — accept/modify
-- **Drift monitor:** live feed of connector-detected drift with "Re-test required" flags that enqueue re-test jobs on acceptance
+- **Drift monitor:** live feed of connector-detected drift with "Re-test required" flags that enqueue re-test jobs on acceptance — *auditor-side only at launch; auditee-facing drift dashboards are hidden when `CLIENT_HUB_ENABLED=false`*
 - **Management response drafter:** agentic panel on finding detail — drafts response, opens/ties ticketing-system issue, shows round-tripped closure evidence
 - **Workpaper editor:**
   - "Generate AI Draft" button
@@ -1335,7 +1382,8 @@ All eleven features create `AIDecision` records (where they don't live in Tier 1
 9. Attempt to delete audit log entry via SQL → blocked by PostgreSQL RULE
 10. Full SOC 2 lifecycle walkthrough (automated test): firm setup through archive, every guard verified
 11. Full Multi-Framework Integrated Engagement walkthrough (SOC 2 + ISO 27001 + ISO 27701): evidence reused across frameworks, three reports issued from one engagement
-12. Full Continuous Assurance / Drift-Triggered Re-Testing walkthrough: connector drift → AI classification → re-test → finding → management response round-trip
+12. Full Continuous Assurance / Drift-Triggered Re-Testing walkthrough: connector drift → AI classification → re-test → finding → management response round-trip. Run this walkthrough twice — once with `CLIENT_HUB_ENABLED=true` (full auditor + auditee surface), once with `CLIENT_HUB_ENABLED=false` (auditor-side only; verify auditee notifications are suppressed and Client Hub routes return `410`)
+13. Launch-posture flag enforcement: with `CLIENT_HUB_ENABLED=false`, every Client Hub route returns `410 Gone`, `ClientAdmin` / `ClientUser` invitations are rejected, and the SPA hides client-side navigation entries; flipping the flag to `true` enables all of it without any database migration
 13. Provenance chain verification across the three walkthroughs: no broken chains; deliberate tamper is detected and alerted
 
 ---

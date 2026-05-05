@@ -2,12 +2,15 @@ package identity_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform/featureflag"
 )
 
 func TestGetFirm(t *testing.T) {
@@ -84,4 +87,60 @@ func TestInvitationFlow(t *testing.T) {
 	// Re-accepting the same token must fail.
 	_, err = svc.AcceptInvitation(ctx, inv.Token, "Other", "pwpwpwpw")
 	assert.Error(t, err)
+}
+
+// TestCreateInvitation_ClientHubDisabled verifies the launch-posture flag
+// rejects ClientAdmin / ClientUser invitations when CLIENT_HUB_ENABLED=false.
+// See docs/superpowers/specs/implementation-plan-design.md §2.1.
+func TestCreateInvitation_ClientHubDisabled(t *testing.T) {
+	svc := setupServiceWithFlags(t, featureflag.New(false))
+	ctx := context.Background()
+
+	reg, err := svc.RegisterFirm(ctx, identity.RegisterFirmInput{
+		FirmName: "Disabled Hub Firm", AdminEmail: "dh@test.com", AdminName: "Admin",
+		Password: "pwpwpwpw", Country: "US", StaffCount: "1-10",
+		AuditTypes: []string{"SOC2"},
+	})
+	require.NoError(t, err)
+
+	for _, role := range []string{"ClientAdmin", "ClientUser"} {
+		t.Run(role, func(t *testing.T) {
+			_, err := svc.CreateInvitation(ctx, reg.Firm.ID, reg.User.ID, identity.CreateInvitationInput{
+				Email: "client@test.com", AssignedRole: role,
+			})
+			require.Error(t, err)
+			var appErr *platform.AppError
+			require.True(t, errors.As(err, &appErr), "expected *platform.AppError, got %T", err)
+			assert.Equal(t, 422, appErr.Code)
+			assert.Equal(t, "CLIENT_HUB_DISABLED", appErr.Message)
+		})
+	}
+
+	// Firm-side roles still succeed even when the flag is off.
+	inv, err := svc.CreateInvitation(ctx, reg.Firm.ID, reg.User.ID, identity.CreateInvitationInput{
+		Email: "staff@test.com", AssignedRole: "Staff",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, inv.Token)
+}
+
+// TestCreateInvitation_ClientHubEnabled verifies that with the flag flipped
+// on, client-role invitations succeed.
+func TestCreateInvitation_ClientHubEnabled(t *testing.T) {
+	svc := setupServiceWithFlags(t, featureflag.New(true))
+	ctx := context.Background()
+
+	reg, err := svc.RegisterFirm(ctx, identity.RegisterFirmInput{
+		FirmName: "Enabled Hub Firm", AdminEmail: "eh@test.com", AdminName: "Admin",
+		Password: "pwpwpwpw", Country: "US", StaffCount: "1-10",
+		AuditTypes: []string{"SOC2"},
+	})
+	require.NoError(t, err)
+
+	inv, err := svc.CreateInvitation(ctx, reg.Firm.ID, reg.User.ID, identity.CreateInvitationInput{
+		Email: "clientadmin@test.com", AssignedRole: "ClientAdmin",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, inv.Token)
+	assert.Equal(t, "ClientAdmin", inv.AssignedRole)
 }
