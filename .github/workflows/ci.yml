@@ -98,6 +98,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Verify single root lock file (npm workspaces canonical)
+        run: |
+          extra=$(find apps packages -name 'package-lock.json' -not -path '*/node_modules/*' 2>/dev/null || true)
+          if [ -n "$extra" ]; then
+            echo "::error::Per-workspace package-lock.json files found:"
+            echo "$extra"
+            echo "This repo uses npm workspaces; only the root package-lock.json is authoritative."
+            echo "Delete the per-workspace lock and re-run 'npm install' from the root."
+            exit 1
+          fi
       - uses: actions/setup-node@v6
         with:
           node-version: "22"

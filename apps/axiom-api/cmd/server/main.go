@@ -16,6 +16,7 @@ import (
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/gateway"
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform/featureflag"
 )
 
 func main() {
@@ -75,6 +76,16 @@ func main() {
 	r.Get("/api/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+
+	// Public bootstrap config consumed by the SPA at startup. Surfaces the
+	// launch-posture feature flags so the UI can hide gated surfaces.
+	flags := featureflag.Load()
+	r.Get("/api/v1/config", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"clientHubEnabled": flags.ClientHubEnabled(),
+		})
 	})
 
 	identityHandler.RegisterRoutes(r)

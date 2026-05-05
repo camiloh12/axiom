@@ -3532,6 +3532,15 @@ The phase is not complete until the validation report shows ✅ for every page a
 - Email verification (deferred — magic link for invitations covers the invite flow)
 - Tour completion endpoint (trivial — add when dashboard tour is built)
 
+**Launch-posture follow-up (added post-merge per PO direction):** the implementation plan now defines a global `CLIENT_HUB_ENABLED` feature flag (see `docs/superpowers/specs/implementation-plan-design.md` §2.1) that gates the auditee-side surface at launch. The current Phase 1 invitation flow (`CreateInvitation`) does **not** check this flag and will allow `ClientAdmin` / `ClientUser` invitations regardless. This gap must be closed before Phase 3 (Client Hub) ships:
+
+- Add a `featureflag.ClientHubEnabled()` check at the top of `identity.Service.CreateInvitation` returning `422 CLIENT_HUB_DISABLED` when the role is `ClientAdmin` or `ClientUser` and the flag is off.
+- Add a corresponding `featureflag` package under `internal/platform/featureflag` reading `CLIENT_HUB_ENABLED` from the environment with default `false`.
+- Mirror the check on the React invitation form in `pages/users.tsx` to hide the client roles when the SPA's bootstrap config reports `clientHubEnabled = false`.
+- Tests: add `flag=false` rejection cases to `service_extras_test.go` invitation tests; existing tests pass `flag=true` so the legacy corpus continues to validate the full feature.
+
+The flag itself, the gateway middleware, and the Client Hub endpoint gating land in Phase 3 alongside the Client Hub implementation. The invitation gating above is the only code change required in the Phase 0/1 surface.
+
 **Type consistency:** Verified — `TokenPair`, `Claims`, `JWTIssuer`, `Service`, `Handler`, `Middleware`, `AppError` types are used consistently across all tasks.
 
 ---

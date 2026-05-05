@@ -15,19 +15,29 @@ import (
 
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity/queries"
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform/featureflag"
 )
 
 type Service struct {
 	pool    *pgxpool.Pool
 	queries *queries.Queries
 	jwt     *JWTIssuer
+	flags   *featureflag.Flags
 }
 
+// NewService constructs the identity service. Pass nil for flags to use the
+// process-level loaded flags (env-driven). Tests should pass an explicit
+// featureflag.New(...) value.
 func NewService(pool *pgxpool.Pool, jwt *JWTIssuer) *Service {
+	return NewServiceWithFlags(pool, jwt, featureflag.Load())
+}
+
+func NewServiceWithFlags(pool *pgxpool.Pool, jwt *JWTIssuer, flags *featureflag.Flags) *Service {
 	return &Service{
 		pool:    pool,
 		queries: queries.New(pool),
 		jwt:     jwt,
+		flags:   flags,
 	}
 }
 

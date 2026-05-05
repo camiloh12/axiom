@@ -19,6 +19,11 @@ interface Invitation {
   token?: string
 }
 
+// ClientAdmin / ClientUser are deliberately not invitable from the firm-staff
+// page. Those roles belong to a specific client engagement (users.client_id is
+// required by a CHECK constraint) and will be invited via the Client Hub flow,
+// which is gated behind the CLIENT_HUB_ENABLED launch-posture flag. Backend
+// CreateInvitation enforces the same restriction as defense-in-depth.
 const ROLES = ['Partner', 'Manager', 'Staff', 'EQReviewer', 'ViewOnly'] as const
 
 export default function UsersPage() {

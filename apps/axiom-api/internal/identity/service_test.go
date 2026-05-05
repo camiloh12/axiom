@@ -9,14 +9,24 @@ import (
 
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/identity"
 	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform"
+	"github.com/axiom-platform/axiom/apps/axiom-api/internal/platform/featureflag"
 )
 
+// setupService constructs a Service for tests with CLIENT_HUB_ENABLED=true so
+// the existing test corpus continues to validate the full both-sided feature
+// surface. Tests that exercise the launch-posture flag-off behavior should
+// call setupServiceWithFlags directly.
 func setupService(t *testing.T) *identity.Service {
+	t.Helper()
+	return setupServiceWithFlags(t, featureflag.New(true))
+}
+
+func setupServiceWithFlags(t *testing.T, flags *featureflag.Flags) *identity.Service {
 	t.Helper()
 	pool := platform.TestDB(t)
 	privKey, pubKey := testKeyPair(t)
 	issuer := identity.NewJWTIssuer(privKey, pubKey)
-	return identity.NewService(pool, issuer)
+	return identity.NewServiceWithFlags(pool, issuer, flags)
 }
 
 func TestRegisterFirm(t *testing.T) {

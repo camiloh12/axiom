@@ -233,6 +233,15 @@ func (s *Service) UpdateClient(ctx context.Context, clientID uuid.UUID, input Up
 }
 
 func (s *Service) CreateInvitation(ctx context.Context, firmID, inviterID uuid.UUID, input CreateInvitationInput) (*InvitationDTO, error) {
+	// Launch posture (per docs/superpowers/specs/implementation-plan-design.md §2.1):
+	// the auditee-side surface is gated behind CLIENT_HUB_ENABLED. Reject
+	// ClientAdmin / ClientUser invitations while the flag is off.
+	if !s.flags.ClientHubEnabled() && (input.AssignedRole == "ClientAdmin" || input.AssignedRole == "ClientUser") {
+		return nil, platform.ErrValidation(
+			"CLIENT_HUB_DISABLED",
+			"Client roles cannot be invited while the Client Hub is disabled.",
+		)
+	}
 	if err := s.ctxWithFirm(ctx, firmID); err != nil {
 		return nil, fmt.Errorf("set firm context: %w", err)
 	}

@@ -70,6 +70,29 @@ Axiom is an AI-native **audit management and evidence collection** platform buil
 
 **Secondary differentiator:** Self-serve onboarding with time-to-first-engagement under one week. No implementation consultant required for standard SOC 2, ISO 27001/27701, HIPAA, ISO 42001, PCI DSS, or SOC 1 methodologies. This is a structural sales advantage against auditor-side incumbents (Fieldguide enterprise sales motion) and against GRC adjacencies (AuditBoard, Hyperproof) whose ACVs require sales-led procurement cycles. Axiom's integration roadmap (cloud, identity, dev tools, evidence-bridge ingestion from Drata / Vanta / Sprinto / Hyperproof) makes it a strong contender in the **audit management and evidence collection** category positioning, not just in the auditor-workspace niche.
 
+### Launch Posture: Auditor-First, Auditee-Side Built but Feature-Flagged Off
+
+The both-sided architecture — one `CommonControl` graph backing both auditor-side and auditee-side workflows — is built into the platform from day one and is the defining product differentiator. **At launch, however, the auditee-side surface is gated behind a global feature flag (`CLIENT_HUB_ENABLED`) and disabled by default.** All auditee-side capabilities are still implemented per the phase plan, but they are not user-visible until the flag is flipped on.
+
+**What is gated off at launch:**
+
+- **Client Hub portal** — the tokenized, no-login client-facing upload surface (Journey 8); auditor-side document requests still work, but auditors deliver evidence via traditional out-of-band methods (email, SFTP, secure share) rather than the platform's portal.
+- **Client Hub auditee GRC workspace** — continuous monitoring, policy library, drift-triggered re-testing dashboards (Journey 12).
+- **Cross-framework evidence mapping for auditee users** (Journey 4 client-facing view); the cross-framework graph itself stays on for auditor-side use.
+- **`ClientAdmin` and `ClientUser` roles** — invitation API rejects these roles when the flag is off; existing users (none at launch) would be deactivated.
+- **Auditee-side drift alerts and continuous-assurance flows** (Journey 12).
+
+**What stays on at launch:**
+
+- Engagement lifecycle, methodology templates, control testing, workpapers with four-level sign-off, EQR, reporting, and archival (auditor-side flow).
+- Cross-framework `CommonControl` graph and STRM-grade evidence mapping — used internally by auditors; only the auditee-facing dashboard is hidden.
+- AI features producing signed `AIDecision` records and cryptographic provenance for AI outputs.
+- Connector-based evidence ingestion (auditor-side; auditees do not yet log in to confirm).
+
+**Why a flag, not a deferred capability:** the both-sided architecture is the product differentiator, not a future bet, and the data model + service layer are validated on day one. Launching auditor-first lets the firm-side go-to-market motion start cleanly without the support and procurement complexity of two simultaneous personas. When the flag is flipped, no migration or schema change is required — the feature simply becomes visible.
+
+**Flag mechanism:** global env-var-driven boolean (`CLIENT_HUB_ENABLED=false` by default) checked at the API gateway middleware and in the React app shell. A future per-firm override (`firms.client_hub_enabled` column) is anticipated but not added to the schema until selective enablement is required.
+
 ### What Axiom Does NOT Do at Launch
 
 - **Issue ISO certificates on behalf of a Certification Body** — accredited CBs are valid customer firms and Axiom supports their engagement-delivery workflow, including generating the certificate document from a template. The legal certification decision and signature remain with the CB under ISO 17021-1; Axiom does not become an accreditation body and does not replace CB technical-review authority.
@@ -162,7 +185,7 @@ Best for: 10–40 staff firms, 20–50 engagements/year, one to two frameworks.
 - Unlimited users
 - Up to 35 active engagements/year included
 - **Framework templates at launch:** SOC 2 Type I/II, ISO 27001:2022, ISO 27701:2019, HIPAA, PCI DSS SAQ, SOC 1 Type I/II
-- Client Hub with continuous monitoring (auditee workspace)
+- Client Hub with continuous monitoring (auditee workspace) — *built and on the roadmap; disabled at launch via the `CLIENT_HUB_ENABLED` feature flag (see §1 Launch Posture). Pricing reflects the eventual feature surface; firms onboarded before the flag is flipped on receive the full feature when it is enabled.*
 - AI evidence → `CommonControl` mapping suggestions
 - Standard AI: document extraction, evidence completeness review, workpaper draft assist, report section draft
 - Pre-built methodology templates (AICPA SOC 2 TSC, ISO 27001 Annex A, HIPAA Safeguards, PCI DSS requirements)
@@ -657,15 +680,15 @@ Full journey maps with stage-by-stage detail (user actions, touchpoints, emotion
 | 1 | FirmAdmin | Set up firm and launch first engagement | `Firm`, `MethodologyTemplate`, `Engagement` scaffold, 5-step onboarding, 14-day trial clock | — |
 | 2 | Staff Auditor | Join platform and reach first task | Magic link auth, role assignment, guided tour, `EngagementTeamMember` | — |
 | 3 | Partner | Create and scope a new engagement | `ClientAcceptance` gate, EQR independence validation (where applicable), framework version lock after Fieldwork | Risk category (Feature 6), Framework migration (Feature 7), Gap analysis (Feature 3) |
-| 4 | ClientAdmin | **Cross-framework evidence mapping** — upload one artifact, see which `FrameworkRequirement` nodes it satisfies across every in-scope framework | `EvidenceItem` → `EvidenceItemSupports` → `CommonControl` → `CommonControlSatisfies` → `FrameworkRequirement`, period-aware staleness, partial-satisfaction percentages with gap lists | Evidence → CommonControl mapping (Feature 2), Gap analysis (Feature 3), Framework migration (Feature 7) |
+| 4 | ClientAdmin | **Cross-framework evidence mapping** — upload one artifact, see which `FrameworkRequirement` nodes it satisfies across every in-scope framework. **Gated at launch** by `CLIENT_HUB_ENABLED` (auditor-side keeps the cross-framework graph; auditee view is hidden) | `EvidenceItem` → `EvidenceItemSupports` → `CommonControl` → `CommonControlSatisfies` → `FrameworkRequirement`, period-aware staleness, partial-satisfaction percentages with gap lists | Evidence → CommonControl mapping (Feature 2), Gap analysis (Feature 3), Framework migration (Feature 7) |
 | 5 | Staff Auditor | Test controls and prepare workpapers | `TestProcedure` status progression, AI content tracking gate, four-level sign-off (Tester → Detailed Reviewer → General Reviewer → Final Reviewer) via `WorkpaperSignOff` | Evidence link (Feature 5), Workpaper draft (Feature 4) |
 | 6 | Manager | Review workpapers and advance the engagement | `ReviewNote` (immutable), `WorkpaperSignOff` reviewer-level enforcement, phase transition guards | Findings triage (Feature 8) |
 | 7 | Staff Auditor | Manage document requests and collect evidence | `DocumentRequest` lifecycle, AI review queue sorted by confidence, reminder state machine | Document completeness (Feature 1), Evidence link (Feature 5), Evidence → CommonControl mapping (Feature 2) |
-| 8 | Client Contact | Fulfill audit document requests | Tokenized Client Hub link (no login, engagement-scoped), `ClientAdmin` delegation | Document completeness (Feature 1), Evidence → CommonControl mapping (Feature 2) |
+| 8 | Client Contact | Fulfill audit document requests. **Gated at launch** by `CLIENT_HUB_ENABLED` — Client Hub portal not exposed; auditors collect evidence out-of-band until the flag is flipped on | Tokenized Client Hub link (no login, engagement-scoped), `ClientAdmin` delegation | Document completeness (Feature 1), Evidence → CommonControl mapping (Feature 2) |
 | 9 | Partner | Generate report, finalize, and archive | Report issuance triggers retention computation; Finalized locks content; S3 Object Lock WORM archival; addendum workflow | Report section draft (Feature 11), Findings triage (Feature 8), Management-response drafting (Feature 10) |
 | 10 | EQR Reviewer | Conduct engagement quality review | Read-only (not `EngagementTeamMember`), `EngagementQualityReview` sign-off gate, immutable EQR record, AI edit substantiveness summaries | — |
 | 11 | Partner | **Multi-framework integrated engagement** — scope SOC 2 + ISO 27001 + ISO 27701 in one engagement; one control tested once, evidence satisfies all in-scope frameworks via `CommonControl` graph; separate opinion per framework at reporting | `EngagementFramework` (multiple per `Engagement`), shared `CommonControl` library, reconciled sampling windows | Gap analysis (Feature 3), Evidence → CommonControl mapping (Feature 2) |
-| 12 | ClientAdmin | **Continuous assurance** — respond to drift alerts, auto-retest affected controls, update risk register, notify auditor when drift is material | Drift detection on connector-sourced configs, period-window thresholds, `Notification (DriftDetected / EvidenceExpiring)`, auto-enqueued re-test jobs | Drift-triggered re-testing (Feature 9), Findings triage (Feature 8), Management-response drafting (Feature 10) |
+| 12 | ClientAdmin | **Continuous assurance** — respond to drift alerts, auto-retest affected controls, update risk register, notify auditor when drift is material. **Gated at launch** by `CLIENT_HUB_ENABLED` — built but not user-visible; the auditor-side drift detection still runs but does not surface to auditees | Drift detection on connector-sourced configs, period-window thresholds, `Notification (DriftDetected / EvidenceExpiring)`, auto-enqueued re-test jobs | Drift-triggered re-testing (Feature 9), Findings triage (Feature 8), Management-response drafting (Feature 10) |
 
 ### Regulatory / methodology constraints by journey
 
@@ -709,6 +732,8 @@ These flows represent genuine Axiom differentiation — no competitor (Fieldguid
 ## 13. Out of Scope at Launch
 
 The following capabilities are explicitly excluded from the MVP. Each exclusion is deliberate.
+
+> **Built but flagged off (not "out of scope"):** the auditee-side surface (Client Hub portal, continuous monitoring, drift-triggered re-testing) is fully built per the phase plans but disabled at launch via the global `CLIENT_HUB_ENABLED` feature flag. See §1 "Launch Posture: Auditor-First, Auditee-Side Built but Feature-Flagged Off" for what is gated and what stays on. This is distinct from the table below — the items below are not built at all.
 
 | Capability | Rationale for Exclusion |
 |---|---|
