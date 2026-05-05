@@ -32,7 +32,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <NavLink
               key={n.to}
               to={n.to}
-              className={({ isActive }) => `sidebar-link${isActive ? ' is-active' : ''}`}
+              className={({ isActive }: { isActive: boolean }) => `sidebar-link${isActive ? ' is-active' : ''}`}
             >
               {n.label}
             </NavLink>
