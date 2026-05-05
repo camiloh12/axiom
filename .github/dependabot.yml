@@ -6,21 +6,16 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
 
+  # Single npm entry at the root: this repo uses npm workspaces, so the root
+  # package-lock.json is the only authoritative lock file. A root-directory
+  # scan finds dependency updates across every workspace (apps/web,
+  # packages/openapi) without producing duplicate per-workspace PRs that drift
+  # the locks out of sync. Do not add per-workspace npm entries here.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-
-  - package-ecosystem: "npm"
-    directory: "/apps/web"
-    schedule:
-      interval: "weekly"
-
-  - package-ecosystem: "npm"
-    directory: "/packages/openapi"
-    schedule:
-      interval: "weekly"
 
   - package-ecosystem: "github-actions"
     directory: "/"
